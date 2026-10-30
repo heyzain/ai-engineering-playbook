@@ -102,7 +102,7 @@ When halted, the agent must:
 
 ## 6. Clarification Request Protocol
 
-When blocked by missing or ambiguous requirements, the agent must not ask unstructured, vague questions. It must issue a structured **Clarification Request (RFC)** using the standard template:
+When blocked by missing or ambiguous requirements, the agent must not ask unstructured, vague questions. It must issue a structured **Clarification Request (RFC)** using the standard [Clarification RFC Template](../templates/clarification-rfc-template.md):
 
 ### Clarification Request Format
 
@@ -161,7 +161,7 @@ Stage transitions represent irreversible or high-cost milestones. Transitions mu
 
 ### Approval Sequence
 1. **Exit Package Assembly**:
-   The agent compiles a concise **Stage Exit Package** containing:
+   The agent compiles a concise **Stage Exit Package** formatted using the [Stage Gate Exit Package Template](../templates/gate-exit-package-template.md) containing:
    - Summary of completed deliverables against stage acceptance criteria.
    - Verifiable evidence (passing test logs, build outputs, static analysis results, artifact links).
    - Traceability matrix linking deliverables to specifications.
@@ -186,7 +186,7 @@ In exceptional engineering situations (e.g., critical hotfixes, spike prototypes
 ### Exception Rules
 - **No Self-Granted Exceptions**: AI agents are strictly forbidden from waiving, bypassing, or deferring any stage gate rule independently.
 - **Human Authority**: Only an authorized human engineer may grant an exception.
-- **Mandatory Individual Exception Record**: Every exception must be stored as an individual record under `governance/exceptions/` (e.g., `governance/exceptions/EXC-YYYYMMDD-###.md`) and committed to version control before progression proceeds. Loose, unrecorded, or verbal exceptions are invalid.
+- **Mandatory Individual Exception Record**: Every exception must be stored as an individual record under `governance/exceptions/` (e.g., `governance/exceptions/EXC-YYYYMMDD-###.md`) using the [Gate Exception Record Template](../templates/exception-record-template.md) and committed to version control before progression proceeds. Loose, unrecorded, or verbal exceptions are invalid.
 
 ### Exception Record Format
 

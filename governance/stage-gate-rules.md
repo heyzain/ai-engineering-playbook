@@ -36,7 +36,7 @@ Skipping stages or gates is prohibited. If defects or design gaps are discovered
 > **No Agent Self-Approval**: AI agents are strictly forbidden from approving their own mandatory stage transitions. Stage completion requires verifiable evidence, not merely an unverified AI claim, and requires explicit human sign-off.
 
 ### Dual Approval Protocols (Solo vs. Team)
-Stage gates enforce human governance under two operational models:
+Stage gates enforce human governance under two operational models, each utilizing the standardized [Stage Gate Exit Package Template](../templates/gate-exit-package-template.md):
 - **Solo Developer Mode**: Pull requests are optional to eliminate unnecessary friction. Stage gate approval is granted via explicit human confirmation directly in the development conversation (e.g., *"Approved Stage 1 Exit Package: Proceed to Stage 2"*). The agent must verify and record concrete evidence (test outputs, artifact links, logs) before advancing.
 - **Team / Multi-Contributor Mode**: Stage gate approval requires formal Pull Request reviews, designated reviewer sign-offs, or issue checklist checkoffs before merge.
 
@@ -58,9 +58,7 @@ Establish the fundamental business problem, user needs, strategic goals, non-goa
   - High-level initiative description, user request, or problem statement.
   - Relevant domain background, user feedback, or business drivers.
 - **Expected Deliverables**:
-  - **Problem Statement Document**: Context, target audience, core user problem, and expected business outcome.
-  - **Explicit Non-Goals**: Clear definition of what will deliberately *not* be solved in this scope.
-  - **Success Metrics**: Measurable indicators defining when the problem is solved.
+  - **Problem Statement Document (PRD Core)**: Context, target audience, core user problem, explicit non-goals, and measurable success metrics structured per [templates/prd-template.md](../templates/prd-template.md).
 - **Validation Criteria**:
   - Problem statement clearly separates the *problem* from any specific technical *solution*.
   - Non-goals are clearly delineated to prevent scope creep.
@@ -68,7 +66,7 @@ Establish the fundamental business problem, user needs, strategic goals, non-goa
 - **Exit Criteria**:
   - Problem Statement, Non-Goals, and Success Metrics are documented and agreed upon.
 - **Approval Requirements**:
-  - Product owner, lead engineer, or primary human stakeholder sign-off.
+  - Product owner, lead engineer, or primary human stakeholder sign-off documented in the [Stage Gate Exit Package](../templates/gate-exit-package-template.md).
 
 ---
 
@@ -84,22 +82,24 @@ Translate the problem statement into unambiguous, testable, and complete functio
   - Approved Stage 0 deliverables.
   - Existing system constraints, regulatory/compliance rules, and interface prerequisites.
 - **Expected Deliverables**:
-  - **Requirements Specification (PRD / Spec)**:
+  - **Requirements Specification (PRD / Spec)**: Formatted per [templates/prd-template.md](../templates/prd-template.md), including:
     - Unique Requirement IDs (e.g., `REQ-001`, `REQ-002`).
     - Functional user stories and use cases.
     - Explicit input/output definitions and boundary conditions.
     - Negative flows, error handling specifications, and recovery behaviors.
-    - Non-functional requirements (NFRs: security, performance, latency, accessibility, internationalization).
+    - Non-functional requirements (`NFR-XXX`: security, performance, latency, accessibility, internationalization).
+    - Requirements vs. assumptions verification table.
   - **Acceptance Criteria**: Formatted as verifiable assertions or Given-When-Then criteria.
 - **Validation Criteria**:
   - Zero vague terminology (e.g., "fast", "intuitive", "clean") without quantifiable bounds.
   - All identified edge cases and error states have specified outcomes.
   - Traceability: Every requirement traces directly back to a Stage 0 goal.
+  - Zero open or unresolved [Clarification RFCs](../templates/clarification-rfc-template.md).
 - **Exit Criteria**:
   - Complete requirements specification with no unresolved clarification requests.
   - All acceptance criteria are objectively testable.
 - **Approval Requirements**:
-  - Lead engineer or project owner approval.
+  - Lead engineer or project owner approval documented in the [Stage Gate Exit Package](../templates/gate-exit-package-template.md).
 
 ---
 
@@ -121,7 +121,7 @@ Define the technical structure, component decomposition, data models, contracts,
     - Data schemas, persistence models, and entity lifecycle states.
     - Formal interface contracts (APIs, function signatures, schemas, error formats).
   - **Architecture Decision Records (ADRs)**:
-    - Formal ADR for any significant structural choice, new dependency, or technology pattern.
+    - Formal ADR for any significant structural choice, new dependency, or technology pattern structured per [templates/adr-template.md](../templates/adr-template.md).
   - **Security & Threat Model**:
     - Identified trust boundaries, authentication/authorization model, and data protection plan.
 - **Validation Criteria**:
@@ -133,7 +133,7 @@ Define the technical structure, component decomposition, data models, contracts,
   - System architecture and interface contracts are finalized.
   - All relevant ADRs are recorded and committed.
 - **Approval Requirements**:
-  - Software architect, tech lead, or designated human reviewer.
+  - Software architect, tech lead, or designated human reviewer documented in the [Stage Gate Exit Package](../templates/gate-exit-package-template.md).
 
 ---
 
@@ -270,4 +270,4 @@ Any bypass of a stage gate requirement must strictly follow the exception protoc
 
 1. **No Agent Self-Bypass**: Agents are forbidden from skipping or waiving gates.
 2. **Mandatory Human Sign-Off**: Only authorized humans can approve a gate bypass.
-3. **Formal Tracking**: An individual Exception Record (`EXC-YYYYMMDD-###.md`) must be committed under `governance/exceptions/` before advancing. Loose, verbal, or undocumented waivers are invalid.
+3. **Formal Tracking**: An individual Exception Record (`EXC-YYYYMMDD-###.md`) must be committed under `governance/exceptions/` using the [Gate Exception Record Template](../templates/exception-record-template.md) before advancing. Loose, verbal, or undocumented waivers are invalid.

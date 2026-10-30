@@ -17,7 +17,7 @@ Every AI agent must follow these seven non-negotiable operating rules:
 3. **Check Prerequisites Before Advancing**: Before beginning work in any stage, verify that all entry criteria and input artifacts from prior stages are present, approved, and valid.
 4. **Never Assume an Incomplete Requirement is Complete**: If a requirement lacks acceptance criteria, error handling specifications, or boundary definitions, treat it as **incomplete**. Never hallucinate or assume unstated business logic.
 5. **Ask for Clarification When Requirements are Ambiguous**: When faced with ambiguity, conflicting specifications, or unstated parameters, immediately **halt** and use the structured Clarification Request format defined in [ENGINEERING_CONTROLLER.md](governance/ENGINEERING_CONTROLLER.md#6-clarification-request-protocol).
-6. **Never Bypass Mandatory Quality Gates**: Stage gates are mandatory barriers. You are strictly forbidden from waiving, bypassing, or deferring quality gates on your own authority. Any bypass requires an authorized human exception record (`EXC-YYYYMMDD-###.md`) committed under `governance/exceptions/`.
+6. **Never Bypass Mandatory Quality Gates**: Stage gates are mandatory barriers. You are strictly forbidden from waiving, bypassing, or deferring quality gates on your own authority. Any bypass requires an authorized human exception record (`EXC-YYYYMMDD-###.md`) committed under `governance/exceptions/` structured per [templates/exception-record-template.md](templates/exception-record-template.md).
 7. **Validate Work Before Reporting Completion**: Never claim a task or stage is complete without verifying deliverables against acceptance criteria. Provide verifiable evidence (test outputs, static analysis results, file paths) for every completed requirement. **AI agents cannot self-approve mandatory stage transitions.**
 
 ---
@@ -64,13 +64,14 @@ When assigned a task, every AI agent must execute this standardized operational 
   - Undefined edge cases or negative flows.
   - Vague or unquantifiable acceptance criteria.
   - Unstated security, performance, or accessibility expectations.
-- If ambiguities or gaps exist, halt and issue a **Clarification Request (RFC)** using the template in [ENGINEERING_CONTROLLER.md](governance/ENGINEERING_CONTROLLER.md#6-clarification-request-protocol).
+- If ambiguities or gaps exist, halt and issue a **Clarification Request (RFC)** using [templates/clarification-rfc-template.md](templates/clarification-rfc-template.md).
 
 ### Step 4: Planning & Architecture Alignment
 - Formulate a brief, actionable implementation plan.
 - Ensure the plan adheres to the [Engineering Constitution](core/engineering-constitution.md):
   - Prioritize simplicity and YAGNI.
   - Avoid speculative abstractions and unnecessary dependencies.
+  - Record architectural decisions using [templates/adr-template.md](templates/adr-template.md).
   - Follow technology-specific standards under canonical `stacks/<technology>/` where applicable.
 
 ### Step 5: Implementation & Local Verification
@@ -84,7 +85,7 @@ When assigned a task, every AI agent must execute this standardized operational 
 - Stage completion requires concrete evidence, not merely an unverified agent claim.
 
 ### Step 7: Handover & Stage Gate Approval
-- Assemble a concise Stage Exit Package (deliverable summary, proof evidence, requirement traceability).
+- Assemble a concise Stage Exit Package formatted per [templates/gate-exit-package-template.md](templates/gate-exit-package-template.md) (deliverable summary, proof evidence, requirement traceability).
 - AI agents cannot self-approve stage transitions.
 - Await human approval:
   - **Solo Developer Mode**: Explicit human confirmation in the development conversation (PR optional).
@@ -110,4 +111,5 @@ When interacting with human engineers, AI agents must:
 | **Engineering Values & Principles** | [core/engineering-constitution.md](core/engineering-constitution.md) |
 | **Controller Architecture & Halt Rules** | [governance/ENGINEERING_CONTROLLER.md](governance/ENGINEERING_CONTROLLER.md) |
 | **Stage Gates, Criteria & Deliverables** | [governance/stage-gate-rules.md](governance/stage-gate-rules.md) |
+| **Standard Engineering Templates** | [templates/README.md](templates/README.md) |
 | **Repository Vision & Layout** | [README.md](README.md) |
