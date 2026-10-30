@@ -28,6 +28,18 @@ Stage 6: Deployment & Operational Monitoring
 
 Skipping stages or gates is prohibited. If defects or design gaps are discovered during a later stage, the process must formally loop back to the originating stage to update upstream specifications before proceeding.
 
+> [!IMPORTANT]
+> **Lifecycle Stages vs. Operational Controller Steps**
+> These 7 stages represent the sequential macro lifecycle of software delivery. They must not be confused with the agent's micro operational controller steps (Inspect, Validate, Gap Analysis, Plan, Implement, Verify, Handover), which execute repeatedly on individual tasks within each stage.
+
+> [!CAUTION]
+> **No Agent Self-Approval**: AI agents are strictly forbidden from approving their own mandatory stage transitions. Stage completion requires verifiable evidence, not merely an unverified AI claim, and requires explicit human sign-off.
+
+### Dual Approval Protocols (Solo vs. Team)
+Stage gates enforce human governance under two operational models:
+- **Solo Developer Mode**: Pull requests are optional to eliminate unnecessary friction. Stage gate approval is granted via explicit human confirmation directly in the development conversation (e.g., *"Approved Stage 1 Exit Package: Proceed to Stage 2"*). The agent must verify and record concrete evidence (test outputs, artifact links, logs) before advancing.
+- **Team / Multi-Contributor Mode**: Stage gate approval requires formal Pull Request reviews, designated reviewer sign-offs, or issue checklist checkoffs before merge.
+
 ---
 
 ## 2. Detailed Stage Specifications
@@ -258,4 +270,4 @@ Any bypass of a stage gate requirement must strictly follow the exception protoc
 
 1. **No Agent Self-Bypass**: Agents are forbidden from skipping or waiving gates.
 2. **Mandatory Human Sign-Off**: Only authorized humans can approve a gate bypass.
-3. **Formal Tracking**: An Exception Record (`EXC-YYYYMMDD-###`) must be committed before advancing.
+3. **Formal Tracking**: An individual Exception Record (`EXC-YYYYMMDD-###.md`) must be committed under `governance/exceptions/` before advancing. Loose, verbal, or undocumented waivers are invalid.

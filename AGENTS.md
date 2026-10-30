@@ -17,14 +17,19 @@ Every AI agent must follow these seven non-negotiable operating rules:
 3. **Check Prerequisites Before Advancing**: Before beginning work in any stage, verify that all entry criteria and input artifacts from prior stages are present, approved, and valid.
 4. **Never Assume an Incomplete Requirement is Complete**: If a requirement lacks acceptance criteria, error handling specifications, or boundary definitions, treat it as **incomplete**. Never hallucinate or assume unstated business logic.
 5. **Ask for Clarification When Requirements are Ambiguous**: When faced with ambiguity, conflicting specifications, or unstated parameters, immediately **halt** and use the structured Clarification Request format defined in [ENGINEERING_CONTROLLER.md](governance/ENGINEERING_CONTROLLER.md#6-clarification-request-protocol).
-6. **Never Bypass Mandatory Quality Gates**: Stage gates are mandatory barriers. You are strictly forbidden from waiving, bypassing, or deferring quality gates on your own authority. Any bypass requires an authorized human exception record (`EXC-YYYYMMDD-###`).
-7. **Validate Work Before Reporting Completion**: Never claim a task or stage is complete without verifying deliverables against acceptance criteria. Provide verifiable evidence (test outputs, static analysis results, file paths) for every completed requirement.
+6. **Never Bypass Mandatory Quality Gates**: Stage gates are mandatory barriers. You are strictly forbidden from waiving, bypassing, or deferring quality gates on your own authority. Any bypass requires an authorized human exception record (`EXC-YYYYMMDD-###.md`) committed under `governance/exceptions/`.
+7. **Validate Work Before Reporting Completion**: Never claim a task or stage is complete without verifying deliverables against acceptance criteria. Provide verifiable evidence (test outputs, static analysis results, file paths) for every completed requirement. **AI agents cannot self-approve mandatory stage transitions.**
 
 ---
 
-## 2. Standard Agent Execution Lifecycle
+## 2. Standard Agent Operational Steps (Controller Execution Loop)
 
-When assigned a task, every AI agent must execute this standardized six-phase control loop:
+> [!IMPORTANT]
+> **Distinction Between Lifecycle Stages and Operational Steps**
+> - **Lifecycle Stages (Stage 0 to Stage 6)**: The sequential macro stages of software evolution (Discovery, Requirements, Architecture, Implementation, Integration, Hardening, Deployment) defined in [stage-gate-rules.md](governance/stage-gate-rules.md).
+> - **Operational Controller Steps (Step 1 to Step 7)**: The per-task micro execution loop executed by an AI agent on *every task* within any active lifecycle stage.
+
+When assigned a task, every AI agent must execute this standardized operational control loop:
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
@@ -38,46 +43,53 @@ When assigned a task, every AI agent must execute this standardized six-phase co
 │        ▼         plan                                       │
 │ 5. IMPLEMENT     Execute changes with test-first discipline │
 │        ▼                                                    │
-│ 6. VERIFY        Run tests, check gates, report with proof  │
+│ 6. VERIFY        Run tests, check invariants, gather proof  │
+│        ▼                                                    │
+│ 7. HANDOVER      Assemble Exit Package & await human signoff│
 └─────────────────────────────────────────────────────────────┘
 ```
 
-### Phase 1: Context & State Inspection
+### Step 1: Context & State Inspection
 - Check current directory topology, Git status, and active branch.
 - Locate existing specifications, ADRs, and active stage deliverables.
 - Establish the current baseline without modifying any files.
 
-### Phase 2: Stage & Prerequisite Validation
+### Step 2: Stage & Prerequisite Validation
 - Determine the target lifecycle stage according to [stage-gate-rules.md](governance/stage-gate-rules.md).
 - Verify that preceding stage artifacts exist and have been formally approved.
 - If prerequisites are missing or unapproved, **halt** and notify the human operator.
 
-### Phase 3: Requirement Gap Analysis
+### Step 3: Requirement Gap Analysis
 - Analyze the incoming task or specification for:
   - Undefined edge cases or negative flows.
   - Vague or unquantifiable acceptance criteria.
   - Unstated security, performance, or accessibility expectations.
-- If ambiguities or gaps exist, halt and issue a **Clarification Request (RFC)**.
+- If ambiguities or gaps exist, halt and issue a **Clarification Request (RFC)** using the template in [ENGINEERING_CONTROLLER.md](governance/ENGINEERING_CONTROLLER.md#6-clarification-request-protocol).
 
-### Phase 4: Planning & Architecture Alignment
+### Step 4: Planning & Architecture Alignment
 - Formulate a brief, actionable implementation plan.
 - Ensure the plan adheres to the [Engineering Constitution](core/engineering-constitution.md):
   - Prioritize simplicity and YAGNI.
   - Avoid speculative abstractions and unnecessary dependencies.
-  - Maintain technology-agnostic modular boundaries.
+  - Follow technology-specific standards under canonical `stacks/<technology>/` where applicable.
 
-### Phase 5: Implementation & Local Verification
+### Step 5: Implementation & Local Verification
 - Implement the minimal sufficient solution to satisfy the verified requirements.
 - Write or update automated unit tests to verify behavior and edge cases.
 - Maintain documentation integrity: do not delete or overwrite existing comments or docs without intent.
 
-### Phase 6: Stage Gate Verification & Reporting
-- Execute all relevant test suites and static analysis tools.
-- Assemble a concise completion report containing:
-  - Files created or modified.
-  - Verifiable evidence of passing tests / checks.
-  - Requirement traceability mapping.
-  - Confirmation of gate readiness.
+### Step 6: Work Verification & Evidence Gathering
+- Execute all relevant test suites, static analysis tools, and type checks.
+- Collect verifiable evidence (command output, test counts, linter output).
+- Stage completion requires concrete evidence, not merely an unverified agent claim.
+
+### Step 7: Handover & Stage Gate Approval
+- Assemble a concise Stage Exit Package (deliverable summary, proof evidence, requirement traceability).
+- AI agents cannot self-approve stage transitions.
+- Await human approval:
+  - **Solo Developer Mode**: Explicit human confirmation in the development conversation (PR optional).
+  - **Team Mode**: Formal Pull Request review sign-off.
+- Advance to the subsequent stage only after explicit human approval is granted.
 
 ---
 

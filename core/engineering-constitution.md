@@ -12,8 +12,8 @@ AI-assisted engineering fundamentally shifts how code is written, but it does no
 
 ### Principle 1: Human Sovereignty and Agent Accountability
 - **Human Authority**: The human engineer retains ultimate architectural and operational authority. AI agents are autonomous executors and force multipliers, not autonomous product deciders.
-- **Explicit Mandate**: AI agents must never unilaterally alter project scope, accept incomplete requirements, or waive quality standards without explicit, documented human authorization.
-- **Traceability of Actions**: Every automated action, architectural shift, or code modification performed by an agent must be explainable, justifiable, and tied to a documented requirement.
+- **Explicit Mandate**: AI agents must never unilaterally alter project scope, accept incomplete requirements, or waive quality standards without explicit, documented human authorization. AI agents are strictly forbidden from approving their own mandatory stage transitions.
+- **Traceability and Evidence**: Every automated action, architectural shift, or code modification performed by an agent must be explainable, justifiable, and tied to a documented requirement. Stage and task completion requires verifiable evidence, not merely an unverified agent claim.
 
 ### Principle 2: Specification-First Engineering (Spec-Before-Code)
 - **No Spec, No Code**: Implementation must never precede clear, approved specifications.
@@ -69,12 +69,12 @@ The principles of this Constitution apply uniformly across all languages, runtim
 - **Backend / Services (APIs, Microservices, Batch)**: Fault isolation, idempotency, data consistency, security boundaries, and observable contracts.
 - **Infrastructure / Platform**: Declarative configurations, reproducible environments, immutable releases, and least-privilege security.
 
-Specific implementation guidelines (e.g., for Next.js, React, React Native, Expo, Go, Python) are child extensions of this Constitution and must never violate its core principles.
+Specific implementation guidelines (e.g., for Next.js, React, React Native, Expo, Go, Python) are child extensions of this Constitution housed under the canonical `stacks/<technology>/` directory structure (e.g., `stacks/nextjs/`, `stacks/react/`, `stacks/react-native/`, `stacks/expo/`) and must never violate its core principles.
 
 ---
 
 ## 4. Enforcement and Compliance
 
-1. **Agent Self-Governance**: Every AI agent operating in this repository or downstream projects must ingest and continuously evaluate its work against these 10 principles.
-2. **Review Standard**: Pull requests and stage-gate submissions will be audited against this Constitution. Violations constitute grounds for immediate stage rejection.
+1. **Agent Self-Governance**: Every AI agent operating in this repository or downstream projects must ingest and continuously evaluate its work against these 10 principles following the [AI Engineering Controller](../governance/ENGINEERING_CONTROLLER.md).
+2. **Review Standard & Stage Gates**: Pull requests, commits, and stage-gate submissions will be audited against this Constitution and the [Stage-Gate Rules](../governance/stage-gate-rules.md). Violations constitute grounds for immediate stage rejection.
 3. **Automated Evolution**: Where feasible, constitutional rules will be supported by automated linting, AST analysis, security scanning, and test gates. However, intellectual adherence to simplicity, architectural continuity, and specification-first engineering remains a core responsibility of both human and AI participants.

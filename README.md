@@ -25,11 +25,11 @@ This playbook shifts the paradigm from ad-hoc "prompt-and-pray" generation to **
 The foundational principles, stage gates, and controller rules defined in this repository are **100% technology-agnostic**. They apply uniformly regardless of programming language, application domain, or deployment runtime.
 
 ### Modular Architecture
-Technology-specific rules, linters, project scaffolds, and idioms will be introduced as modular extensions without polluting the core governance model:
-- `stacks/nextjs` (Planned) — Next.js App Router, SSR/SSG patterns, edge runtimes.
-- `stacks/react` (Planned) — React component architecture, state management, and web accessibility.
-- `stacks/react-native` (Planned) — Mobile cross-platform patterns, native bridges, performance.
-- `stacks/expo` (Planned) — Expo Application Services (EAS), file-based routing, device APIs.
+Technology-specific rules, linters, project scaffolds, and idioms will be introduced as modular extensions under the canonical directory structure `stacks/<technology>/` without polluting the core governance model:
+- `stacks/nextjs/` (Planned) — Next.js App Router, SSR/SSG patterns, edge runtimes.
+- `stacks/react/` (Planned) — React component architecture, state management, and web accessibility.
+- `stacks/react-native/` (Planned) — Mobile cross-platform patterns, native bridges, performance.
+- `stacks/expo/` (Planned) — Expo Application Services (EAS), file-based routing, device APIs.
 
 ### Non-Goals for the Foundation
 - No premature automation, external frameworks, or heavy package dependencies.
@@ -51,7 +51,8 @@ ai-engineering-playbook/
 │
 └── governance/
     ├── ENGINEERING_CONTROLLER.md       # AI Controller architecture, halt mechanisms, and RFC protocol
-    └── stage-gate-rules.md             # 7-stage engineering lifecycle, entry/exit criteria, and gates
+    ├── stage-gate-rules.md             # 7-stage engineering lifecycle, entry/exit criteria, and gates
+    └── exceptions/                     # Directory for individual gate exception records (EXC-YYYYMMDD-###.md)
 ```
 
 ### Document Manifest
@@ -90,21 +91,24 @@ Agent Cognitive Compliance              Automated Deterministic Tooling
 
 ### For AI Coding Agents
 1. Ingest [AGENTS.md](AGENTS.md) immediately upon workspace initialization.
-2. Never skip stages or jump directly into code generation.
+2. Follow the 7 operational controller steps sequentially within the active lifecycle stage.
 3. If an input or requirement is ambiguous, halt and trigger a structured Clarification Request.
 4. Verify every deliverable with concrete evidence before reporting completion.
+5. **Never self-approve mandatory stage transitions**: Always assemble a Stage Exit Package and await explicit human sign-off.
 
 ### For Human Engineers and Architects
 1. Use the [Stage-Gate Rules](governance/stage-gate-rules.md) to evaluate agent progress at each gate.
-2. Review and authorize stage transitions via pull requests or review comments.
-3. Grant gate exceptions only when justified, recording them per [ENGINEERING_CONTROLLER.md](governance/ENGINEERING_CONTROLLER.md#9-exception-handling-and-recording).
+2. Review and authorize stage transitions:
+   - **Solo Developer Mode**: Explicit in-chat confirmation with recorded evidence (PRs optional).
+   - **Team Mode**: Formal Pull Request code reviews and approval sign-offs.
+3. Grant gate exceptions only when justified, recording each as an individual document under `governance/exceptions/EXC-YYYYMMDD-###.md` per [ENGINEERING_CONTROLLER.md](governance/ENGINEERING_CONTROLLER.md#9-exception-handling-and-recording).
 4. Update the [Engineering Constitution](core/engineering-constitution.md) when architectural paradigms evolve.
 
 ---
 
 ## 6. Next Implementation Steps
 
-With the foundational methodology established, subsequent tasks will address:
+With the foundational methodology established and audited, subsequent tasks will address:
 1. **Standard Artifact Templates** (`templates/`): Reusable templates for PRDs, RFCs, ADRs, and Stage Exit Packages.
 2. **Automated Governance Tools** (`tooling/`): Lightweight CLI tools / pre-commit hooks to automate gate checks.
-3. **Technology Extensions** (`stacks/`): Specific engineering standards for Next.js, React, React Native, and Expo.
+3. **Technology Extensions** (`stacks/<technology>/`): Specific engineering standards for Next.js, React, React Native, and Expo.

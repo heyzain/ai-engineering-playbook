@@ -18,6 +18,13 @@ self-checks, review checklists)                     type checkers, automated tes
 > **Enforcement Reality Notice**
 > Markdown instruction files and prompt directives **do not** provide technically guaranteed enforcement. In the foundational phase of this playbook, the Controller operates via **structured agent self-governance under direct human supervision**. As projects mature, critical gates will be progressively transitioned to deterministic automated tooling (CI checks, pre-commit hooks, AST linters, policy-as-code engines).
 
+### Lifecycle Stages vs. Operational Controller Steps
+
+To ensure consistent communication and avoid ambiguity, this playbook strictly distinguishes between two different concepts:
+
+- **Project Lifecycle Stages (Stages 0–6)**: The macro lifecycle stages of a project governed by [Stage-Gate Rules](stage-gate-rules.md) (Stage 0: Discovery & Problem Formulation through Stage 6: Deployment & Operational Monitoring). Progression across stages is sequential, gating-controlled, and strictly requires explicit human approval.
+- **Operational Controller Steps (Steps 1–7)**: The micro execution loop executed by an AI agent for *each task or work unit* within an active lifecycle stage (Step 1: Inspect State, Step 2: Validate Prerequisites, Step 3: Gap Analysis, Step 4: Plan, Step 5: Implement, Step 6: Verify Deliverables, Step 7: Stage Handover). Operational steps recur continuously within every lifecycle stage.
+
 ---
 
 ## 2. Project State Inspection
@@ -149,18 +156,25 @@ Before any stage is marked as complete, the Controller performs multi-layered ve
 
 Stage transitions represent irreversible or high-cost milestones. Transitions must never be assumed or automatically granted by the agent.
 
+> [!CAUTION]
+> **No Agent Self-Approval**: AI agents are strictly forbidden from approving their own mandatory stage transitions. Stage completion always requires verifiable evidence, not merely an unverified AI claim. Progression to the subsequent stage requires explicit human sign-off.
+
 ### Approval Sequence
 1. **Exit Package Assembly**:
    The agent compiles a concise **Stage Exit Package** containing:
-   - Summary of completed deliverables.
-   - Verification evidence (test runs, audit logs, artifact links).
-   - Traceability matrix linking deliverables to requirements.
+   - Summary of completed deliverables against stage acceptance criteria.
+   - Verifiable evidence (passing test logs, build outputs, static analysis results, artifact links).
+   - Traceability matrix linking deliverables to specifications.
    - Known limitations or deferred items (if any).
 2. **Human Review and Sign-Off**:
-   - The human engineer reviews the Stage Exit Package.
-   - The human issues formal approval (e.g., verbal confirmation, PR approval, issue label, or stage checklist checkoff).
+   - **Solo Developer Mode**:
+     - Pull requests are **optional** for solo projects to minimize overhead.
+     - The human engineer reviews the Stage Exit Package and issues an explicit confirmation directly in the development conversation (e.g., *"Approved Stage 1 Exit Package: Proceed to Stage 2"*).
+     - The agent records this explicit confirmation and the accompanying verification evidence in the task completion log and commit message before proceeding.
+   - **Team / Multi-Contributor Mode**:
+     - Stage transitions are formally requested and approved via Pull Request review approvals, designated issue sign-offs, or formal code review ceremonies before merge.
 3. **Transition Milestone**:
-   - Upon human approval, the repository advances to the subsequent stage.
+   - Upon explicit human approval, the repository advances to the subsequent stage.
    - The state transition is committed to version control or logged.
 
 ---
@@ -172,14 +186,16 @@ In exceptional engineering situations (e.g., critical hotfixes, spike prototypes
 ### Exception Rules
 - **No Self-Granted Exceptions**: AI agents are strictly forbidden from waiving, bypassing, or deferring any stage gate rule independently.
 - **Human Authority**: Only an authorized human engineer may grant an exception.
-- **Mandatory Exception Record**: Every exception must be explicitly recorded in the project's governance records (e.g., `governance/exceptions.md` or the relevant ticket/PR) before progression proceeds.
+- **Mandatory Individual Exception Record**: Every exception must be stored as an individual record under `governance/exceptions/` (e.g., `governance/exceptions/EXC-YYYYMMDD-###.md`) and committed to version control before progression proceeds. Loose, unrecorded, or verbal exceptions are invalid.
 
 ### Exception Record Format
+
+Stored at `governance/exceptions/EXC-YYYYMMDD-###.md`:
 
 ```markdown
 ### 📋 Gate Exception Record: [EXC-YYYYMMDD-###]
 - **Date**: [YYYY-MM-DD]
-- **Active Stage**: [e.g., Stage 3: Implementation]
+- **Active Stage**: [e.g., Stage 3: Implementation & Unit Verification]
 - **Bypassed Gate / Requirement**: [Specific rule being waived]
 - **Authorized Human Approver**: [Name / Role / ID]
 - **Justification**: [Why this exception is necessary and cannot be resolved immediately]
@@ -201,6 +217,6 @@ To maintain intellectual honesty, the table below documents the current enforcem
 | **Missing Requirement Detection** | Agent compliance (gap heuristics) | Spec-linter / Schema validation / Automated PR reviewer |
 | **Progression Blocking** | Agent cognitive halt | Branch protection rules / Required status checks |
 | **Clarification Protocol** | Agent compliance (RFC template) | Interactive agent CLI / Structured UI modal prompt |
-| **Work Verification** | Agent test runs + Human review | Automated CI test pipelines, static analysis, type checks |
-| **Stage Transition Approval** | Explicit human prompt sign-off | Formal GitHub PR approval / Signed release gates |
-| **Exception Recording** | Agent documentation + Human sign-off | Policy-as-code exception registry with TTL expiration |
+| **Work Verification** | Verifiable evidence (test/lint logs) + Human review | Automated CI test pipelines, static analysis, type checks |
+| **Stage Transition Approval** | Explicit human sign-off (in-chat for solo, PR for team) | Formal GitHub PR approval / Signed release gates |
+| **Exception Recording** | Individual record under `governance/exceptions/` | Policy-as-code exception registry with TTL expiration |
