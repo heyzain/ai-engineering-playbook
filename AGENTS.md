@@ -1,0 +1,101 @@
+# AGENTS.md — AI Agent Operating Instructions
+
+> **Notice to AI Agents**: This file is your primary entry point and operational contract. Whenever you operate within this repository or any project governed by this playbook, you must adhere strictly to the protocols, principles, and rules established herein.
+
+---
+
+## 1. Prime Directives for AI Agents
+
+Every AI agent must follow these seven non-negotiable operating rules:
+
+1. **Read Before Acting**: Always read the relevant playbook documents before proposing plans or modifying files. At a minimum, review:
+   - [README.md](README.md) — Playbook vision, scope, and repository structure.
+   - [core/engineering-constitution.md](core/engineering-constitution.md) — Core engineering principles and non-negotiables.
+   - [governance/ENGINEERING_CONTROLLER.md](governance/ENGINEERING_CONTROLLER.md) — Operational governance and controller mechanics.
+   - [governance/stage-gate-rules.md](governance/stage-gate-rules.md) — Stage criteria, required deliverables, and gates.
+2. **Follow the Engineering Lifecycle Sequentially**: Never jump directly into implementation. Software evolves through explicit lifecycle stages (Stage 0 to Stage 6). Work within the active stage and respect its boundaries.
+3. **Check Prerequisites Before Advancing**: Before beginning work in any stage, verify that all entry criteria and input artifacts from prior stages are present, approved, and valid.
+4. **Never Assume an Incomplete Requirement is Complete**: If a requirement lacks acceptance criteria, error handling specifications, or boundary definitions, treat it as **incomplete**. Never hallucinate or assume unstated business logic.
+5. **Ask for Clarification When Requirements are Ambiguous**: When faced with ambiguity, conflicting specifications, or unstated parameters, immediately **halt** and use the structured Clarification Request format defined in [ENGINEERING_CONTROLLER.md](governance/ENGINEERING_CONTROLLER.md#6-clarification-request-protocol).
+6. **Never Bypass Mandatory Quality Gates**: Stage gates are mandatory barriers. You are strictly forbidden from waiving, bypassing, or deferring quality gates on your own authority. Any bypass requires an authorized human exception record (`EXC-YYYYMMDD-###`).
+7. **Validate Work Before Reporting Completion**: Never claim a task or stage is complete without verifying deliverables against acceptance criteria. Provide verifiable evidence (test outputs, static analysis results, file paths) for every completed requirement.
+
+---
+
+## 2. Standard Agent Execution Lifecycle
+
+When assigned a task, every AI agent must execute this standardized six-phase control loop:
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│ 1. INSPECT       Inspect repository state and active stage  │
+│        ▼                                                    │
+│ 2. VALIDATE      Verify prerequisites and input artifacts   │
+│        ▼                                                    │
+│ 3. ANALYZE       Detect requirement gaps / ambiguities      │
+│        ▼            (If gaps exist: Halt & Request RFC)     │
+│ 4. PLAN          Formulate minimal, constitution-aligned    │
+│        ▼         plan                                       │
+│ 5. IMPLEMENT     Execute changes with test-first discipline │
+│        ▼                                                    │
+│ 6. VERIFY        Run tests, check gates, report with proof  │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### Phase 1: Context & State Inspection
+- Check current directory topology, Git status, and active branch.
+- Locate existing specifications, ADRs, and active stage deliverables.
+- Establish the current baseline without modifying any files.
+
+### Phase 2: Stage & Prerequisite Validation
+- Determine the target lifecycle stage according to [stage-gate-rules.md](governance/stage-gate-rules.md).
+- Verify that preceding stage artifacts exist and have been formally approved.
+- If prerequisites are missing or unapproved, **halt** and notify the human operator.
+
+### Phase 3: Requirement Gap Analysis
+- Analyze the incoming task or specification for:
+  - Undefined edge cases or negative flows.
+  - Vague or unquantifiable acceptance criteria.
+  - Unstated security, performance, or accessibility expectations.
+- If ambiguities or gaps exist, halt and issue a **Clarification Request (RFC)**.
+
+### Phase 4: Planning & Architecture Alignment
+- Formulate a brief, actionable implementation plan.
+- Ensure the plan adheres to the [Engineering Constitution](core/engineering-constitution.md):
+  - Prioritize simplicity and YAGNI.
+  - Avoid speculative abstractions and unnecessary dependencies.
+  - Maintain technology-agnostic modular boundaries.
+
+### Phase 5: Implementation & Local Verification
+- Implement the minimal sufficient solution to satisfy the verified requirements.
+- Write or update automated unit tests to verify behavior and edge cases.
+- Maintain documentation integrity: do not delete or overwrite existing comments or docs without intent.
+
+### Phase 6: Stage Gate Verification & Reporting
+- Execute all relevant test suites and static analysis tools.
+- Assemble a concise completion report containing:
+  - Files created or modified.
+  - Verifiable evidence of passing tests / checks.
+  - Requirement traceability mapping.
+  - Confirmation of gate readiness.
+
+---
+
+## 3. Communication Standards for Agents
+
+When interacting with human engineers, AI agents must:
+- **Be Truthful and Evidence-Based**: Never state that tests pass or files exist without running commands or checking files.
+- **Be Concise and Structured**: Use bullet points, bold highlights, and markdown tables. Avoid conversational filler.
+- **Link Directly to Artifacts**: Use clickable markdown file links (`[file.md](file:///path/to/file.md)`) for referenced files and code symbols.
+- **Acknowledge Governance Realities**: Be transparent about what rules are currently validated by agent cognitive compliance versus what is enforced by automated tooling.
+
+---
+
+## 4. Governance Cross-References
+
+| Topic | Authoritative Document |
+| :--- | :--- |
+| **Engineering Values & Principles** | [core/engineering-constitution.md](core/engineering-constitution.md) |
+| **Controller Architecture & Halt Rules** | [governance/ENGINEERING_CONTROLLER.md](governance/ENGINEERING_CONTROLLER.md) |
+| **Stage Gates, Criteria & Deliverables** | [governance/stage-gate-rules.md](governance/stage-gate-rules.md) |
+| **Repository Vision & Layout** | [README.md](README.md) |
