@@ -82,19 +82,20 @@ When assigned a task, every AI agent must execute this standardized operational 
 - Maintain documentation integrity: do not delete or overwrite existing comments or docs without intent.
 
 ### Step 6: Work Verification & Evidence Gathering
-- Execute all relevant test suites, static analysis tools, and type checks.
-- Collect verifiable evidence (command output, test counts, linter output, exit code).
-- Update deliverable in `.playbook/state.json`: if exit code is 0, transition status to `verified`, set `validation_status: "passed"`, and append proof to `evidence[]`.
-- Stage completion requires concrete evidence, not merely an unverified agent claim. **Never treat `completed`, `verified`, and `approved` as interchangeable states.**
+- Execute relevant validation disciplines (automated test suites, type checks, static analysis, or manual/visual reviews).
+- Collect verifiable evidence (command output, test counts, linter output, or manual inspection checklist).
+- Update deliverable in `.playbook/state.json`: if verification checks pass, transition status to `verified`, set `validation_status: "passed"`, and append proof to `evidence[]` with `result: "passed"`.
+- If an authorized exception waives a requirement, set deliverable status to `waived`, `validation_status: "waived"`, and record `exception_ref`.
+- Deliverable completion requires concrete evidence, not merely an unverified agent claim. **Never treat `completed`, `verified`, and `approved` as interchangeable states.**
 
-### Step 7: Handover & Stage Gate Approval
+### Step 7: Handover & Stage Gate Approval (Two-Phase Handshake)
 - Assemble a concise Stage Exit Package formatted per [templates/gate-exit-package-template.md](templates/gate-exit-package-template.md) (deliverable summary, proof evidence, requirement traceability).
-- Update `.playbook/state.json`: set `exit_package.status` to `submitted_for_review` and `human_approval.status` to `pending_review`.
-- **AI agents cannot self-approve stage transitions.** Only an authorized human engineer may sign off on gate transitions.
-- Await human approval:
+- Update `.playbook/state.json` (Phase 1): set `exit_package.status` to `submitted_for_review`, set `human_approval.status` to `pending_review`, and set `stage_status` to `pending_review`.
+- **The AI agent's authority boundary ends here.** AI agents cannot self-approve stage transitions.
+- Await human approval (Phase 2):
   - **Solo Developer Mode**: Explicit human confirmation in the development conversation (PR optional).
   - **Team Mode**: Formal Pull Request review sign-off.
-- Advance to the subsequent stage (`ADVANCE_STAGE`) only after explicit human approval is granted.
+- Advance to the subsequent stage (`ADVANCE_STAGE` for Stages 0–5, or `CLOSE_LIFECYCLE` for Stage 6) only after explicit human approval is granted. Transitioning to a non-existent Stage 7 is strictly prohibited.
 
 ---
 

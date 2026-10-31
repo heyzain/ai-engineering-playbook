@@ -3,6 +3,7 @@
   "schema_version": "1.0.0",
   "project_id": "zentrix-lms",
   "playbook_version": "1.0.0",
+  "lifecycle_status": "active",
   "current_stage": 4,
   "stage_status": "approved",
   "current_stage_detail": {
@@ -15,9 +16,23 @@
         "name": "Integration Test Suite",
         "description": "Cross-subsystem integration verification.",
         "artifact_path": "tests/integration/",
-        "status": "approved",
+        "status": "waived",
         "validation_status": "waived",
-        "evidence": []
+        "exception_ref": "EXC-20260901-001",
+        "evidence": [
+          {
+            "requirement_id": "REQ-005",
+            "type": "manual_functional",
+            "procedure": "Waived per exception EXC-20260901-001.",
+            "result": "passed",
+            "summary": "Integration tests waived temporarily.",
+            "exit_code": null,
+            "evidence_ref": "docs/exceptions/EXC-20260901-001.md",
+            "verified_at": "2026-09-01T10:00:00Z",
+            "verified_by": "human:zain",
+            "actor_type": "human"
+          }
+        ]
       }
     ],
     "rfcs": [],
@@ -36,7 +51,8 @@
     ],
     "exit_package": {
       "status": "submitted_for_review",
-      "path": "docs/gates/GATE-4-EXIT-PACKAGE.md"
+      "path": "docs/gates/GATE-4-EXIT-PACKAGE.md",
+      "submitted_at": "2026-10-31T09:00:00Z"
     },
     "human_approval": {
       "status": "approved",

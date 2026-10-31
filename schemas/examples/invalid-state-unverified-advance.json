@@ -3,8 +3,9 @@
   "schema_version": "1.0.0",
   "project_id": "zentrix-lms",
   "playbook_version": "1.0.0",
+  "lifecycle_status": "active",
   "current_stage": 3,
-  "stage_status": "completed",
+  "stage_status": "pending_review",
   "current_stage_detail": {
     "stage": 3,
     "stage_name": "Implementation & Unit Verification",
@@ -17,6 +18,7 @@
         "artifact_path": "src/telemetry/queue.ts",
         "status": "verified",
         "validation_status": "unvalidated",
+        "exception_ref": null,
         "evidence": []
       }
     ],
@@ -24,14 +26,15 @@
     "adrs": [],
     "exceptions": [],
     "exit_package": {
-      "status": "not_drafted",
-      "path": "docs/gates/GATE-3-EXIT-PACKAGE.md"
+      "status": "submitted_for_review",
+      "path": "docs/gates/GATE-3-EXIT-PACKAGE.md",
+      "submitted_at": "2026-10-31T09:00:00Z"
     },
     "human_approval": {
-      "status": "not_requested",
+      "status": "pending_review",
       "approved_by": null,
       "role": null,
-      "approval_mode": null,
+      "approval_mode": "solo",
       "decision": null,
       "signature_reference": null,
       "approved_at": null,

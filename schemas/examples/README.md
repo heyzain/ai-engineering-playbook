@@ -10,7 +10,7 @@
 | :--- | :--- | :--- | :--- |
 | [`valid-manifest.json`](valid-manifest.json) | `project-manifest.schema.json` | **Valid** | Complete project manifest with standard paths, tech stack, and enabled capabilities. |
 | [`invalid-manifest.json`](invalid-manifest.json) | `project-manifest.schema.json` | **Invalid** | Invalid project ID format, invalid governance profile enum, invalid capability, and out-of-range lifecycle stage (`9`). |
-| [`valid-state-stage1-verified.json`](valid-state-stage1-verified.json) | `project-state.schema.json` | **Valid** | Stage 1 with verified deliverables, passing validation evidence (`exit_code: 0`), resolved RFC, and pending human review. |
+| [`valid-state-stage1-verified.json`](valid-state-stage1-verified.json) | `project-state.schema.json` | **Valid** | Stage 1 with verified deliverables, passing multi-modal validation evidence (`result: "passed"`), resolved RFC, and pending human review (`stage_status: "pending_review"`). |
 | [`valid-state-stage2-approved.json`](valid-state-stage2-approved.json) | `project-state.schema.json` | **Valid** | Stage 2 approved with historical stage audit ledger (`stage_history`), accepted ADR, authorized exception waiver, and explicit human sign-off. |
 | [`invalid-state-agent-self-approval.json`](invalid-state-agent-self-approval.json) | `project-state.schema.json` | **Invalid** (Rule Violation) | Violation of **Principle 1**: AI agent attempted to approve its own gate transition without human sign-off. |
 | [`invalid-state-unverified-advance.json`](invalid-state-unverified-advance.json) | `project-state.schema.json` | **Invalid** (Rule Violation) | Violation of **Principle 7**: Deliverable marked `verified` without verification evidence and with `validation_status: "unvalidated"`. |

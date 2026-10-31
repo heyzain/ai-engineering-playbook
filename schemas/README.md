@@ -1,6 +1,6 @@
 # Machine-Readable Project Schemas
 
-> **Specification Version**: 1.0.0  
+> **Specification Version**: 1.1.0  
 > **Playbook Alignment**: Core Governance, AI Engineering Controller, and Stage-Gate Lifecycle  
 > **Status**: Canonical Governance Contract
 
@@ -11,48 +11,63 @@
 To bridge the gap between prompt-level cognitive compliance and deterministic engineering governance, the AI Engineering Playbook defines formal, technology-agnostic schemas for project metadata and lifecycle state:
 
 1. **Project Manifest Schema (`project-manifest.schema.json`)**: Defines static and configuration properties of a project (identity, technology profile, artifact path mappings, active stage pointer, and enabled quality capabilities).
-2. **Project State Schema (`project-state.schema.json`)**: Defines dynamic lifecycle progression, deliverable completion, verification evidence, outstanding RFCs, related ADRs, active exceptions, and mandatory human sign-offs.
+2. **Project State Schema (`project-state.schema.json`)**: Defines dynamic lifecycle progression, deliverable completion, multi-modal verification evidence, outstanding RFCs, related ADRs, active exceptions, and mandatory human sign-offs.
 
-These schemas enable both AI coding agents and automated governance tooling (linters, pre-commit hooks, CI/CD runners, and dashboard validators) to inspect, evaluate, and audit repository state deterministically.
+These schemas enable AI coding agents and automated governance tooling (linters, pre-commit hooks, CI/CD runners, and dashboard validators) to inspect, evaluate, and audit repository state deterministically.
 
 ---
 
 ## 2. Core Architectural Invariants
 
 ### 2.1 Separation of Manifest from State
-- **The Manifest (`project.manifest.json`)**: Contains relatively static configuration—which tech stack is in use, which directories store PRDs and ADRs, which capabilities are enabled, and which lifecycle stage is active.
-- **The State (`state.json`)**: Contains dynamic, auditable lifecycle data—granular deliverable statuses, concrete evidence blocks (test runs, schema validations, lint logs), open blocking RFCs, active exceptions, and human approval signatures.
+- **The Manifest (`project.manifest.json`)**: Contains static configuration—which tech stack is in use, which directories store PRDs and ADRs, which capabilities are enabled, and which lifecycle stage is active.
+- **The State (`state.json`)**: Contains dynamic, auditable lifecycle data—granular deliverable statuses, multi-modal evidence blocks (test runs, schema validations, lint logs, manual reviews), open blocking RFCs, active exceptions, and human approval signatures.
 
 ### 2.2 Separation of Machine State from Human Documentation
-Machine-readable JSON files store structured metadata, verification logs, and cryptographic or textual links. Human-readable markdown files (`docs/prd/`, `docs/adr/`, `docs/rfcs/`, `docs/gates/`, `governance/exceptions/`) preserve rich engineering context, rationale, and narrative. Automated tooling parses the JSON state and validates that all referenced markdown artifacts physically exist and conform to their template contracts.
+Machine-readable JSON files store structured metadata, verification logs, and cryptographic or textual links. Human-readable markdown files (`docs/prd/`, `docs/adr/`, `docs/rfcs/`, `docs/gates/`, `docs/exceptions/`) preserve rich engineering context, rationale, and narrative. Automated tooling parses the JSON state and validates that all referenced markdown artifacts physically exist and conform to their template contracts.
 
-### 2.3 Strict Status Separation: The Three-Tier Quality Invariant
-In conventional development, terms like "done", "complete", and "verified" are often blurred. Under this playbook, they represent strictly distinct lifecycle phases:
+### 2.3 Strict Status Orthogonality: Stage vs. Deliverable Lifecycle
+In conventional development, terms like "done", "complete", and "verified" are often blurred. Under this playbook, **Stage Status** and **Deliverable Status** are strictly distinct:
 
 ```
+DELIVERABLE LIFECYCLE:
 ┌──────────────┐     Authoring / Coding      ┌──────────────┐
 │ in_progress  │ ─────────────────────────►  │  completed   │
 └──────────────┘                             └──────────────┘
-                                                    │
-                                                    ▼ Dynamic / Static Verification
-                                             ┌──────────────┐
-                                             │   verified   │
-                                             └──────────────┘
+       │                                            │
+       │ Exception Waiver                           ▼ Multi-Modal Verification
+       ▼                                     ┌──────────────┐
+┌──────────────┐                             │   verified   │
+│    waived    │                             └──────────────┘
+└──────────────┘                                    │
+       ▲                                            │
+       └───────────────────┬────────────────────────┘
+                           │ All Deliverables Verified / Waived
+STAGE LIFECYCLE:           ▼
+┌──────────────┐     Exit Package Submitted  ┌────────────────┐
+│ in_progress  │ ─────────────────────────►  │ pending_review │
+└──────────────┘                             └────────────────┘
                                                     │
                                                     ▼ Human Sign-Off / Gate Review
-                                             ┌──────────────┐
-                                             │   approved   │
-                                             └──────────────┘
+                                             ┌────────────────┐
+                                             │    approved    │
+                                             └────────────────┘
 ```
 
-| Status | Exact Definition | Permitted Actor | What is Required to Reach this Status |
-| :--- | :--- | :--- | :--- |
-| `not_started` | Stage or deliverable defined in scope but untouched. | Controller / System | Initial state allocation. |
-| `in_progress` | Active authoring, system design, or code generation underway. | AI Agent / Human | Active operational step. |
-| `completed` | The deliverable or code artifact has been written and committed. | AI Agent / Human | Artifact file exists at `artifact_path` and is non-empty. **Not yet verified.** |
-| `verified` | Deliverable behavior, invariants, and syntax have passed automated or demonstrable verification. | AI Agent / CI Tooling | Verifiable evidence (test suite pass log, exit code 0, static analysis output) attached to `evidence` array. |
-| `blocked` | Progression is halted due to a gap, failing check, or open blocking RFC. | Controller / Agent | An active blocker (e.g. `RFC-YYYYMMDD-###` in `pending_decision` or failing test). |
-| `approved` | Authorized human engineer has formally reviewed the deliverable or stage exit package and signed off. | **Human Only** | Explicit human sign-off record populated (`approved_by`, `role`, `signature_reference`, `approved_at`). |
+#### Stage Status Taxonomy (`stage_status`)
+- `not_started`: Stage scope initialized; no work begun.
+- `in_progress`: Active execution (deliverables being authored, tested, or reworked).
+- `blocked`: Stage progression halted (open blocking RFC, failed prerequisite).
+- `pending_review`: All required deliverables are `verified` or `waived`; Stage Exit Package compiled and submitted; awaiting human judgment.
+- `approved`: Authorized human engineer has formally signed off on the gate transition.
+
+#### Deliverable Status Taxonomy (`deliverables[].status`)
+- `not_started`: Deliverable specified; file not yet created.
+- `in_progress`: Deliverable file created; actively being drafted or modified.
+- `completed`: Deliverable artifact committed to disk; not yet verified.
+- `verified`: Verification checks (automated or manual) passed with proof recorded (`result: "passed"`).
+- `waived`: Requirement formally waived by an authorized active exception record (`EXC-*`).
+- `blocked`: Deliverable work halted due to an unresolved RFC or dependency.
 
 > [!CAUTION]
 > **Interchangeability Prohibition**: Treating `completed`, `verified`, and `approved` as interchangeable is a constitutional violation. An AI agent claiming a deliverable is `approved` because it has been `completed` or `verified` triggers an immediate controller halt.
@@ -88,28 +103,50 @@ In conventional development, terms like "done", "complete", and "verified" are o
 | `schema_version` | String | Semantic version of the state schema (`1.0.0`). | Yes |
 | `project_id` | String | Project identifier matching manifest. | Yes |
 | `playbook_version` | String | Playbook standard version. | Yes |
-| `current_stage` | Integer | Integer `0` through `6`. | Yes |
-| `stage_status` | Enum | `not_started` \| `in_progress` \| `completed` \| `verified` \| `blocked` \| `approved`. | Yes |
+| `lifecycle_status` | Enum | `active` \| `completed_terminal` \| `reopened_maintenance` \| `paused`. | Yes |
+| `current_stage` | Integer | Integer `0` through `6` strictly bounded. | Yes |
+| `stage_status` | Enum | `not_started` \| `in_progress` \| `blocked` \| `pending_review` \| `approved`. | Yes |
 | `current_stage_detail` | Object | Detailed active stage breakdown (deliverables, evidence, RFCs, ADRs, exceptions, exit package, human approval). | Yes |
 | `stage_history` | Array | Immutable audit ledger of completed stages and their human sign-offs. | Yes |
 | `last_updated` | Object | Timestamp, actor ID, actor type (`human` \| `agent`), and rationale for update. | Yes |
 
-### 4.2 Granular Deliverable Schema
+### 4.2 Multi-Modal Verification Evidence Model
 
-Each deliverable in `current_stage_detail.deliverables` requires:
-- `id`: Unique identifier (e.g. `DELIV-001`, `PRD-CORE`, `UNIT-TEST-SUITE`).
-- `name`: Title of deliverable.
-- `artifact_path`: Relative path to file or directory.
-- `status`: One of the 6 canonical statuses.
-- `validation_status`: `unvalidated` \| `passed` \| `failed` \| `waived`.
-- `evidence`: Array of verifiable proof objects containing:
-  - `type`: `test_execution` \| `static_analysis` \| `type_check` \| `schema_validation` \| `security_audit` \| `human_inspection`.
-  - `summary`: High-level test counts or check outcomes.
-  - `command`: Exact command executed (e.g. `npm test -- --ci`).
-  - `exit_code`: Numeric process exit code (`0` for success).
-  - `log_ref`: File path to detailed log output.
-  - `verified_at`: ISO 8601 timestamp.
-  - `verified_by`: Identity of verifying agent or human.
+Each deliverable in `current_stage_detail.deliverables` contains an `evidence` array accommodating automated, manual, and architectural validation:
+
+```json
+{
+  "requirement_id": "REQ-002",
+  "type": "visual_review",
+  "procedure": "Inspected dashboard layout at 375px, 768px, and 1440px viewport widths in dark and light modes.",
+  "result": "passed",
+  "summary": "Verified zero layout overflow and contrast ratio exceeding 4.5:1.",
+  "exit_code": null,
+  "evidence_ref": "docs/qa/visual-responsive-audit.png",
+  "verified_at": "2026-10-31T11:00:00Z",
+  "verified_by": "human:zain",
+  "actor_type": "human"
+}
+```
+
+- `requirement_id`: Optional string linking proof to `REQ-###` or deliverable.
+- `type`: Enum:
+  - `automated_test`: Unit, integration, or e2e test execution.
+  - `build_typecheck`: TypeScript compiler, build bundles.
+  - `static_analysis`: ESLint, Prettier, AST analyzers.
+  - `schema_validation`: Ajv, OpenAPI validator.
+  - `security_audit`: Snyk, Dependabot, threat model audit.
+  - `manual_functional`: Human user story execution.
+  - `visual_review`: UI layout, dark mode, responsive styling.
+  - `accessibility_audit`: WCAG contrast, screen reader testing.
+  - `architecture_review`: Constitutional compliance and design review.
+- `procedure`: Executed shell command OR human review protocol.
+- `result`: `passed` \| `failed` \| `inconclusive`. Only `passed` permits transition to `verified`.
+- `exit_code`: Nullable integer (0 for successful command runs; null for human reviews).
+- `evidence_ref`: Relative path to log, screenshot, report, or test output.
+- `verified_at`: ISO 8601 timestamp.
+- `verified_by`: Identity of executor or reviewer.
+- `actor_type`: `agent` \| `human`.
 
 ### 4.3 Human Approval Record Schema
 
@@ -119,17 +156,20 @@ Mandatory human sign-off block in `current_stage_detail.human_approval`:
 - `role`: Role of human approver (e.g., `Lead Architect`, `Product Owner`).
 - `approval_mode`: `solo` \| `team`.
 - `decision`: `GATE_APPROVED` \| `REJECTED` \| `null`.
-- `signature_reference`: Verifiable reference (e.g. commit hash, PR # number, explicit conversation timestamp).
+- `signature_reference`: Verifiable reference (e.g. PR # number, commit SHA, chat quote with timestamp).
 - `approved_at`: ISO 8601 timestamp (`null` while pending).
 - `conditions`: Optional instructions or follow-up constraints.
 
 ---
 
-## 5. Verification Tooling Integration
+## 5. Five Tiers of Governance Verification
 
-Automated tools evaluate project state through deterministic rule checks:
-1. **Schema Compliance**: `ajv validate -s schemas/project-state.schema.json -d .playbook/state.json`.
-2. **Path Integrity**: For each deliverable, RFC, ADR, and exit package, verify that the referenced file physically exists in the file system.
-3. **Evidence Rigor**: Verify that every deliverable marked `verified` has at least one valid evidence entry with `exit_code: 0`.
-4. **Halt Condition Check**: Confirm that no RFC with `is_blocking: true` is in `pending_decision`, and no exception in `exceptions` is in `expired` or `revoked` status.
-5. **Human Sovereignty Check**: Assert that if `stage_status` is `approved`, `human_approval.status` equals `approved`, `human_approval.approved_by` is non-null, and `last_updated.actor_type` reflects human authorization or human-supervised agent commitment.
+To maintain intellectual honesty, automated tools and agents evaluate rules according to five distinct validation tiers:
+
+| Tier | Validation Level | Capabilities | Limitations |
+| :--- | :--- | :--- | :--- |
+| **Tier 1** | **JSON Schema Validation** | Validates structural shape, mandatory keys, data types, and enum values. | Cannot verify semantic truth, file existence, or human identity. |
+| **Tier 2** | **Deterministic CLI Checks** | Verifies physical file existence, non-empty files, git working tree state, RFC blocking flags, and exception expiration dates. | Cannot verify the quality of prose or whether tests provide real coverage. |
+| **Tier 3** | **External Evidence Checks** | Verifies tool exit codes, parses test runner summaries, inspects CI artifact hashes. | Cannot prevent local mock tampering unless run in an isolated hermetic CI runner. |
+| **Tier 4** | **Human Review & Authority** | Verifies business problem alignment, architecture trade-offs, UX acceptability, exception necessity, and gate sign-off. | Dependent on human diligence and domain review; not real-time. |
+| **Tier 5** | **AI Semantic Reasoning** | Detects unstated assumptions, ambiguous requirements, constitutional misalignments, and drafting gaps. | Non-deterministic; prone to completion bias if unconstrained; strictly forbidden from self-approving gates. |

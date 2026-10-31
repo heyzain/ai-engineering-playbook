@@ -2,13 +2,14 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://ai-engineering-playbook.org/schemas/project-state.schema.json",
   "title": "AI Engineering Playbook - Project State Schema",
-  "description": "Technology-agnostic machine-readable state model representing lifecycle progression, deliverable completion, verification evidence, active exceptions, blocking RFCs, and human approvals.",
+  "description": "Technology-agnostic machine-readable state model representing lifecycle progression, deliverable completion, multi-modal verification evidence, active exceptions, blocking RFCs, and human approvals.",
   "type": "object",
   "required": [
     "$schema",
     "schema_version",
     "project_id",
     "playbook_version",
+    "lifecycle_status",
     "current_stage",
     "stage_status",
     "current_stage_detail",
@@ -36,6 +37,16 @@
       "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$",
       "description": "Playbook standard version governing this state (e.g. 1.0.0)."
     },
+    "lifecycle_status": {
+      "type": "string",
+      "enum": [
+        "active",
+        "completed_terminal",
+        "reopened_maintenance",
+        "paused"
+      ],
+      "description": "Overall project lifecycle state across Stages 0 through 6. 'completed_terminal' indicates Stage 6 is approved and sealed."
+    },
     "current_stage": {
       "type": "integer",
       "minimum": 0,
@@ -47,12 +58,11 @@
       "enum": [
         "not_started",
         "in_progress",
-        "completed",
-        "verified",
         "blocked",
+        "pending_review",
         "approved"
       ],
-      "description": "Overall state of the active lifecycle stage. 'completed' means deliverables exist; 'verified' means evidence gathered; 'approved' means human sign-off granted."
+      "description": "Macro lifecycle state of the active stage. 'pending_review' indicates all required deliverables are verified/waived and exit package is submitted for human review."
     },
     "current_stage_detail": {
       "type": "object",
@@ -132,10 +142,10 @@
                   "in_progress",
                   "completed",
                   "verified",
-                  "blocked",
-                  "approved"
+                  "waived",
+                  "blocked"
                 ],
-                "description": "Deliverable lifecycle status. 'completed' = created; 'verified' = verified with evidence; 'approved' = human reviewed."
+                "description": "Deliverable lifecycle status. 'completed' = authored on disk; 'verified' = verification passed; 'waived' = waived under authorized exception."
               },
               "validation_status": {
                 "type": "string",
@@ -147,46 +157,80 @@
                 ],
                 "description": "Result of verification checks. 'waived' requires an active exception record."
               },
+              "exception_ref": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "pattern": "^EXC-[0-9]{8}-[0-9]{3}$",
+                "description": "Mandatory reference to active exception record if status is waived."
+              },
               "evidence": {
                 "type": "array",
-                "description": "Verifiable proof references confirming deliverable quality.",
+                "description": "Verifiable proof references confirming deliverable quality across automated and manual validation methods.",
                 "items": {
                   "type": "object",
                   "required": [
                     "type",
+                    "procedure",
+                    "result",
                     "summary",
+                    "evidence_ref",
                     "verified_at",
-                    "verified_by"
+                    "verified_by",
+                    "actor_type"
                   ],
                   "additionalProperties": false,
                   "properties": {
+                    "requirement_id": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "description": "Traceable requirement ID (e.g. REQ-001, NFR-002) validated by this evidence."
+                    },
                     "type": {
                       "type": "string",
                       "enum": [
-                        "test_execution",
+                        "automated_test",
+                        "build_typecheck",
                         "static_analysis",
-                        "type_check",
                         "schema_validation",
                         "security_audit",
-                        "human_inspection"
+                        "manual_functional",
+                        "visual_review",
+                        "accessibility_audit",
+                        "architecture_review"
                       ],
-                      "description": "Method of verification."
+                      "description": "Method or discipline of verification."
+                    },
+                    "procedure": {
+                      "type": "string",
+                      "description": "Executed command line string OR description of manual inspection protocol."
+                    },
+                    "result": {
+                      "type": "string",
+                      "enum": [
+                        "passed",
+                        "failed",
+                        "inconclusive"
+                      ],
+                      "description": "Outcome of verification. Only 'passed' permits deliverable transition to 'verified'."
                     },
                     "summary": {
                       "type": "string",
-                      "description": "Concise summary of verification results (e.g. '42 tests passed, 0 failures')."
-                    },
-                    "command": {
-                      "type": "string",
-                      "description": "Exact command executed to gather verification evidence."
+                      "description": "Concise summary of verification results (e.g. '42 tests passed, 0 failures', 'Contrast ratio 7.2:1 verified')."
                     },
                     "exit_code": {
-                      "type": "integer",
-                      "description": "Command exit code (0 for success)."
+                      "type": [
+                        "integer",
+                        "null"
+                      ],
+                      "description": "Process exit code if automated execution (0 for success); null for manual reviews."
                     },
-                    "log_ref": {
+                    "evidence_ref": {
                       "type": "string",
-                      "description": "Relative path to log file or raw proof output."
+                      "description": "Relative path to log file, report, screenshot, or checklist proof."
                     },
                     "verified_at": {
                       "type": "string",
@@ -195,7 +239,15 @@
                     },
                     "verified_by": {
                       "type": "string",
-                      "description": "Identity of verification executor (e.g. 'agent:controller', 'human:zain')."
+                      "description": "Identifier of verification executor or reviewer (e.g. 'agent:controller', 'human:zain')."
+                    },
+                    "actor_type": {
+                      "type": "string",
+                      "enum": [
+                        "agent",
+                        "human"
+                      ],
+                      "description": "Actor class performing verification."
                     }
                   }
                 }

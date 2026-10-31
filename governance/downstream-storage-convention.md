@@ -75,7 +75,7 @@ The storage architecture adheres to four principles:
   - Commits to version control so the full progression history is auditable via Git.
 - **`logs/`**:
   - Stores concrete outputs from verification runs (terminal captures, test runner outputs, compiler reports).
-  - Referenced in `state.json` deliverables under `evidence[].log_ref`.
+  - Referenced in `state.json` deliverables under `evidence[].evidence_ref`.
 
 ### 3.2 `docs/prd/` (Requirements Baseline)
 - Stores Product Requirements Documents formatted per `templates/prd-template.md`.

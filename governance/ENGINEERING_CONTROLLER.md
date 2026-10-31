@@ -163,24 +163,25 @@ Stage transitions represent irreversible or high-cost milestones. Transitions mu
 > [!CAUTION]
 > **No Agent Self-Approval**: AI agents are strictly forbidden from approving their own mandatory stage transitions. Stage completion always requires verifiable evidence, not merely an unverified AI claim. Progression to the subsequent stage requires explicit human sign-off.
 
-### Approval Sequence
-1. **Exit Package Assembly**:
+### Approval Sequence (The Two-Phase Handshake)
+1. **Exit Package Assembly & Review Submission (Phase 1 — Agent Handover)**:
    The agent compiles a concise **Stage Exit Package** formatted using the [Stage Gate Exit Package Template](../templates/gate-exit-package-template.md) containing:
    - Summary of completed deliverables against stage acceptance criteria.
-   - Verifiable evidence (passing test logs, build outputs, static analysis results, artifact links).
+   - Verifiable evidence (passing test logs, build outputs, static analysis results, manual review proof, artifact links).
    - Traceability matrix linking deliverables to specifications.
    - Known limitations or deferred items (if any).
-   - The agent updates `.playbook/state.json`: `exit_package.status = "submitted_for_review"`, `human_approval.status = "pending_review"`.
-2. **Human Review and Sign-Off**:
+   - The agent updates `.playbook/state.json`: sets `exit_package.status = "submitted_for_review"`, `human_approval.status = "pending_review"`, and `stage_status = "pending_review"`.
+   - **The agent's authority boundary strictly halts here.**
+2. **Human Review and Sign-Off (Phase 2 — Human Sovereign Decision)**:
    - **Solo Developer Mode**:
      - Pull requests are **optional** for solo projects to minimize overhead.
      - The human engineer reviews the Stage Exit Package and issues an explicit confirmation directly in the development conversation (e.g., *"Approved Stage 1 Exit Package: Proceed to Stage 2"*).
-     - The agent records this explicit confirmation and the accompanying verification evidence in `.playbook/state.json` under `human_approval` (`approved_by`, `role`, `decision: "GATE_APPROVED"`, `signature_reference`) and in the commit message before proceeding.
+     - The agent records this explicit confirmation in `.playbook/state.json` under `human_approval` (`approved_by`, `role`, `approval_mode: "solo"`, `decision: "GATE_APPROVED"`, `signature_reference: "chat-msg-timestamp"`, `approved_at`), sets `stage_status = "approved"`, and logs the commit message before proceeding.
    - **Team / Multi-Contributor Mode**:
-     - Stage transitions are formally requested and approved via Pull Request review approvals, designated issue sign-offs, or formal code review ceremonies before merge.
-3. **Transition Milestone (`ADVANCE_STAGE`)**:
-   - Upon explicit human approval, the repository advances to the subsequent stage per [state-machine.md](state-machine.md).
-   - The completed stage is appended to `stage_history` in `.playbook/state.json`.
+     - Stage transitions are formally requested and approved via Pull Request review approvals, designated issue sign-offs, or formal code review ceremonies before merge, recording PR review ID and commit SHA.
+3. **Transition Milestone (`ADVANCE_STAGE` / `CLOSE_LIFECYCLE`)**:
+   - For Stages 0 through 5: Upon explicit human approval, the repository advances to the subsequent stage (`ADVANCE_STAGE`) per [state-machine.md](state-machine.md). The completed stage is appended to `stage_history` in `.playbook/state.json`.
+   - For Stage 6: Approval triggers `CLOSE_LIFECYCLE`, transitioning `lifecycle_status` to `completed_terminal`. Stage advancement beyond Stage 6 is strictly barred.
    - The state transition is committed to version control.
 
 ---

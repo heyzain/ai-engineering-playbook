@@ -3,6 +3,7 @@
   "schema_version": "1.0.0",
   "project_id": "zentrix-lms",
   "playbook_version": "1.0.0",
+  "lifecycle_status": "active",
   "current_stage": 2,
   "stage_status": "approved",
   "current_stage_detail": {
@@ -15,17 +16,21 @@
         "name": "System Architecture Specification",
         "description": "Component topology, trust boundaries, and entity lifecycles.",
         "artifact_path": "docs/adr/ADR-20261031-001-system-topology.md",
-        "status": "approved",
+        "status": "verified",
         "validation_status": "passed",
+        "exception_ref": null,
         "evidence": [
           {
-            "type": "human_inspection",
+            "requirement_id": null,
+            "type": "architecture_review",
+            "procedure": "playbook-arch-audit docs/adr/ADR-20261031-001-system-topology.md",
+            "result": "passed",
             "summary": "Constitutional compliance verified by human architect.",
-            "command": "playbook-arch-audit docs/adr/ADR-20261031-001-system-topology.md",
             "exit_code": 0,
-            "log_ref": ".playbook/logs/stage-2-arch-audit.log",
+            "evidence_ref": ".playbook/logs/stage-2-arch-audit.log",
             "verified_at": "2026-10-31T11:30:00Z",
-            "verified_by": "human:zain"
+            "verified_by": "human:zain",
+            "actor_type": "human"
           }
         ]
       },
@@ -34,17 +39,21 @@
         "name": "Interface Contracts & JSON Schemas",
         "description": "Public API schemas, payloads, and error envelope specifications.",
         "artifact_path": "schemas/api/",
-        "status": "approved",
+        "status": "verified",
         "validation_status": "passed",
+        "exception_ref": null,
         "evidence": [
           {
+            "requirement_id": null,
             "type": "schema_validation",
+            "procedure": "ajv compile -s schemas/api/*.json",
+            "result": "passed",
             "summary": "All 18 JSON schemas validate under Draft 2020-12 meta-schema.",
-            "command": "ajv compile -s schemas/api/*.json",
             "exit_code": 0,
-            "log_ref": ".playbook/logs/stage-2-schema-compilation.log",
+            "evidence_ref": ".playbook/logs/stage-2-schema-compilation.log",
             "verified_at": "2026-10-31T11:40:00Z",
-            "verified_by": "agent:controller"
+            "verified_by": "agent:controller",
+            "actor_type": "agent"
           }
         ]
       },
@@ -53,14 +62,21 @@
         "name": "High-Throughput Ingestion Benchmark Spike",
         "description": "Prototype load verification for event streaming pipeline.",
         "artifact_path": "tests/bench/ingest_spike.ts",
-        "status": "approved",
+        "status": "waived",
         "validation_status": "waived",
+        "exception_ref": "EXC-20261031-001",
         "evidence": [
           {
-            "type": "human_inspection",
+            "requirement_id": null,
+            "type": "architecture_review",
+            "procedure": "Human architect inspection and waiver per EXC-20261031-001.",
+            "result": "passed",
             "summary": "Benchmark deliverable waived per authorized exception EXC-20261031-001.",
+            "exit_code": null,
+            "evidence_ref": "docs/exceptions/EXC-20261031-001.md",
             "verified_at": "2026-10-31T11:45:00Z",
-            "verified_by": "human:zain"
+            "verified_by": "human:zain",
+            "actor_type": "human"
           }
         ]
       }

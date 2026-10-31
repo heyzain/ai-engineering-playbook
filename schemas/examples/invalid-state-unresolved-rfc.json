@@ -3,8 +3,9 @@
   "schema_version": "1.0.0",
   "project_id": "zentrix-lms",
   "playbook_version": "1.0.0",
+  "lifecycle_status": "active",
   "current_stage": 1,
-  "stage_status": "completed",
+  "stage_status": "pending_review",
   "current_stage_detail": {
     "stage": 1,
     "stage_name": "Requirements & Specification",
@@ -15,9 +16,23 @@
         "name": "Full Product Requirements Document",
         "description": "Functional user stories and acceptance criteria.",
         "artifact_path": "docs/prd/PRD-20261031-core-specification.md",
-        "status": "completed",
-        "validation_status": "unvalidated",
-        "evidence": []
+        "status": "verified",
+        "validation_status": "passed",
+        "exception_ref": null,
+        "evidence": [
+          {
+            "requirement_id": "REQ-001",
+            "type": "schema_validation",
+            "procedure": "playbook-spec-lint docs/prd/PRD-20261031-core-specification.md",
+            "result": "passed",
+            "summary": "Specification validation passed.",
+            "exit_code": 0,
+            "evidence_ref": ".playbook/logs/stage-1-spec-lint.log",
+            "verified_at": "2026-10-31T09:15:00Z",
+            "verified_by": "agent:controller",
+            "actor_type": "agent"
+          }
+        ]
       }
     ],
     "rfcs": [
@@ -35,7 +50,8 @@
     "exceptions": [],
     "exit_package": {
       "status": "submitted_for_review",
-      "path": "docs/gates/GATE-1-EXIT-PACKAGE.md"
+      "path": "docs/gates/GATE-1-EXIT-PACKAGE.md",
+      "submitted_at": "2026-10-31T09:25:00Z"
     },
     "human_approval": {
       "status": "pending_review",
@@ -53,6 +69,6 @@
     "timestamp": "2026-10-31T09:30:00Z",
     "updated_by": "agent:controller",
     "actor_type": "agent",
-    "reason": "VIOLATION: Stage completion requested while blocking RFC-20261031-002 is unresolved."
+    "reason": "VIOLATION: Stage review requested while blocking RFC-20261031-002 is unresolved."
   }
 }

@@ -49,6 +49,10 @@ ai-engineering-playbook/
 ├── core/
 │   └── engineering-constitution.md     # 10 fundamental engineering principles and non-negotiables
 │
+├── docs/                               # Repository documentation & decisions
+│   └── adr/                            # Architecture Decision Records
+│       └── ADR-20261031-001-state-model-refinements.md # State model refinements & two-phase handshake
+│
 ├── governance/
 │   ├── ENGINEERING_CONTROLLER.md       # AI Controller architecture, halt mechanisms, and RFC protocol
 │   ├── stage-gate-rules.md             # 7-stage engineering lifecycle, entry/exit criteria, and gates
@@ -92,6 +96,7 @@ ai-engineering-playbook/
 | [governance/state-machine.md](governance/state-machine.md) | Deterministic FSM transition matrix, preconditions, and guards | Humans, Agents & Tools |
 | [governance/downstream-storage-convention.md](governance/downstream-storage-convention.md) | Downstream directory layout, state storage, and log retention | Humans & Agents |
 | [schemas/README.md](schemas/README.md) | Machine-readable JSON Schema specifications and validation rules | Humans, Agents & Tools |
+| [docs/adr/ADR-20261031-001-state-model-refinements.md](docs/adr/ADR-20261031-001-state-model-refinements.md) | Architectural decision record for state model taxonomy and two-phase handshake | Humans & Agents |
 | [templates/README.md](templates/README.md) | Standardized artifact templates (PRD, ADR, RFC, Exit Package, Exception) | Humans & Agents |
 
 ---

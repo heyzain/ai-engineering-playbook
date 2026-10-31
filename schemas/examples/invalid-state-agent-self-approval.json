@@ -3,6 +3,7 @@
   "schema_version": "1.0.0",
   "project_id": "zentrix-lms",
   "playbook_version": "1.0.0",
+  "lifecycle_status": "active",
   "current_stage": 1,
   "stage_status": "approved",
   "current_stage_detail": {
@@ -13,15 +14,23 @@
       {
         "id": "DELIV-101",
         "name": "Full Product Requirements Document",
+        "description": "Functional user stories.",
         "artifact_path": "docs/prd/PRD-20261031-core-specification.md",
-        "status": "approved",
+        "status": "verified",
         "validation_status": "passed",
+        "exception_ref": null,
         "evidence": [
           {
+            "requirement_id": "REQ-001",
             "type": "schema_validation",
+            "procedure": "playbook-spec-lint docs/prd/PRD-20261031-core-specification.md",
+            "result": "passed",
             "summary": "Specification validation passed.",
+            "exit_code": 0,
+            "evidence_ref": ".playbook/logs/stage-1-spec-lint.log",
             "verified_at": "2026-10-31T09:15:00Z",
-            "verified_by": "agent:controller"
+            "verified_by": "agent:controller",
+            "actor_type": "agent"
           }
         ]
       }
@@ -31,11 +40,12 @@
     "exceptions": [],
     "exit_package": {
       "status": "submitted_for_review",
-      "path": "docs/gates/GATE-1-EXIT-PACKAGE.md"
+      "path": "docs/gates/GATE-1-EXIT-PACKAGE.md",
+      "submitted_at": "2026-10-31T09:20:00Z"
     },
     "human_approval": {
       "status": "approved",
-      "approved_by": "Autonomous Agent (Self-Approved)",
+      "approved_by": "Autonomous Agent Controller (Self-Approved)",
       "role": "AI Engineering Controller",
       "approval_mode": "solo",
       "decision": "GATE_APPROVED",
