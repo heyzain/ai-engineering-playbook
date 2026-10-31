@@ -87,7 +87,7 @@ ai-engineering-playbook/
     └── playbook-cli/                   # Cross-platform governance CLI (@ai-engineering-playbook/cli)
         ├── README.md                   # CLI architecture, commands, and programmatic API
         ├── package.json                # Dependencies (Ajv Draft 2020-12, ajv-formats)
-        ├── src/                        # CLI source (init, validate, Ajv validator, scaffolder)
+        ├── src/                        # CLI source (init, inspect, validate, diagnostics, Ajv validator)
         └── tests/                      # Automated test suite (node:test)
 ```
 
@@ -105,7 +105,7 @@ ai-engineering-playbook/
 | [schemas/README.md](schemas/README.md) | Machine-readable JSON Schema specifications and validation rules | Humans, Agents & Tools |
 | [docs/adr/ADR-20261031-001-state-model-refinements.md](docs/adr/ADR-20261031-001-state-model-refinements.md) | Architectural decision record for state model taxonomy and two-phase handshake | Humans & Agents |
 | [templates/README.md](templates/README.md) | Standardized artifact templates (PRD, ADR, RFC, Exit Package, Exception) | Humans & Agents |
-| [tooling/playbook-cli/README.md](tooling/playbook-cli/README.md) | Cross-platform governance CLI for project initialization and schema validation | Humans, Agents & Tools |
+| [tooling/playbook-cli/README.md](tooling/playbook-cli/README.md) | Cross-platform governance CLI for project initialization, state inspection, and schema validation | Humans, Agents & Tools |
 
 ---
 
@@ -152,7 +152,7 @@ Agent Cognitive Compliance    Deterministic Schema Contracts       Automated Too
 
 ## 6. Next Implementation Steps
 
-With the foundational methodology, standard templates, machine-readable project state system, and foundational initialization CLI (`tooling/playbook-cli/`) established, subsequent tasks will address:
+With the foundational methodology, standard templates, machine-readable project state system, and foundational initialization & inspection CLI (`tooling/playbook-cli/`) established, subsequent tasks will address:
 1. **Automated Governance CLI Transitions** (`tooling/playbook-cli`): Adding transition state machine operations (`playbook advance`, interactive `playbook approve`) to execute stage transitions deterministically.
 2. **Quality Gates & Hook Integration**: Git pre-commit/pre-push hooks and CI gate validators verifying `.playbook/state.json`.
 3. **Technology Stacks** (`stacks/<technology>/`): Specific engineering standards and scaffolds for Next.js, React, React Native, and Expo.
