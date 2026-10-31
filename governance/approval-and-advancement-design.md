@@ -306,7 +306,7 @@ The following fields are strictly excluded from the canonical projection:
 1. **`stage_status` Normalization**:
    - When evaluating a gate for approval (`stage_status === "pending_review"`) or verifying an approved gate during advancement (`stage_status === "approved"`), `stage_status` is **strictly normalized to the canonical token `"approved"`**.
    - **Why this is mathematically necessary**: Before approval, `state.stage_status` is `pending_review`. After approval, `state.stage_status` is `approved`. If `stage_status` were projected verbatim, recalculating the digest after approval would produce a completely different hash, immediately causing false `APPROVAL_STALE` errors. Normalizing both states to `"approved"` ensures that the canonical projection of an unchanged approval remains 100% byte-for-byte identical.
-   - **Rejection of Non-Reviewable States**: If `stage_status` is in any non-reviewable/non-approved status (`rejected`, `in_progress`, `not_started`), it does **NOT** normalize to `"approved"`; recalculation raises `APPROVAL_INVALID_STAGE_STATUS` and immediately blocks advancement.
+   - **Rejection of Non-Reviewable States**: If `stage_status` is in any non-reviewable/non-approved status (`in_progress`, `blocked`, `not_started`), it does **NOT** normalize to `"approved"`; recalculation raises `APPROVAL_INVALID_STAGE_STATUS` and immediately blocks advancement. Note that per `schemas/project-state.schema.json`, `"rejected"` is not a valid `stage_status` enum; gate rejections revert `stage_status` to `"in_progress"`.
 2. **File Hash Lowercasing**: All computed SHA-256 file hashes (`file_sha256`) and recorded evidence hashes (`evidence_hash`) are normalized to lowercase hexadecimal with standard `sha256:` prefix.
 3. **Deterministic Array Sorting**:
    - `deliverables`: Sorted lexicographically by `id` ascending.
@@ -409,12 +409,16 @@ Any mutation to the underlying engineering baseline between approval and advance
 5. **RFC Mutation**: Adding, modifying, or changing the blocking status of any RFC.
 6. **Exit Package Modification on Disk**: Any post-approval edits to the markdown file at `exit_package.path` changes `exit_package.file_sha256`.
 7. **Identity Mutation**: Altering `project_id`, `milestone_id`, or `current_stage`.
-8. **Reversion of Lifecycle Status**: Resetting `stage_status` to `rejected`, `in_progress`, or `not_started`.
+8. **Reversion of Lifecycle Status**: Resetting `stage_status` to `in_progress`, `blocked`, or `not_started`.
 
 ##### 2.6 Handling Rejected Review Attempts
 When a human reviewer rejects a stage (`playbook approve --reject`):
-- `state.stage_status` transitions to `"rejected"`.
-- `human_approval.decision` transitions to `"GATE_REJECTED"`.
+- Per canonical schema `schemas/project-state.schema.json`, `stage_status` does NOT have a `"rejected"` enum; the active stage **transitions back to `stage_status: "in_progress"`** (or `"blocked"` if blocked by an active issue).
+- Rejection disposition is canonically captured in `current_stage_detail.human_approval`:
+  - `human_approval.status` is set to `"rejected"`.
+  - `human_approval.decision` is set to `"REJECTED"`.
+  - `human_approval.conditions` records mandatory rework instructions.
+- `current_stage_detail.exit_package.status` reverts to `"drafted"`.
 - Any existing `.playbook/approval-fingerprint.json` sidecar is immediately **unlinked/purged**.
 - A rejected stage possesses **zero valid fingerprints**.
 - When engineering fixes are completed and the stage is re-submitted, `state.stage_status` returns to `"pending_review"`.
@@ -646,11 +650,11 @@ To prevent race conditions, stale lock deadlocks, or lock overtaking during recl
 │ 1. Pre-Acquisition Guard Check        │
 │    Is reclaim.lock present & active?  │── YES ──► Back off with randomized
 └───────────────────────────────────────┘           exponential jitter (50-200ms)
-        │ NO (or stale reclaim.lock cleared)
+        │ NO (or proven dead reclaimer cleared)
         ▼
 ┌───────────────────────────────────────┐
 │ 2. Attempt Exclusive Lock Creation   │
-│    fs.openSync('transaction.lock','wx')│── FAILED (EEXIST) ──► Go to 5. Staleness
+│    fs.openSync('transaction.lock','wx')│── FAILED (EEXIST) ──► Go to 4. Staleness
 └───────────────────────────────────────┘                        & Contention Check
         │ SUCCEEDED
         ▼
@@ -680,12 +684,16 @@ To prevent race conditions, stale lock deadlocks, or lock overtaking during recl
 ##### Step 1: Pre-Acquisition Guard Inspection (`reclaim.lock`)
 - Before attempting to create `transaction.lock`, any process (e.g. Process C) must check for the presence of `.playbook/reclaim.lock`.
 - If `reclaim.lock` exists:
-  - The process inspects its payload: `{ reclaiming_pid, target_nonce, created_at, nonce }`.
-  - If `reclaim.lock` is **active** (age < 15 seconds AND process `reclaiming_pid` is alive with process start-time $\le$ `created_at`):
-    - **Reclamation is in progress.** Process C **must never attempt acquisition** of `transaction.lock` while reclamation is active.
+  - The process inspects its payload: `{ reclaiming_pid, hostname, target_nonce, created_at, nonce }`.
+  - **Ownership Invariant**: A live reclaimer holds absolute ownership of `reclaim.lock`. A live reclaimer **never loses ownership solely because its marker exceeded an elapsed time**.
+  - If `reclaim.lock` is **unreadable, empty, or truncated**:
+    - Process C **must not delete or steal the marker**.
+    - Process C **fails closed** with diagnostic `RECLAIM_MARKER_UNVERIFIABLE`.
+  - If `reclaim.lock` is **active** (process `reclaiming_pid` is alive on the local OS with process start-time $\le$ `created_at`):
+    - **Reclamation is actively in progress.** Process C **must never attempt acquisition** of `transaction.lock` while reclamation is active.
     - Process C backs off with randomized exponential jitter (50ms–200ms) and retries Step 1.
-  - If `reclaim.lock` is **stale** (age $\ge$ 15 seconds OR `reclaiming_pid` is dead/recycled):
-    - The process handles stale reclamation cleanup per Section 5.4.5 before proceeding.
+  - If `reclaim.lock` is **proven dead** (PID does not exist via `ESRCH` or start-time is recycled):
+    - Process C safely unlinks the dead `reclaim.lock` per Section 5.4.5 before proceeding.
 
 ##### Step 2: Primary Lock Creation (`transaction.lock`)
 - The process attempts atomic creation: `fs.openSync('.playbook/transaction.lock', 'wx')` (`O_CREAT | O_EXCL`).
@@ -703,7 +711,7 @@ To prevent race conditions, stale lock deadlocks, or lock overtaking during recl
   - Flush to physical storage via `fs.fsyncSync(fd)` and close `fd`.
 - **If creation fails (`EEXIST`)**:
   - `transaction.lock` already exists on disk.
-  - Enter **Staleness & Contention Evaluation** (Step 5).
+  - Enter **Staleness & Contention Evaluation** (Section 5.4.3 & 5.4.4).
 
 ##### Step 3: Post-Acquisition Invariant Re-Check
 - To close the microsecond race window between checking `reclaim.lock` (Step 1) and creating `transaction.lock` (Step 2):
@@ -714,30 +722,59 @@ To prevent race conditions, stale lock deadlocks, or lock overtaking during recl
     - It backs off with jitter and returns to Step 1.
   - If `reclaim.lock` does not exist: **Lock acquisition is verified and exclusive.**
 
-#### 2. Truncated & 0-Byte Lock File Defenses
-If a creator process crashes between creating `.playbook/transaction.lock` and flushing its JSON payload:
-- **Grace Period Evaluation**:
-  - If `stat.size === 0` or JSON parsing fails, compute lock age: $\text{age} = \text{now} - \text{stat.mtime}$.
-  - If age $< 10$ seconds: The creator process is presumed in-flight (writing and fsyncing). The inspecting process backs off with exponential jitter and retries.
-  - If age $\ge 10$ seconds: The creator crashed before payload flush completed. The lock is declared dead (`DEAD_EMPTY_LOCK`) and eligible for atomic reclamation.
+#### 2. Empty, Truncated, and Malformed Lock Defenses
+
+A critical concurrency defect in naive lock designs is assuming that elapsed time (e.g. 10 seconds) proves a lock creator is dead. **Age alone must NEVER establish that a lock owner is dead.** A running process undergoing memory paging, heavy CPU throttling, or long garbage collection pauses remains alive; unilaterally deleting its lock permits concurrent split-brain state mutations.
+
+##### Safe Behavior When Metadata is Absent or Unreadable:
+1. **Transient Write-In-Flight Polling**:
+   - File creation and payload flushing (`openSync` to `fsyncSync`) normally completes within microseconds.
+   - An inspecting process encountering a 0-byte or unparseable lock file polls with exponential backoff for up to **1000ms (1 second)** to accommodate transient local file-buffer flushing.
+2. **Fail-Closed on Unverifiable Ownership**:
+   - If after 1 second the lock file remains empty, truncated, or unparseable JSON:
+   - Because no PID, hostname, or nonce exists, **process ownership cannot be cryptographically or reliably established**.
+   - Automated CLI commands (including `playbook approve` and `playbook advance`) **cannot prove the creator is dead**.
+   - Therefore, the governance engine **FAILS CLOSED IMMEDIATELY** with diagnostic code `LOCK_METADATA_UNREADABLE`.
+   - Automated commands **strictly halt without modifying or deleting the lock file**.
+3. **Safe Operator Recovery Protocol (`playbook repair-lock`)**:
+   How can a crashed process that left an empty lock be recovered without allowing concurrent transactions?
+   - Recovery is barred for unattended background agents.
+   - Recovery requires an explicit interactive human session via `playbook repair-lock`:
+     1. The operator executes `playbook repair-lock` in an interactive terminal.
+     2. The tool inspects the host operating system process table (`ps -ef` / Win32 `Get-Process`) for any running `playbook` CLI instances in the current repository tree.
+     3. **Active Process Found**: If any `playbook` CLI process is running, the tool halts immediately, displays the PID, and refuses to touch the lock.
+     4. **Zero Active Processes Proven**: If and only if the tool confirms **0 active playbook processes** exist on the host, it displays the lock path, size, and timestamp, and prompts for explicit operator confirmation:
+        ```text
+        Found empty/corrupt lock file with unreadable metadata: .playbook/transaction.lock
+        Audited local process tree: 0 active playbook CLI processes found.
+        Confirm removal of unowned lock file to restore repository operations? [y/N]:
+        ```
+     5. Upon operator confirmation (`y`), the tool unlinks the file and records an audit entry in `state.last_updated`.
 
 #### 3. PID Reuse & Cross-Platform Start-Time Verification
-Operating systems recycle PIDs over time. To ensure a dead process's PID is not confused with an unrelated running application:
-1. **Lock TTL Boundary**: Active transactions complete in under 500ms. Lock TTL is set to **5 minutes**. Any lock older than 5 minutes is declared timed out.
-2. **Process Liveliness Check**: Call `process.kill(pid, 0)` (supported on POSIX and Windows in Node.js). If `ESRCH`, the PID does not exist; the process is dead.
-3. **Cross-Platform Start-Time Verification**:
+
+Operating systems recycle PIDs over time. When valid JSON metadata exists in `transaction.lock` or `reclaim.lock`, the engine establishes genuine process death through verifiable operating system evidence:
+1. **Host Boundary Check**:
+   - If `lock.hostname !== os.hostname()`, local PID checks are invalid across physical machines. The CLI cannot verify death over network mounts and fails closed with `CROSS_HOST_LOCK_UNVERIFIABLE`.
+2. **Process Liveliness Check**:
+   - On the same host, call `process.kill(pid, 0)` (supported on POSIX and Windows in Node.js).
+   - If `ESRCH`: The PID definitively does not exist in the OS process table; the process is **dead**.
+3. **Cross-Platform Start-Time Verification (PID Recycling Defense)**:
+   - If `process.kill(pid, 0)` indicates the PID is alive, the OS may have assigned that PID to an unrelated new application.
    - **POSIX (Linux/macOS)**: Query `/proc/<pid>/stat` (field 22 `starttime`) or execute `ps -p <pid> -o lstart=`. If the process start time is *after* `lock.created_at`, the PID was recycled; the original locking process is dead.
    - **Windows (NTFS)**: Query Win32 process creation time via `GetProcessTimes` or PowerShell `(Get-Process -Id <pid>).StartTime`. If the process creation time is *after* `lock.created_at`, the PID was recycled; the original locking process is dead.
-   - **Fallback Rule**: If operating system security policies prevent querying process start times, the engine requires **both** lock age $> \text{TTL}$ (5 minutes) AND verified dead PID (`ESRCH`) before declaring a lock stale.
+   - **Liveness Invariant**: If the process is alive and start time $\le$ `lock.created_at`, the process is **genuinely alive**. A live process **NEVER loses its lock due to time elapsed**. Other processes must wait or fail closed.
+4. **Fallback Rule**: If operating system security policies prevent querying process start times, the engine requires verified dead PID (`ESRCH`) before declaring a lock stale.
 
 #### 4. Atomic Stale-Lock Reclamation Protocol (`reclaim.lock`)
-When multiple processes simultaneously detect that `transaction.lock` is stale (`STALE_DEAD_PROCESS`, `STALE_PID_RECYCLED`, or `STALE_TIMED_OUT`):
+
+When multiple processes simultaneously detect that `transaction.lock` is stale due to a **proven dead process** (`STALE_DEAD_PROCESS` or `STALE_PID_RECYCLED`):
 1. **Reclamation Mutex Competition**:
    - Neither process may directly unlink `transaction.lock`.
    - Each process attempts to acquire the atomic reclamation mutex:
      `fs.openSync('.playbook/reclaim.lock', 'wx')`
    - **Winning Process**: Succeeded in acquiring `reclaim.lock`.
-     - Writes payload: `{ "reclaiming_pid": process.pid, "target_nonce": staleNonce, "created_at": new Date().toISOString(), "nonce": reclaimNonce }`.
+     - Writes payload: `{ "reclaiming_pid": process.pid, "hostname": os.hostname(), "target_nonce": staleNonce, "created_at": new Date().toISOString(), "nonce": reclaimNonce }`.
      - Flushes via `fsync` and closes.
    - **Losing Processes**: Fail with `EEXIST`. They back off with exponential jitter and return to Step 1.
 2. **Stale Target Invariant Verification**:
@@ -752,15 +789,27 @@ When multiple processes simultaneously detect that `transaction.lock` is stale (
    - The winning process now exclusively owns `transaction.lock` and proceeds with the transaction.
 
 #### 5. Reclaimer Crash Scenarios & Self-Healing Matrix
-If the winning reclaimer process crashes at any point during reclamation, the system self-heals deterministically without infinite lock chains:
 
-| Reclaimer Crash Point | State on Disk | Recovery by Subsequent Process | Invariant Preserved |
-| :--- | :--- | :--- | :--- |
-| **Crash after acquiring `reclaim.lock`, before unlinking `transaction.lock`** | `reclaim.lock` exists (PID B, dead); `transaction.lock` exists (stale A). | Next process detects `reclaim.lock` age $\ge 15$s or PID B dead; safely unlinks `reclaim.lock`, then re-evaluates `transaction.lock`. | No deadlock; dead reclaim guard safely cleared. |
-| **Crash after unlinking `transaction.lock`, before creating new lock** | `reclaim.lock` exists (PID B, dead); `transaction.lock` is missing. | Normal acquisition sees `reclaim.lock`; detects PID B dead; safely unlinks `reclaim.lock`; creates new `transaction.lock` via standard acquisition. | No orphaned gap; unlinking requires dead PID proof. |
-| **Crash after creating new `transaction.lock`, before unlinking `reclaim.lock`** | Both locks exist (held by PID B, dead). | Next process detects PID B dead; safely unlinks `reclaim.lock`, then initiates standard reclamation on `transaction.lock`. | Clean sequential unwinding of abandoned locks. |
+If the winning reclaimer process crashes at any point during reclamation, subsequent processes evaluate the state using strict OS proof of death:
 
-#### 6. Ownership Verification on Lock Release & Race Prevention
+| Reclaimer Crash Point | State on Disk | Verification of Death | Recovery Action by Subsequent Process | Invariant Preserved |
+| :--- | :--- | :--- | :--- | :--- |
+| **Crash after acquiring `reclaim.lock`, before unlinking `transaction.lock` (with metadata)** | `reclaim.lock` exists (PID B); `transaction.lock` exists (stale A). | Next process reads PID B; OS returns `ESRCH` or start-time recycled. | Next process safely unlinks verified dead `reclaim.lock`, then re-evaluates `transaction.lock`. | No deadlock; dead reclaimer cleared via verified OS proof. |
+| **Crash after acquiring `reclaim.lock` before flush (0-byte marker)** | `reclaim.lock` exists (0 bytes); `transaction.lock` exists (stale A). | Unreadable metadata; PID cannot be verified. | **Fails closed immediately** (`RECLAIM_MARKER_UNVERIFIABLE`). Halts; requires `playbook repair-lock`. | Prevents lock stealing when creator cannot be proven dead. |
+| **Crash after unlinking `transaction.lock`, before creating new lock** | `reclaim.lock` exists (PID B); `transaction.lock` is missing. | Next process reads PID B; OS confirms PID B is dead. | Next process safely unlinks dead `reclaim.lock`; proceeds with standard normal acquisition of `transaction.lock`. | Self-heals cleanly; unlinking requires dead PID proof. |
+| **Crash after creating new `transaction.lock`, before unlinking `reclaim.lock`** | Both locks exist (held by PID B, dead). | Next process confirms PID B is dead. | Next process safely unlinks dead `reclaim.lock`, then initiates standard reclamation on dead `transaction.lock`. | Clean sequential unwinding of abandoned locks. |
+
+#### 6. Before / After Comparison of Corrected Lock Recovery Behavior
+
+| Dimension | Previous Flawed Heuristic | Corrected Fail-Closed Protocol |
+| :--- | :--- | :--- |
+| **0-byte / Truncated Lock File** | Lock declared dead automatically if age $\ge 10$s. | 1s transient backoff; if still empty, **fails closed** (`LOCK_METADATA_UNREADABLE`). Requires interactive `playbook repair-lock` with process-tree auditing. |
+| **Reclamation Marker TTL** | `reclaim.lock` declared dead automatically if age $\ge 15$s. | Marker owner **never loses lock due to age**. Reclaimer must be proven dead via OS process table (`ESRCH` / start-time). If unreadable, fails closed. |
+| **Cross-Host Locks** | Unverifiable PIDs assumed dead after timeout. | If `lock.hostname !== os.hostname()`, PID checks are barred. Fails closed (`CROSS_HOST_LOCK_UNVERIFIABLE`). |
+| **Living Slow Process** | Lock could be stolen by competing process after TTL. | A living process with valid PID and matching start-time retains ownership. Competing processes must back off or fail closed. |
+| **Operator Recovery Tool** | None (required ad-hoc manual file deletion). | Dedicated interactive command `playbook repair-lock` that audits active processes before permitting lock unlinking. |
+
+#### 7. Ownership Verification on Lock Release & Race Prevention
 When a transaction finishes and the process prepares to release `transaction.lock`:
 1. Read `.playbook/transaction.lock` from disk.
 2. Parse JSON and verify ownership:
@@ -768,11 +817,19 @@ When a transaction finishes and the process prepares to release `transaction.loc
 3. **If ownership matches**: Unlink `.playbook/transaction.lock`.
 4. **If nonce mismatches**:
    - **DO NOT UNLINK.**
-   - The process took longer than TTL (5 minutes) and another process legally reclaimed the lock.
+   - The process lost ownership (e.g. following operator intervention or crash recovery).
    - Emit diagnostic `LOCK_LOST_DURING_TRANSACTION`.
    - This invariant strictly prevents a slow or resurrected process from deleting another process's active lock.
 
-#### 7. Supported Filesystems Boundary & OS-Specific Requirements
+#### 8. Supported Filesystems Boundary & OS-Specific Requirements
+- **Supported Local Filesystems**: NTFS (Windows), ext4/btrfs/XFS (Linux), APFS (macOS). These filesystems guarantee:
+  1. Atomic single directory entry creation with `O_CREAT | O_EXCL` (`openSync` with `'wx'`).
+  2. Single-file atomic replace via `rename(2)` / `MoveFileExW(..., MOVEFILE_REPLACE_EXISTING)`.
+  3. Immediate consistency of local directory metadata following `fsync`.
+- **Unsupported Filesystems (Documented Limitation)**:
+  - Network filesystems (NFSv2, NFSv3, SMB/CIFS shares). NFSv3 does not guarantee atomic `O_EXCL` across clients and suffers from close-to-open attribute caching lag.
+  - Virtualized bind mounts (e.g. Docker shared desktop mounts on Windows/macOS using 9P or virtiofs) where host-guest inode mapping or oplocks delay file existence visibility.
+  - **Operational Constraint**: Multi-process Playbook execution on unsupported network filesystems is strictly unsupported. The CLI emits a diagnostic warning if a network filesystem is detected.
 - **Supported Local Filesystems**: NTFS (Windows), ext4/btrfs/XFS (Linux), APFS (macOS). These filesystems guarantee:
   1. Atomic single directory entry creation with `O_CREAT | O_EXCL` (`openSync` with `'wx'`).
   2. Single-file atomic replace via `rename(2)` / `MoveFileExW(..., MOVEFILE_REPLACE_EXISTING)`.
@@ -1061,12 +1118,28 @@ playbook repair-manifest --dry-run
 - **Verdict**: Zero schema modifications required for manifest.
 
 ### 9.2 State Schema Conformance (`schemas/project-state.schema.json`)
-- `stage_status`: Supports `"approved"`, `"in_progress"`, `"pending_review"`.
+
+To prevent silent introduction of unsupported enum values or schema violations, all lifecycle states, review statuses, and human decisions are strictly mapped against canonical schema definitions:
+
+#### Schema Compatibility & Lifecycle State Mapping Table
+
+| State Entity / Field | Canonical Schema Path | Allowed Enums in Canonical v1.0.0 Schema | Representation on Human Approval | Representation on Human Rejection (`REJECT_GATE`) | Proposed Future Evolution (v1.1.0) |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| **Active Stage Macro Status** | `state.stage_status` | `"not_started"`, `"in_progress"`, `"blocked"`, `"pending_review"`, `"approved"` | `"approved"` | `"in_progress"` *(Note: `"rejected"` is NOT a valid `stage_status` enum)* | Expand enum to include `"rejected"` if dedicated macro status is required |
+| **Human Review Status** | `state.current_stage_detail.human_approval.status` | `"not_requested"`, `"pending_review"`, `"approved"`, `"rejected"` | `"approved"` | `"rejected"` | Unchanged |
+| **Human Verdict / Decision** | `state.current_stage_detail.human_approval.decision` | `"GATE_APPROVED"`, `"REJECTED"`, `null` | `"GATE_APPROVED"` | `"REJECTED"` *(Note: `"GATE_REJECTED"` is invalid)* | Unchanged |
+| **Review Conditions / Rework** | `state.current_stage_detail.human_approval.conditions` | `string`, `null` | Optional approval conditions | Mandatory rework instructions / defect references | Unchanged |
+| **Exit Package Status** | `state.current_stage_detail.exit_package.status` | `"not_drafted"`, `"drafted"`, `"submitted_for_review"`, `"approved"` | `"approved"` | Reverts to `"drafted"` | Unchanged |
+| **Audit Actor Type** | `state.last_updated.actor_type` | `"human"`, `"agent"` | `"human"` (Mandatory) | `"human"` (Mandatory) | Unchanged |
+| **Audit Reason** | `state.last_updated.reason` | `string` (`maxLength: 500`) | Approval record & signer reference | Rejection reason & required rework summary | Unchanged |
+| **Historical Stage Summary** | `state.stage_history[].human_approval` | Strictly restricted to: `approved_by`, `role`, `approval_mode`, `signature_reference` (`additionalProperties: false`) | Archived upon `advance` | N/A (rejections remain in active stage) | Preserve queryable `review_history[]` ledger |
+
+- `stage_status`: Supports `"approved"`, `"in_progress"`, `"blocked"`, `"pending_review"`, `"not_started"`. Rejection canonically maps to `"in_progress"`.
 - `current_stage_detail.human_approval`: Contains `status`, `approved_by`, `role`, `approval_mode`, `decision`, `signature_reference`, `approved_at`, `conditions`. Fully supported.
 - `last_updated`: Enforces `actor_type: "human"` when `stage_status: "approved"`. Fully supported.
 - `stage_history[].human_approval`: Strictly restricted to `"approved_by"`, `"role"`, `"approval_mode"`, and `"signature_reference"` with `additionalProperties: false`. The advancement orchestrator strictly trims `status`, `decision`, and `conditions` before appending to `stage_history[]` (`approved_at` is preserved at the record level).
 - `archived_milestones[]`: Preserves past milestone histories and frozen snapshot reference. Fully supported.
-- **Verdict**: Existing Draft 2020-12 state schema completely accommodates the approval and advancement architecture with zero breaking changes.
+- **Verdict**: Existing Draft 2020-12 state schema completely accommodates the approval and advancement architecture with zero breaking changes and zero unsupported enum values.
 
 ### 9.3 Minimal Proposed Schema Evolution (Non-Breaking, Future v1.1.0)
 To natively preserve machine-calculated verification fingerprints and multi-cycle review logs directly within state files without modifying existing v1.0.0 contracts:
@@ -1218,7 +1291,7 @@ To preserve scientific rigor and intellectual honesty, all governance, locking, 
 ## 12. Confirmed Architectural Decisions & Governance Alignment
 
 1. **Deterministic Canonical Fingerprint Projection**: Approvals are bound to an RFC 8785 canonical projection where `stage_status` normalizes to `"approved"` for both `pending_review` (pre-approval) and `approved` (post-approval). Recalculating the fingerprint after approval yields the exact same digest as long as engineering deliverables and file contents remain unchanged.
-2. **Atomic Dual-Lock Protocol**: Normal acquisition actively inspects `.playbook/reclaim.lock` and re-verifies invariant absence post-acquisition, preventing any process from entering a transaction while another is reclaiming or owning the lock. PID reuse is defended via process start-time verification.
+2. **Atomic Dual-Lock Protocol & Fail-Closed Metadata Defenses**: Normal acquisition actively inspects `.playbook/reclaim.lock` and re-verifies invariant absence post-acquisition, preventing any process from entering a transaction while another is reclaiming or owning the lock. Age alone never establishes process death; unreadable, empty, or truncated lock metadata strictly fails closed (`LOCK_METADATA_UNREADABLE` / `RECLAIM_MARKER_UNVERIFIABLE`). Stale locks can only be reclaimed with operating system proof of process death (`ESRCH` or start-time recycling), and unowned empty locks are safely recovered through interactive operator process auditing (`playbook repair-lock`).
 3. **Fail-Safe Crash Recovery (Cases A–E)**: An orphaned sidecar (`state.json` not approved) never establishes approval. Missing or malformed sidecars strictly block advancement and require human re-review or Git restoration. Missing or corrupt journals fail closed immediately (`CRITICAL_RECOVERY_FAILURE`) leaving files untouched.
 4. **Transaction Journal & Process Lock**: Multi-file state and manifest updates are governed by a write-ahead transaction journal (`.playbook/tx-journal.json`) and process lock (`.playbook/transaction.lock`), eliminating any reliance on non-existent filesystem multi-file atomicity. Full serialized payloads in the journal guarantee recoverability across missing/corrupted temporary files.
 5. **Authoritative State Machine**: `state.json` (`current_stage`) is the sole execution authority; manifest drift blocks approval under strict/standard profiles and is repaired upon stage advancement or via interactive `playbook repair-manifest`.
