@@ -29,7 +29,8 @@ export function formatEvidenceTerminalReport(report: EvidenceVerificationReport)
   lines.push(`  Total Records Inspected:  ${s.total}`);
   lines.push(`  ✔ Integrity Passed:       ${s.integrity_passed} (File exists, matching SHA-256)`);
   lines.push(`  ℹ Existence Verified:     ${s.existence_verified} (File exists, no hash recorded)`);
-  lines.push(`  ✖ Integrity Failed:       ${s.integrity_failed} (Hash mismatch or unreadable)`);
+  lines.push(`  ✖ Integrity Failed:       ${s.integrity_failed} (Hash mismatch against state.json)`);
+  lines.push(`  ✖ Unreadable Files:       ${s.unreadable} (Permission denied, directory, or read error)`);
   lines.push(`  ✖ Missing Files:          ${s.missing} (Referenced file absent on disk)`);
   lines.push(`  ✖ Invalid References:     ${s.invalid_reference} (Traversal, unsafe, or malformed)`);
   lines.push(`  ▲ Unsupported URIs:       ${s.unsupported} (Remote URLs not fetched)`);
@@ -133,6 +134,8 @@ function getStatusBadge(item: EvidenceItemResult): string {
       return "[PASS: EXISTENCE]";
     case "integrity_failed":
       return "[FAIL: INTEGRITY MISMATCH]";
+    case "unreadable":
+      return "[FAIL: UNREADABLE]";
     case "missing":
       return "[FAIL: FILE MISSING]";
     case "invalid_reference":

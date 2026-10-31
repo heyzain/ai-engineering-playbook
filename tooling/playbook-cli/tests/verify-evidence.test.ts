@@ -325,10 +325,11 @@ describe("Evidence Verification Engine (playbook verify-evidence)", () => {
     ];
 
     const report = verifier.verify(tempDir, state);
-    assert.equal(report.summary.integrity_failed, 1);
+    assert.equal(report.summary.unreadable, 1);
     assert.equal(report.all_passed, false);
-    assert.equal(report.items[0].status, "integrity_failed");
+    assert.equal(report.items[0].status, "unreadable");
     assert.match(report.items[0].details, /directory, not a verifiable file/);
+    assert.ok(report.diagnostics.some((d) => d.code === "EVIDENCE_UNREADABLE"));
   });
 
   test("correctly evaluates multiple evidence records with mixed outcomes", () => {
@@ -351,6 +352,10 @@ describe("Evidence Verification Engine (playbook verify-evidence)", () => {
 
     // Item 4: missing
     const log4 = ".playbook/logs/test4-missing.log";
+
+    // Item 5: unreadable (directory target)
+    const log5 = ".playbook/logs/test5-dir.log";
+    fs.mkdirSync(path.join(tempDir, log5), { recursive: true });
 
     state.current_stage_detail.deliverables[0].evidence = [
       {
@@ -405,14 +410,27 @@ describe("Evidence Verification Engine (playbook verify-evidence)", () => {
         verified_by: "agent:controller",
         actor_type: "agent",
       },
+      {
+        requirement_id: "REQ-05",
+        type: "automated_test",
+        procedure: "p5",
+        result: "passed",
+        summary: "s5",
+        exit_code: 0,
+        evidence_ref: log5,
+        verified_at: "2026-10-31T10:00:00Z",
+        verified_by: "agent:controller",
+        actor_type: "agent",
+      },
     ];
 
     const report = verifier.verify(tempDir, state);
-    assert.equal(report.summary.total, 4);
+    assert.equal(report.summary.total, 5);
     assert.equal(report.summary.integrity_passed, 1);
     assert.equal(report.summary.existence_verified, 1);
     assert.equal(report.summary.integrity_failed, 1);
     assert.equal(report.summary.missing, 1);
+    assert.equal(report.summary.unreadable, 1);
     assert.equal(report.all_passed, false);
   });
 
@@ -560,5 +578,240 @@ describe("Evidence Verification Engine (playbook verify-evidence)", () => {
     assert.equal(parsed.summary.integrity_passed, 1);
     assert.equal(parsed.items[0].status, "integrity_passed");
     assert.ok(Array.isArray(parsed.limitations));
+  });
+
+  test("diagnoses and rejects malformed evidence_hash format (EVIDENCE_HASH_MALFORMED)", () => {
+    const verifier = new EvidenceVerifier();
+    const state = createInitialState({ projectId: "evidence-app" });
+
+    const logRelPath = ".playbook/logs/hash-malformed.log";
+    fs.mkdirSync(path.join(tempDir, ".playbook", "logs"), { recursive: true });
+    fs.writeFileSync(path.join(tempDir, logRelPath), "Test content\n");
+
+    state.current_stage_detail.deliverables[0].evidence = [
+      {
+        requirement_id: null,
+        type: "automated_test",
+        procedure: "test",
+        result: "passed",
+        summary: "test",
+        exit_code: 0,
+        evidence_hash: "sha256:not_valid_hex_string",
+        evidence_ref: logRelPath,
+        verified_at: "2026-10-31T10:00:00Z",
+        verified_by: "agent:controller",
+        actor_type: "agent",
+      },
+      {
+        requirement_id: null,
+        type: "automated_test",
+        procedure: "test",
+        result: "passed",
+        summary: "test",
+        exit_code: 0,
+        evidence_hash: "",
+        evidence_ref: logRelPath,
+        verified_at: "2026-10-31T10:00:00Z",
+        verified_by: "agent:controller",
+        actor_type: "agent",
+      },
+    ];
+
+    const report = verifier.verify(tempDir, state);
+    assert.equal(report.summary.integrity_failed, 2);
+    assert.equal(report.all_passed, false);
+    assert.ok(report.diagnostics.some((d) => d.code === "EVIDENCE_HASH_MALFORMED"));
+  });
+
+  test("strictly compares SHA-256 hashes case-insensitively with canonical schema pattern", () => {
+    const verifier = new EvidenceVerifier();
+    const state = createInitialState({ projectId: "evidence-app" });
+
+    const logRelPath = ".playbook/logs/case-test.log";
+    const content = "Case sensitivity test\n";
+    fs.mkdirSync(path.join(tempDir, ".playbook", "logs"), { recursive: true });
+    fs.writeFileSync(path.join(tempDir, logRelPath), content);
+
+    const lowercaseHash = createSha256(content);
+    const uppercaseHash = lowercaseHash.toUpperCase();
+
+    state.current_stage_detail.deliverables[0].evidence = [
+      {
+        requirement_id: null,
+        type: "automated_test",
+        procedure: "test",
+        result: "passed",
+        summary: "test",
+        exit_code: 0,
+        evidence_hash: uppercaseHash,
+        evidence_ref: logRelPath,
+        verified_at: "2026-10-31T10:00:00Z",
+        verified_by: "agent:controller",
+        actor_type: "agent",
+      },
+    ];
+
+    const report = verifier.verify(tempDir, state);
+    assert.equal(report.summary.integrity_passed, 1);
+    assert.equal(report.all_passed, true);
+    assert.equal(report.items[0].hash_matched, true);
+  });
+
+  test("rejects absolute, drive-relative, and UNC path references as invalid_reference", () => {
+    const verifier = new EvidenceVerifier();
+    const state = createInitialState({ projectId: "evidence-app" });
+
+    state.current_stage_detail.deliverables[0].evidence = [
+      {
+        requirement_id: null,
+        type: "automated_test",
+        procedure: "test",
+        result: "passed",
+        summary: "absolute posix path",
+        exit_code: 0,
+        evidence_ref: "/etc/shadow",
+        verified_at: "2026-10-31T10:00:00Z",
+        verified_by: "agent:controller",
+        actor_type: "agent",
+      },
+      {
+        requirement_id: null,
+        type: "automated_test",
+        procedure: "test",
+        result: "passed",
+        summary: "absolute windows drive path",
+        exit_code: 0,
+        evidence_ref: "C:\\Windows\\System32\\cmd.exe",
+        verified_at: "2026-10-31T10:00:00Z",
+        verified_by: "agent:controller",
+        actor_type: "agent",
+      },
+      {
+        requirement_id: null,
+        type: "automated_test",
+        procedure: "test",
+        result: "passed",
+        summary: "UNC network share path",
+        exit_code: 0,
+        evidence_ref: "\\\\storage-server\\logs\\build.log",
+        verified_at: "2026-10-31T10:00:00Z",
+        verified_by: "agent:controller",
+        actor_type: "agent",
+      },
+      {
+        requirement_id: null,
+        type: "automated_test",
+        procedure: "test",
+        result: "passed",
+        summary: "drive-relative path",
+        exit_code: 0,
+        evidence_ref: "C:relative.log",
+        verified_at: "2026-10-31T10:00:00Z",
+        verified_by: "agent:controller",
+        actor_type: "agent",
+      },
+    ];
+
+    const report = verifier.verify(tempDir, state);
+    assert.equal(report.summary.invalid_reference, 4);
+    assert.equal(report.all_passed, false);
+    for (const item of report.items) {
+      assert.equal(item.status, "invalid_reference");
+      assert.match(item.details, /relative path within project root/);
+    }
+  });
+
+  test("enforces read-only behavior on failure paths: zero filesystem or state mutations", () => {
+    const manifest = createInitialManifest({ projectId: "readonly-fail-app", projectName: "Readonly Fail App" });
+    const state = createInitialState({ projectId: "readonly-fail-app" });
+    scaffolder.scaffold({ targetDir: tempDir, manifest, state });
+
+    const statePath = path.join(tempDir, ".playbook", "state.json");
+    const manifestPath = path.join(tempDir, ".playbook", "manifest.json");
+
+    state.current_stage_detail.deliverables[0].evidence = [
+      {
+        requirement_id: null,
+        type: "automated_test",
+        procedure: "test",
+        result: "passed",
+        summary: "missing file",
+        exit_code: 0,
+        evidence_ref: ".playbook/logs/missing.log",
+        verified_at: "2026-10-31T10:00:00Z",
+        verified_by: "agent:controller",
+        actor_type: "agent",
+      },
+    ];
+    fs.writeFileSync(statePath, JSON.stringify(state, null, 2));
+
+    const stateMtimeBefore = fs.statSync(statePath).mtimeMs;
+    const manifestMtimeBefore = fs.statSync(manifestPath).mtimeMs;
+    const filesBefore = fs.readdirSync(path.join(tempDir, ".playbook"));
+
+    const res = runVerifyEvidence({ cwd: tempDir, json: true, silent: true });
+    assert.equal(res.success, false);
+    assert.equal(res.exitCode, 1);
+
+    const stateMtimeAfter = fs.statSync(statePath).mtimeMs;
+    const manifestMtimeAfter = fs.statSync(manifestPath).mtimeMs;
+    const filesAfter = fs.readdirSync(path.join(tempDir, ".playbook"));
+
+    assert.equal(stateMtimeAfter, stateMtimeBefore);
+    assert.equal(manifestMtimeAfter, manifestMtimeBefore);
+    assert.deepEqual(filesAfter, filesBefore);
+  });
+
+  test("verifies consistency between human-readable terminal report and machine-readable JSON output", () => {
+    const manifest = createInitialManifest({ projectId: "consistency-app", projectName: "Consistency App" });
+    const state = createInitialState({ projectId: "consistency-app" });
+    scaffolder.scaffold({ targetDir: tempDir, manifest, state });
+
+    const log1 = ".playbook/logs/pass.log";
+    const content1 = "Pass\n";
+    fs.mkdirSync(path.join(tempDir, ".playbook", "logs"), { recursive: true });
+    fs.writeFileSync(path.join(tempDir, log1), content1);
+
+    state.current_stage_detail.deliverables[0].evidence = [
+      {
+        requirement_id: "REQ-C1",
+        type: "automated_test",
+        procedure: "p1",
+        result: "passed",
+        summary: "pass",
+        exit_code: 0,
+        evidence_hash: createSha256(content1),
+        evidence_ref: log1,
+        verified_at: "2026-10-31T10:00:00Z",
+        verified_by: "agent:controller",
+        actor_type: "agent",
+      },
+      {
+        requirement_id: "REQ-C2",
+        type: "automated_test",
+        procedure: "p2",
+        result: "passed",
+        summary: "fail",
+        exit_code: 0,
+        evidence_hash: "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+        evidence_ref: log1,
+        verified_at: "2026-10-31T10:00:00Z",
+        verified_by: "agent:controller",
+        actor_type: "agent",
+      },
+    ];
+    fs.writeFileSync(path.join(tempDir, ".playbook", "state.json"), JSON.stringify(state, null, 2));
+
+    const jsonRes = runVerifyEvidence({ cwd: tempDir, json: true, silent: true });
+    const termRes = runVerifyEvidence({ cwd: tempDir, json: false, silent: true });
+
+    assert.equal(jsonRes.exitCode, termRes.exitCode);
+    assert.equal(jsonRes.success, termRes.success);
+    assert.match(termRes.output, /Total Records Inspected:\s+2/);
+    assert.match(termRes.output, /Integrity Passed:\s+1/);
+    assert.match(termRes.output, /Integrity Failed:\s+1/);
+    assert.equal(jsonRes.report.summary.total, 2);
+    assert.equal(jsonRes.report.summary.integrity_passed, 1);
+    assert.equal(jsonRes.report.summary.integrity_failed, 1);
   });
 });

@@ -12,9 +12,12 @@ import type {
   EvidenceVerificationSummary,
 } from "./types.js";
 
+export const CANONICAL_HASH_PATTERN = /^sha256:[a-f0-9]{64}$/i;
+
 export const EVIDENCE_LIMITATIONS = [
   "A matching SHA-256 hash verifies integrity against the recorded hash in state.json, but does NOT prove the authenticity of the verification actor or test runner.",
   "A matching SHA-256 hash does NOT establish the engineering correctness, validity, or semantic completeness of the evidence contents.",
+  "State and evidence files stored within the same mutable repository do NOT establish an independent trust boundary; an actor with write access to evidence files typically has write access to state.json.",
   "Existence verification confirms only that a referenced file exists on disk; it does NOT establish that requirements were satisfied.",
   "External URLs and network references are unsupported and are not fetched to preserve hermetic, offline-first execution.",
 ];
@@ -26,6 +29,10 @@ export class EvidenceVerifier {
    */
   public verify(projectDir: string, stateInput?: ProjectState): EvidenceVerificationReport {
     const resolvedProjectDir = path.resolve(projectDir);
+    const realProjectDir = fs.existsSync(resolvedProjectDir)
+      ? fs.realpathSync(resolvedProjectDir)
+      : resolvedProjectDir;
+
     const timestamp = new Date().toISOString();
 
     let state: ProjectState | null = stateInput || null;
@@ -93,7 +100,7 @@ export class EvidenceVerifier {
       const evidenceList = deliv.evidence || [];
       for (const ev of evidenceList) {
         summary.total++;
-        const itemResult = this.verifyEvidenceItem(resolvedProjectDir, deliv.id, deliv.name, ev);
+        const itemResult = this.verifyEvidenceItem(resolvedProjectDir, realProjectDir, deliv.id, deliv.name, ev);
         items.push(itemResult);
 
         // Update aggregated summary count
@@ -108,14 +115,32 @@ export class EvidenceVerifier {
             path: itemResult.evidence_ref,
             remediation: `Generate the required evidence artifact at ${itemResult.evidence_ref} by re-running verification.`,
           });
-        } else if (itemResult.status === "integrity_failed") {
+        } else if (itemResult.status === "unreadable") {
           diagnostics.push({
-            code: "EVIDENCE_HASH_MISMATCH",
+            code: "EVIDENCE_UNREADABLE",
             severity: "error",
-            message: `Evidence integrity check failed for deliverable '${deliv.name}' (${deliv.id}): ${itemResult.details}.`,
+            message: `Evidence file for deliverable '${deliv.name}' (${deliv.id}) could not be read: ${itemResult.details}.`,
             path: itemResult.evidence_ref,
-            remediation: `Re-run the verification procedure ('${itemResult.procedure}') and record the updated evidence hash.`,
+            remediation: "Ensure the evidence path is a readable file with appropriate filesystem permissions, not a directory.",
           });
+        } else if (itemResult.status === "integrity_failed") {
+          if (itemResult.details.includes("Malformed evidence_hash")) {
+            diagnostics.push({
+              code: "EVIDENCE_HASH_MALFORMED",
+              severity: "error",
+              message: `Evidence hash format invalid for deliverable '${deliv.name}' (${deliv.id}): ${itemResult.details}.`,
+              path: itemResult.evidence_ref,
+              remediation: "Correct evidence_hash in state.json to match canonical pattern 'sha256:<64 hex characters>'.",
+            });
+          } else {
+            diagnostics.push({
+              code: "EVIDENCE_HASH_MISMATCH",
+              severity: "error",
+              message: `Evidence integrity check failed for deliverable '${deliv.name}' (${deliv.id}): ${itemResult.details}.`,
+              path: itemResult.evidence_ref,
+              remediation: `Re-run the verification procedure ('${itemResult.procedure}') and record the updated evidence hash.`,
+            });
+          }
         } else if (itemResult.status === "invalid_reference") {
           diagnostics.push({
             code: "EVIDENCE_PATH_INVALID",
@@ -158,6 +183,7 @@ export class EvidenceVerifier {
 
   private verifyEvidenceItem(
     projectDir: string,
+    realProjectDir: string,
     delivId: string,
     delivName: string,
     ev: {
@@ -173,7 +199,7 @@ export class EvidenceVerifier {
     const rawRef = ev.evidence_ref ?? "";
     const trimmedRef = rawRef.trim();
     const recordedResult = (ev.result as "passed" | "failed" | "inconclusive") || "inconclusive";
-    const recordedHash = ev.evidence_hash ? ev.evidence_hash.trim().toLowerCase() : null;
+    const rawRecordedHash = ev.evidence_hash !== undefined && ev.evidence_hash !== null ? String(ev.evidence_hash).trim() : null;
 
     const baseResult: Omit<EvidenceItemResult, "status" | "details" | "resolved_path" | "calculated_hash" | "hash_matched"> = {
       deliverable_id: delivId,
@@ -183,7 +209,7 @@ export class EvidenceVerifier {
       procedure: ev.procedure,
       recorded_result: recordedResult,
       evidence_ref: rawRef,
-      recorded_hash: recordedHash,
+      recorded_hash: rawRecordedHash,
     };
 
     // 1. Check for empty or malformed reference
@@ -231,15 +257,28 @@ export class EvidenceVerifier {
       };
     }
 
-    // 3. Security Boundary & Path Traversal Prevention
-    let targetPath: string;
-    if (path.isAbsolute(trimmedRef)) {
-      targetPath = path.resolve(trimmedRef);
-    } else {
-      targetPath = path.resolve(projectDir, trimmedRef);
+    // 3. Reject Absolute, Drive-Relative, or UNC Paths
+    // Evidence references in project state MUST be relative paths
+    if (
+      path.isAbsolute(trimmedRef) ||
+      /^[a-zA-Z]:/i.test(trimmedRef) ||
+      /^[/\\]/.test(trimmedRef) ||
+      trimmedRef.startsWith("\\\\")
+    ) {
+      return {
+        ...baseResult,
+        status: "invalid_reference",
+        resolved_path: null,
+        calculated_hash: null,
+        hash_matched: null,
+        details: `Evidence reference must be a relative path within project root; absolute, drive-relative, or UNC paths are disallowed: '${trimmedRef}'.`,
+      };
     }
 
-    // Boundary check: targetPath must be within projectDir
+    // 4. Security Boundary & Path Traversal Prevention
+    const targetPath = path.resolve(projectDir, trimmedRef);
+
+    // Boundary check: targetPath must resolve inside projectDir
     const relFromRoot = path.relative(projectDir, targetPath);
     if (relFromRoot.startsWith("..") || path.isAbsolute(relFromRoot)) {
       return {
@@ -252,11 +291,11 @@ export class EvidenceVerifier {
       };
     }
 
-    // Symlink escape check
+    // Symlink and Junction escape check against canonical real project directory
     try {
       if (fs.existsSync(targetPath)) {
         const realTarget = fs.realpathSync(targetPath);
-        const realRel = path.relative(projectDir, realTarget);
+        const realRel = path.relative(realProjectDir, realTarget);
         if (realRel.startsWith("..") || path.isAbsolute(realRel)) {
           return {
             ...baseResult,
@@ -272,7 +311,7 @@ export class EvidenceVerifier {
       const errMsg = err instanceof Error ? err.message : String(err);
       return {
         ...baseResult,
-        status: "integrity_failed",
+        status: "unreadable",
         resolved_path: toPosixPath(relFromRoot),
         calculated_hash: null,
         hash_matched: false,
@@ -282,7 +321,7 @@ export class EvidenceVerifier {
 
     const posixRelPath = normalizeRelativePath(relFromRoot);
 
-    // 4. File Existence Check
+    // 5. File Existence Check
     if (!fs.existsSync(targetPath)) {
       return {
         ...baseResult,
@@ -294,14 +333,14 @@ export class EvidenceVerifier {
       };
     }
 
-    // 5. Read File and Calculate SHA-256
+    // 6. Read File and Validate Target Type
     let buffer: Buffer;
     try {
       const stat = fs.statSync(targetPath);
       if (stat.isDirectory()) {
         return {
           ...baseResult,
-          status: "integrity_failed",
+          status: "unreadable",
           resolved_path: posixRelPath,
           calculated_hash: null,
           hash_matched: false,
@@ -313,7 +352,7 @@ export class EvidenceVerifier {
       const errMsg = err instanceof Error ? err.message : String(err);
       return {
         ...baseResult,
-        status: "integrity_failed",
+        status: "unreadable",
         resolved_path: posixRelPath,
         calculated_hash: null,
         hash_matched: false,
@@ -324,8 +363,8 @@ export class EvidenceVerifier {
     const hexDigest = crypto.createHash("sha256").update(buffer).digest("hex");
     const calculatedHash = `sha256:${hexDigest}`.toLowerCase();
 
-    // 6. Compare with Recorded Hash
-    if (!recordedHash) {
+    // 7. Check for Missing Hash
+    if (rawRecordedHash === null) {
       return {
         ...baseResult,
         status: "existence_verified",
@@ -336,7 +375,21 @@ export class EvidenceVerifier {
       };
     }
 
-    const matches = calculatedHash === recordedHash;
+    // 8. Strict Validation of Recorded Hash Format
+    if (!CANONICAL_HASH_PATTERN.test(rawRecordedHash)) {
+      return {
+        ...baseResult,
+        status: "integrity_failed",
+        resolved_path: posixRelPath,
+        calculated_hash: calculatedHash,
+        hash_matched: false,
+        details: `Malformed evidence_hash '${rawRecordedHash}'. Must match canonical format 'sha256:[a-f0-9]{64}'.`,
+      };
+    }
+
+    const normalizedRecordedHash = rawRecordedHash.toLowerCase();
+    const matches = calculatedHash === normalizedRecordedHash;
+
     if (matches) {
       return {
         ...baseResult,
@@ -354,7 +407,7 @@ export class EvidenceVerifier {
       resolved_path: posixRelPath,
       calculated_hash: calculatedHash,
       hash_matched: false,
-      details: `SHA-256 hash mismatch: expected '${recordedHash}', calculated '${calculatedHash}'.`,
+      details: `SHA-256 hash mismatch: expected '${normalizedRecordedHash}', calculated '${calculatedHash}'.`,
     };
   }
 
@@ -364,6 +417,7 @@ export class EvidenceVerifier {
       integrity_passed: 0,
       integrity_failed: 0,
       existence_verified: 0,
+      unreadable: 0,
       missing: 0,
       invalid_reference: 0,
       unsupported: 0,
@@ -382,7 +436,11 @@ export class EvidenceVerifier {
     diagnostics: DiagnosticIssue[];
   }): EvidenceVerificationReport {
     const { summary } = opts;
-    const hasFailures = summary.missing > 0 || summary.invalid_reference > 0 || summary.integrity_failed > 0;
+    const hasFailures =
+      summary.missing > 0 ||
+      summary.invalid_reference > 0 ||
+      summary.integrity_failed > 0 ||
+      summary.unreadable > 0;
 
     return {
       schema_version: SCHEMA_VERSION,

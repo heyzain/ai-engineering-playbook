@@ -10,6 +10,7 @@ export type EvidenceVerificationStatus =
   | "integrity_passed"
   | "integrity_failed"
   | "existence_verified"
+  | "unreadable"
   | "unsupported";
 
 /**
@@ -39,6 +40,7 @@ export interface EvidenceVerificationSummary {
   integrity_passed: number;
   integrity_failed: number;
   existence_verified: number;
+  unreadable: number;
   missing: number;
   invalid_reference: number;
   unsupported: number;
