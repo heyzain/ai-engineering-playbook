@@ -15,6 +15,8 @@ export const DEFAULT_PATHS = {
   exceptionsDir: "docs/exceptions",
   manifestFile: ".playbook/manifest.json",
   stateFile: ".playbook/state.json",
+  transactionLockFile: ".playbook/transaction.lock",
+  reclaimLockFile: ".playbook/reclaim.lock",
 } as const;
 
 export const STAGE_NAMES = [

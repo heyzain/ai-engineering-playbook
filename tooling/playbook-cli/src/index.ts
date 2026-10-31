@@ -19,3 +19,4 @@ export * from "./core/evidence/types.js";
 export * from "./core/evidence/verifier.js";
 export * from "./formatters/evidence-terminal.js";
 export * from "./commands/verify-evidence.js";
+export * from "./core/lock/index.js";
