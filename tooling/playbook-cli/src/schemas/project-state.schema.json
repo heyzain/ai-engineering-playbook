@@ -1,0 +1,742 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ai-engineering-playbook.org/schemas/project-state.schema.json",
+  "title": "AI Engineering Playbook - Project State Schema",
+  "description": "Technology-agnostic machine-readable state model representing lifecycle progression, deliverable completion, multi-modal verification evidence, active exceptions, blocking RFCs, milestone preservation, and human approvals.",
+  "type": "object",
+  "required": [
+    "$schema",
+    "schema_version",
+    "project_id",
+    "playbook_version",
+    "milestone_id",
+    "milestone_name",
+    "lifecycle_status",
+    "current_stage",
+    "stage_status",
+    "current_stage_detail",
+    "stage_history",
+    "archived_milestones",
+    "last_updated"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "$schema": {
+      "type": "string",
+      "description": "URI reference to this JSON Schema."
+    },
+    "schema_version": {
+      "type": "string",
+      "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$",
+      "description": "Semantic version of the state schema (e.g. 1.0.0)."
+    },
+    "project_id": {
+      "type": "string",
+      "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$",
+      "description": "Kebab-case project identifier matching the project manifest."
+    },
+    "playbook_version": {
+      "type": "string",
+      "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$",
+      "description": "Playbook standard version governing this state (e.g. 1.0.0)."
+    },
+    "milestone_id": {
+      "type": "string",
+      "pattern": "^M-[a-zA-Z0-9.-]+$",
+      "description": "Active milestone identifier (e.g. M-1.0.0, M-2026.Q4) matching project manifest."
+    },
+    "milestone_name": {
+      "type": "string",
+      "description": "Human-readable title of current project milestone."
+    },
+    "lifecycle_status": {
+      "type": "string",
+      "enum": [
+        "active",
+        "completed_terminal",
+        "reopened_maintenance",
+        "paused"
+      ],
+      "description": "Overall project lifecycle state across Stages 0 through 6. 'completed_terminal' indicates Stage 6 is approved and sealed."
+    },
+    "current_stage": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 6,
+      "description": "Current lifecycle stage (0 to 6) as defined in stage-gate-rules.md."
+    },
+    "stage_status": {
+      "type": "string",
+      "enum": [
+        "not_started",
+        "in_progress",
+        "blocked",
+        "pending_review",
+        "approved"
+      ],
+      "description": "Macro lifecycle state of the active stage. 'pending_review' indicates all required deliverables are verified/waived and exit package is submitted for human review."
+    },
+    "current_stage_detail": {
+      "type": "object",
+      "description": "Fine-grained status, deliverables, evidence, and approvals for the active stage.",
+      "required": [
+        "stage",
+        "stage_name",
+        "started_at",
+        "deliverables",
+        "rfcs",
+        "adrs",
+        "exceptions",
+        "exit_package",
+        "human_approval"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "stage": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 6,
+          "description": "Stage number matching current_stage."
+        },
+        "stage_name": {
+          "type": "string",
+          "enum": [
+            "Discovery & Problem Formulation",
+            "Requirements & Specification",
+            "Architecture & System Design",
+            "Implementation & Unit Verification",
+            "Integration & System Verification",
+            "Review, Hardening & Release Readiness",
+            "Deployment & Operational Monitoring"
+          ],
+          "description": "Canonical stage title from stage-gate-rules.md."
+        },
+        "started_at": {
+          "type": "string",
+          "format": "date-time",
+          "description": "ISO 8601 timestamp when stage work commenced."
+        },
+        "deliverables": {
+          "type": "array",
+          "description": "Required stage deliverables and their granular statuses.",
+          "items": {
+            "type": "object",
+            "required": [
+              "id",
+              "name",
+              "artifact_path",
+              "status",
+              "validation_status",
+              "evidence"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "id": {
+                "type": "string",
+                "description": "Unique deliverable ID (e.g. DELIV-101, PRD-SPEC, UNIT-TESTS)."
+              },
+              "name": {
+                "type": "string",
+                "description": "Descriptive deliverable title."
+              },
+              "description": {
+                "type": "string",
+                "description": "Summary of deliverable scope and purpose."
+              },
+              "artifact_path": {
+                "type": "string",
+                "description": "Relative path to primary deliverable file or directory."
+              },
+              "status": {
+                "type": "string",
+                "enum": [
+                  "not_started",
+                  "in_progress",
+                  "completed",
+                  "verified",
+                  "waived",
+                  "blocked"
+                ],
+                "description": "Deliverable lifecycle status. 'completed' = authored on disk; 'verified' = verification passed; 'waived' = waived under authorized exception."
+              },
+              "validation_status": {
+                "type": "string",
+                "enum": [
+                  "unvalidated",
+                  "passed",
+                  "failed",
+                  "waived"
+                ],
+                "description": "Result of verification checks. 'waived' requires an active exception record."
+              },
+              "exception_ref": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "pattern": "^EXC-[0-9]{8}-[0-9]{3}$",
+                "description": "Mandatory reference to active exception record if status is waived."
+              },
+              "evidence": {
+                "type": "array",
+                "description": "Verifiable proof references confirming deliverable quality across automated and manual validation methods.",
+                "items": {
+                  "type": "object",
+                  "required": [
+                    "type",
+                    "procedure",
+                    "result",
+                    "summary",
+                    "evidence_ref",
+                    "verified_at",
+                    "verified_by",
+                    "actor_type"
+                  ],
+                  "additionalProperties": false,
+                  "properties": {
+                    "requirement_id": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "description": "Traceable requirement ID (e.g. REQ-001, NFR-002) validated by this evidence."
+                    },
+                    "type": {
+                      "type": "string",
+                      "enum": [
+                        "automated_test",
+                        "build_typecheck",
+                        "static_analysis",
+                        "schema_validation",
+                        "security_audit",
+                        "manual_functional",
+                        "visual_review",
+                        "accessibility_audit",
+                        "architecture_review"
+                      ],
+                      "description": "Method or discipline of verification."
+                    },
+                    "procedure": {
+                      "type": "string",
+                      "description": "Executed command line string OR description of manual inspection protocol."
+                    },
+                    "result": {
+                      "type": "string",
+                      "enum": [
+                        "passed",
+                        "failed",
+                        "inconclusive"
+                      ],
+                      "description": "Outcome of verification. Only 'passed' permits deliverable transition to 'verified'."
+                    },
+                    "summary": {
+                      "type": "string",
+                      "description": "Concise summary of verification results (e.g. '42 tests passed, 0 failures', 'Contrast ratio 7.2:1 verified')."
+                    },
+                    "exit_code": {
+                      "type": [
+                        "integer",
+                        "null"
+                      ],
+                      "description": "Process exit code if automated execution (0 for success); null for manual reviews."
+                    },
+                    "commit_sha": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "pattern": "^([a-f0-9]{7}|[a-f0-9]{40})$",
+                      "description": "Git commit SHA of workspace at the time verification was performed."
+                    },
+                    "evidence_hash": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "pattern": "^sha256:[a-f0-9]{64}$",
+                      "description": "SHA-256 integrity hash of evidence file (e.g. log, report, screenshot); null for manual reviews."
+                    },
+                    "evidence_ref": {
+                      "type": "string",
+                      "description": "Relative path to log file, report, screenshot, or checklist proof."
+                    },
+                    "verified_at": {
+                      "type": "string",
+                      "format": "date-time",
+                      "description": "Timestamp of verification execution."
+                    },
+                    "verified_by": {
+                      "type": "string",
+                      "description": "Identifier of verification executor or reviewer (e.g. 'agent:controller', 'human:zain')."
+                    },
+                    "actor_type": {
+                      "type": "string",
+                      "enum": [
+                        "agent",
+                        "human"
+                      ],
+                      "description": "Actor class performing verification."
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "rfcs": {
+          "type": "array",
+          "description": "Clarification Requests initiated in or affecting this stage.",
+          "items": {
+            "type": "object",
+            "required": [
+              "rfc_id",
+              "title",
+              "path",
+              "status",
+              "is_blocking"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "rfc_id": {
+                "type": "string",
+                "pattern": "^RFC-[0-9]{8}-[0-9]{3}$",
+                "description": "Canonical RFC identifier (RFC-YYYYMMDD-###)."
+              },
+              "title": {
+                "type": "string",
+                "description": "Short title of clarification question."
+              },
+              "path": {
+                "type": "string",
+                "description": "Relative file path to RFC markdown artifact."
+              },
+              "status": {
+                "type": "string",
+                "enum": [
+                  "pending_decision",
+                  "resolved",
+                  "rejected"
+                ],
+                "description": "RFC resolution state. 'pending_decision' with is_blocking=true halts stage progression."
+              },
+              "is_blocking": {
+                "type": "boolean",
+                "description": "Whether an unresolved status blocks stage gate progression."
+              },
+              "resolved_at": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "format": "date-time",
+                "description": "Timestamp when resolution was signed off."
+              },
+              "decision_summary": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "description": "Summary of authorized human decision."
+              }
+            }
+          }
+        },
+        "adrs": {
+          "type": "array",
+          "description": "Architecture Decision Records associated with this stage.",
+          "items": {
+            "type": "object",
+            "required": [
+              "adr_id",
+              "title",
+              "path",
+              "status"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "adr_id": {
+                "type": "string",
+                "pattern": "^ADR-[0-9]{8}-[0-9]{3}$",
+                "description": "Canonical ADR identifier (ADR-YYYYMMDD-###)."
+              },
+              "title": {
+                "type": "string",
+                "description": "Imperative decision title."
+              },
+              "path": {
+                "type": "string",
+                "description": "Relative path to ADR markdown file."
+              },
+              "status": {
+                "type": "string",
+                "enum": [
+                  "proposed",
+                  "accepted",
+                  "superseded",
+                  "rejected"
+                ],
+                "description": "ADR status. Must be 'accepted' before Gate 2 approval."
+              },
+              "approved_at": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "format": "date-time",
+                "description": "Timestamp when human architect accepted ADR."
+              }
+            }
+          }
+        },
+        "exceptions": {
+          "type": "array",
+          "description": "Active or historical gate exceptions applying to this stage.",
+          "items": {
+            "type": "object",
+            "required": [
+              "exception_id",
+              "title",
+              "path",
+              "waived_requirement",
+              "authorized_by",
+              "authorized_at",
+              "expiration_date",
+              "status"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "exception_id": {
+                "type": "string",
+                "pattern": "^EXC-[0-9]{8}-[0-9]{3}$",
+                "description": "Canonical Exception identifier (EXC-YYYYMMDD-###)."
+              },
+              "title": {
+                "type": "string",
+                "description": "Short title describing the waiver."
+              },
+              "path": {
+                "type": "string",
+                "description": "Relative path to exception markdown record."
+              },
+              "waived_requirement": {
+                "type": "string",
+                "description": "Exact gate requirement or acceptance criterion waived."
+              },
+              "authorized_by": {
+                "type": "string",
+                "description": "Name and title of authorized human who granted waiver."
+              },
+              "authorized_at": {
+                "type": "string",
+                "format": "date-time",
+                "description": "Timestamp when exception was granted."
+              },
+              "expiration_date": {
+                "type": "string",
+                "format": "date",
+                "description": "Mandatory TTL review/expiration date (YYYY-MM-DD)."
+              },
+              "status": {
+                "type": "string",
+                "enum": [
+                  "active",
+                  "remediated",
+                  "expired",
+                  "revoked"
+                ],
+                "description": "Exception status. 'expired' or 'revoked' immediately blocks gate progression."
+              }
+            }
+          }
+        },
+        "exit_package": {
+          "type": "object",
+          "description": "Stage Gate Exit Package compilation status and location.",
+          "required": [
+            "status",
+            "path"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "status": {
+              "type": "string",
+              "enum": [
+                "not_drafted",
+                "drafted",
+                "submitted_for_review"
+              ],
+              "description": "Exit package drafting and submission status."
+            },
+            "path": {
+              "type": "string",
+              "description": "Relative path to compiled Stage Gate Exit Package markdown."
+            },
+            "submitted_at": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "format": "date-time",
+              "description": "Timestamp when package was finalized and submitted for review."
+            }
+          }
+        },
+        "human_approval": {
+          "type": "object",
+          "description": "Mandatory human review and sign-off record. AI agents are strictly forbidden from writing 'approved' here independently.",
+          "required": [
+            "status",
+            "approved_by",
+            "role",
+            "approval_mode",
+            "decision",
+            "signature_reference",
+            "approved_at",
+            "conditions"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "status": {
+              "type": "string",
+              "enum": [
+                "not_requested",
+                "pending_review",
+                "approved",
+                "rejected"
+              ],
+              "description": "Human review status. Progression blocked unless 'approved'."
+            },
+            "approved_by": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "description": "Human reviewer full name or identifier."
+            },
+            "role": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "description": "Human reviewer title or role (e.g. Lead Architect, Product Owner)."
+            },
+            "approval_mode": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "enum": [
+                "solo",
+                "team",
+                null
+              ],
+              "description": "Solo (in-chat confirmation) vs Team (PR review sign-off)."
+            },
+            "decision": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "enum": [
+                "GATE_APPROVED",
+                "REJECTED",
+                null
+              ],
+              "description": "Formal human verdict."
+            },
+            "signature_reference": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "description": "Auditable proof reference (e.g. PR #12 approval, in-chat confirmation quote, commit SHA)."
+            },
+            "approved_at": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "format": "date-time",
+              "description": "Timestamp when human approved the gate transition."
+            },
+            "conditions": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "description": "Any human-stipulated constraints or follow-ups for subsequent stages."
+            }
+          }
+        }
+      }
+    },
+    "stage_history": {
+      "type": "array",
+      "description": "Immutable ledger of previously completed and approved lifecycle stages for the active milestone.",
+      "items": {
+        "type": "object",
+        "required": [
+          "stage",
+          "stage_name",
+          "status",
+          "started_at",
+          "completed_at",
+          "approved_at",
+          "exit_package_ref",
+          "human_approval"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "stage": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 6,
+            "description": "Stage number."
+          },
+          "stage_name": {
+            "type": "string",
+            "description": "Stage title."
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "approved",
+              "waived"
+            ],
+            "description": "Final gate disposition."
+          },
+          "started_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When stage was initiated."
+          },
+          "completed_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When deliverables were finished and verified."
+          },
+          "approved_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When human sign-off was recorded."
+          },
+          "exit_package_ref": {
+            "type": "string",
+            "description": "Relative path to committed exit package."
+          },
+          "human_approval": {
+            "type": "object",
+            "required": [
+              "approved_by",
+              "role",
+              "approval_mode",
+              "signature_reference"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "approved_by": {
+                "type": "string"
+              },
+              "role": {
+                "type": "string"
+              },
+              "approval_mode": {
+                "type": "string",
+                "enum": [
+                  "solo",
+                  "team"
+                ]
+              },
+              "signature_reference": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      }
+    },
+    "archived_milestones": {
+      "type": "array",
+      "description": "Immutable archive of previously completed milestones, preserving full stage histories, exit packages, and state snapshots.",
+      "items": {
+        "type": "object",
+        "required": [
+          "milestone_id",
+          "milestone_name",
+          "completed_at",
+          "final_stage",
+          "stage_history",
+          "exit_package_ref"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "milestone_id": {
+            "type": "string",
+            "description": "Identifier of archived milestone."
+          },
+          "milestone_name": {
+            "type": "string",
+            "description": "Title of archived milestone."
+          },
+          "completed_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Timestamp when milestone was sealed."
+          },
+          "final_stage": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 6,
+            "description": "Terminal stage number of milestone."
+          },
+          "stage_history": {
+            "type": "array",
+            "description": "Preserved stage history of archived milestone."
+          },
+          "exit_package_ref": {
+            "type": "string",
+            "description": "Relative path to final Stage 6 exit package for milestone."
+          },
+          "state_snapshot_ref": {
+            "type": "string",
+            "description": "Relative path to frozen milestone state JSON snapshot."
+          }
+        }
+      }
+    },
+    "last_updated": {
+      "type": "object",
+      "description": "Audit record of the most recent state file mutation.",
+      "required": [
+        "timestamp",
+        "updated_by",
+        "actor_type",
+        "reason"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "timestamp": {
+          "type": "string",
+          "format": "date-time",
+          "description": "ISO 8601 timestamp of update."
+        },
+        "updated_by": {
+          "type": "string",
+          "description": "Identifier of the agent or human making the change."
+        },
+        "actor_type": {
+          "type": "string",
+          "enum": [
+            "human",
+            "agent"
+          ],
+          "description": "Actor class performing mutation."
+        },
+        "reason": {
+          "type": "string",
+          "description": "Brief explanation of state update (e.g. 'Recorded unit test verification evidence for Stage 3')."
+        }
+      }
+    }
+  }
+}

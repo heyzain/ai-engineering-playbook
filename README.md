@@ -75,13 +75,20 @@ ai-engineering-playbook/
 │       ├── invalid-state-unresolved-rfc.json
 │       └── invalid-state-expired-exception.json
 │
-└── templates/                          # Standardized operational engineering templates
-    ├── README.md                       # Template catalog and usage guide
-    ├── prd-template.md                 # Product Requirements Document template (Stage 0 & 1)
-    ├── adr-template.md                 # Architecture Decision Record template (Stage 2)
-    ├── clarification-rfc-template.md   # Clarification Request (RFC) template (Gap analysis)
-    ├── gate-exit-package-template.md   # Stage Gate Exit Package template (Gates 0–6)
-    └── exception-record-template.md    # Gate Exception Record template (Governance exceptions)
+├── templates/                          # Standardized operational engineering templates
+│   ├── README.md                       # Template catalog and usage guide
+│   ├── prd-template.md                 # Product Requirements Document template (Stage 0 & 1)
+│   ├── adr-template.md                 # Architecture Decision Record template (Stage 2)
+│   ├── clarification-rfc-template.md   # Clarification Request (RFC) template (Gap analysis)
+│   ├── gate-exit-package-template.md   # Stage Gate Exit Package template (Gates 0–6)
+│   └── exception-record-template.md    # Gate Exception Record template (Governance exceptions)
+│
+└── tooling/                            # Machine-readable governance tooling
+    └── playbook-cli/                   # Cross-platform governance CLI (@ai-engineering-playbook/cli)
+        ├── README.md                   # CLI architecture, commands, and programmatic API
+        ├── package.json                # Dependencies (Ajv Draft 2020-12, ajv-formats)
+        ├── src/                        # CLI source (init, validate, Ajv validator, scaffolder)
+        └── tests/                      # Automated test suite (node:test)
 ```
 
 ### Document Manifest
@@ -98,6 +105,7 @@ ai-engineering-playbook/
 | [schemas/README.md](schemas/README.md) | Machine-readable JSON Schema specifications and validation rules | Humans, Agents & Tools |
 | [docs/adr/ADR-20261031-001-state-model-refinements.md](docs/adr/ADR-20261031-001-state-model-refinements.md) | Architectural decision record for state model taxonomy and two-phase handshake | Humans & Agents |
 | [templates/README.md](templates/README.md) | Standardized artifact templates (PRD, ADR, RFC, Exit Package, Exception) | Humans & Agents |
+| [tooling/playbook-cli/README.md](tooling/playbook-cli/README.md) | Cross-platform governance CLI for project initialization and schema validation | Humans, Agents & Tools |
 
 ---
 
@@ -144,6 +152,7 @@ Agent Cognitive Compliance    Deterministic Schema Contracts       Automated Too
 
 ## 6. Next Implementation Steps
 
-With the foundational methodology, standard templates, and machine-readable project state system established, subsequent tasks will address:
-1. **Automated Governance CLI & Tooling** (`tooling/`): A lightweight CLI (e.g. `playbook validate`, `playbook advance`) implementing the state machine checks against `.playbook/state.json`, pre-commit hooks, and CI gate validators.
-2. **Technology Stacks** (`stacks/<technology>/`): Specific engineering standards and scaffolds for Next.js, React, React Native, and Expo.
+With the foundational methodology, standard templates, machine-readable project state system, and foundational initialization CLI (`tooling/playbook-cli/`) established, subsequent tasks will address:
+1. **Automated Governance CLI Transitions** (`tooling/playbook-cli`): Adding transition state machine operations (`playbook advance`, interactive `playbook approve`) to execute stage transitions deterministically.
+2. **Quality Gates & Hook Integration**: Git pre-commit/pre-push hooks and CI gate validators verifying `.playbook/state.json`.
+3. **Technology Stacks** (`stacks/<technology>/`): Specific engineering standards and scaffolds for Next.js, React, React Native, and Expo.

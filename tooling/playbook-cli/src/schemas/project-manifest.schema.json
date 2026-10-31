@@ -1,0 +1,202 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ai-engineering-playbook.org/schemas/project-manifest.schema.json",
+  "title": "AI Engineering Playbook - Project Manifest Schema",
+  "description": "Technology-agnostic configuration manifest defining project identity, playbook standards, artifact paths, active lifecycle stage, milestone pointer, and enabled governance capabilities.",
+  "type": "object",
+  "required": [
+    "$schema",
+    "schema_version",
+    "project_id",
+    "project_name",
+    "active_milestone_id",
+    "playbook",
+    "tech_stack",
+    "paths",
+    "active_lifecycle_stage",
+    "capabilities"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "$schema": {
+      "type": "string",
+      "description": "URI reference to this JSON Schema."
+    },
+    "schema_version": {
+      "type": "string",
+      "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$",
+      "description": "Semantic version of the manifest schema (e.g. 1.0.0)."
+    },
+    "project_id": {
+      "type": "string",
+      "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$",
+      "description": "Unique, URL-safe kebab-case project identifier."
+    },
+    "project_name": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 100,
+      "description": "Human-readable display name of the project."
+    },
+    "active_milestone_id": {
+      "type": "string",
+      "pattern": "^M-[a-zA-Z0-9.-]+$",
+      "description": "Active milestone identifier (e.g. M-1.0.0, M-2026.Q4) matching project state."
+    },
+    "description": {
+      "type": "string",
+      "maxLength": 500,
+      "description": "Brief description of the project purpose and domain."
+    },
+    "playbook": {
+      "type": "object",
+      "description": "Governing playbook standards and rules profile.",
+      "required": [
+        "version",
+        "governance_profile",
+        "approval_mode"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "version": {
+          "type": "string",
+          "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$",
+          "description": "Playbook standard version governing this project (e.g. 1.0.0)."
+        },
+        "repository_uri": {
+          "type": "string",
+          "format": "uri-reference",
+          "description": "Upstream playbook repository URL or git reference."
+        },
+        "governance_profile": {
+          "type": "string",
+          "enum": [
+            "strict",
+            "standard",
+            "lightweight"
+          ],
+          "description": "Governance rigor profile applied to stage gates."
+        },
+        "approval_mode": {
+          "type": "string",
+          "enum": [
+            "solo",
+            "team"
+          ],
+          "description": "Approval workflow: solo (in-chat human sign-off) vs team (formal PR reviews)."
+        }
+      }
+    },
+    "tech_stack": {
+      "type": "object",
+      "description": "Technology stack metadata. Decoupled from core governance rules.",
+      "required": [
+        "ecosystem",
+        "primary_language"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "ecosystem": {
+          "type": "string",
+          "description": "Primary software ecosystem (e.g. node, python, go, rust, java, agnostic)."
+        },
+        "primary_language": {
+          "type": "string",
+          "description": "Primary programming language (e.g. typescript, python, go, agnostic)."
+        },
+        "runtimes": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Target runtimes (e.g. node20, python3.12, jvm21, browser, posix)."
+        },
+        "frameworks": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Primary application frameworks (e.g. nextjs, fastapi, react-native, gin)."
+        },
+        "package_manager": {
+          "type": "string",
+          "description": "Package management tool (e.g. pnpm, npm, poetry, cargo, go-modules)."
+        }
+      }
+    },
+    "paths": {
+      "type": "object",
+      "description": "Relative paths to project documentation and governance artifacts.",
+      "required": [
+        "docs_root",
+        "prd_dir",
+        "adr_dir",
+        "rfc_dir",
+        "gates_dir",
+        "exceptions_dir",
+        "state_file"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "docs_root": {
+          "type": "string",
+          "description": "Root path for project specifications and documentation."
+        },
+        "prd_dir": {
+          "type": "string",
+          "description": "Path to Product Requirements Documents (PRDs)."
+        },
+        "adr_dir": {
+          "type": "string",
+          "description": "Path to Architecture Decision Records (ADRs)."
+        },
+        "rfc_dir": {
+          "type": "string",
+          "description": "Path to Clarification Requests (RFCs)."
+        },
+        "gates_dir": {
+          "type": "string",
+          "description": "Path to Stage Gate Exit Packages."
+        },
+        "exceptions_dir": {
+          "type": "string",
+          "description": "Path to Gate Exception Records (EXC-YYYYMMDD-###.md)."
+        },
+        "state_file": {
+          "type": "string",
+          "description": "Relative path to machine-readable state JSON file."
+        }
+      }
+    },
+    "active_lifecycle_stage": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 6,
+      "description": "Currently active lifecycle stage (0: Discovery through 6: Deployment & Monitoring)."
+    },
+    "capabilities": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "enum": [
+          "automated_testing",
+          "contract_testing",
+          "static_type_checking",
+          "ast_linting",
+          "security_dependency_scanning",
+          "threat_modeling",
+          "canary_deployments",
+          "performance_benchmarks",
+          "telemetry_health_checks"
+        ]
+      },
+      "description": "Optional engineering capabilities and verification checks active for this project."
+    },
+    "metadata": {
+      "type": "object",
+      "description": "Arbitrary project-specific non-governance metadata.",
+      "additionalProperties": true
+    }
+  }
+}
