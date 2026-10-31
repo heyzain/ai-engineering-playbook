@@ -123,4 +123,23 @@ describe("CLI Executable Integration (playbook)", () => {
       }
     );
   });
+
+  test("executes playbook approve with --non-interactive and strictly rejects with TTY_REQUIRED", async () => {
+    await assert.rejects(
+      async () => {
+        await execFileAsync("node", [
+          cliBinPath,
+          "approve",
+          "--cwd",
+          tempDir,
+          "--non-interactive",
+        ]);
+      },
+      (err: { code?: number; stderr?: string }) => {
+        assert.equal(err.code, 1);
+        assert.match(err.stderr || "", /TTY_REQUIRED/);
+        return true;
+      }
+    );
+  });
 });

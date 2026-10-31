@@ -71,6 +71,106 @@ export function createTransactionDiagnostic(
           "Target file was modified or deleted externally between transaction preparation and commit. Inspect repository changes with git diff before re-running.",
       };
 
+    case "TTY_REQUIRED":
+      return {
+        code: "TTY_REQUIRED",
+        severity: "error",
+        message: error.message,
+        path: targetDir,
+        remediation:
+          "Gate approval requires an interactive terminal session. Automated, scripted, or piped approval invocations are strictly prohibited.",
+      };
+
+    case "AGENT_APPROVAL_PROHIBITED":
+      return {
+        code: "AGENT_APPROVAL_PROHIBITED",
+        severity: "error",
+        message: error.message,
+        path: targetDir,
+        remediation:
+          "AI agents are strictly forbidden from approving quality gates. Approval requires an authorized human reviewer.",
+      };
+
+    case "GATE_MISMATCH":
+      return {
+        code: "GATE_MISMATCH",
+        severity: "error",
+        message: error.message,
+        path: ".playbook/state.json",
+        remediation:
+          "The requested gate does not match the active lifecycle stage. Specify the correct gate number corresponding to current_stage.",
+      };
+
+    case "STAGE_ALREADY_APPROVED":
+      return {
+        code: "STAGE_ALREADY_APPROVED",
+        severity: "error",
+        message: error.message,
+        path: ".playbook/state.json",
+        remediation:
+          "Active lifecycle stage has already received formal human approval. Run 'playbook advance' to advance to the next lifecycle stage.",
+      };
+
+    case "GATE_CRITERIA_UNMET":
+      return {
+        code: "GATE_CRITERIA_UNMET",
+        severity: "error",
+        message: error.message,
+        path: ".playbook/state.json",
+        remediation:
+          "Cannot approve stage gate: deliverables are incomplete, unverified, or failing. Ensure all deliverables are verified or validly waived.",
+      };
+
+    case "APPROVAL_FINGERPRINT_MISSING":
+      return {
+        code: "APPROVAL_FINGERPRINT_MISSING",
+        severity: "error",
+        message: error.message,
+        path: ".playbook/approval-fingerprint.json",
+        remediation:
+          "Approval fingerprint sidecar is missing. Human re-review and re-approval via 'playbook approve --gate <N>' is required.",
+      };
+
+    case "APPROVAL_STALE":
+      return {
+        code: "APPROVAL_STALE",
+        severity: "error",
+        message: error.message,
+        path: ".playbook/approval-fingerprint.json",
+        remediation:
+          "Repository state or evidence files have drifted since human approval was granted. Re-verify deliverables and execute human re-approval.",
+      };
+
+    case "ADVANCEMENT_BLOCKED":
+      return {
+        code: "ADVANCEMENT_BLOCKED",
+        severity: "error",
+        message: error.message,
+        path: ".playbook/state.json",
+        remediation:
+          "Lifecycle stage advancement is blocked. Resolve blocking prerequisites or obtain human gate approval before advancing.",
+      };
+
+    case "SNAPSHOT_CONFLICT":
+      return {
+        code: "SNAPSHOT_CONFLICT",
+        severity: "error",
+        message: error.message,
+        path: (error.details?.snapshotPath as string) || ".playbook/milestones",
+        remediation:
+          "A milestone snapshot file already exists with differing contents. Overwriting milestone snapshots is prohibited. Increment milestone ID before sealing.",
+      };
+
+    case "MANIFEST_STAGE_DRIFT":
+      return {
+        code: "MANIFEST_STAGE_DRIFT",
+        severity: "error",
+        message: error.message,
+        path: ".playbook/manifest.json",
+        remediation:
+          "Synchronize manifest active_lifecycle_stage with state.current_stage before advancing.",
+      };
+
     case "RECOVERY_FAILED":
     case "TRANSACTION_LOCK_FAILED":
     default:

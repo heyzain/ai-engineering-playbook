@@ -18,6 +18,8 @@ export const DEFAULT_PATHS = {
   transactionLockFile: ".playbook/transaction.lock",
   reclaimLockFile: ".playbook/reclaim.lock",
   transactionJournalFile: ".playbook/tx-journal.json",
+  approvalFingerprintFile: ".playbook/approval-fingerprint.json",
+  milestonesDir: ".playbook/milestones",
 } as const;
 
 export const STAGE_NAMES = [
