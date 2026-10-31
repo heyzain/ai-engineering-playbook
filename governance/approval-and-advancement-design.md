@@ -174,7 +174,7 @@ To ensure gate sign-off reflects active human judgment rather than automated scr
     "role": "Lead Systems Architect",
     "approval_mode": "solo",
     "decision": "GATE_APPROVED",
-    "signature_reference": "Interactive CLI Session 8dec625e-7884-4400-a257-39124763c805 | fp:sha256:7a4c9b...",
+    "signature_reference": "Interactive CLI Session 8dec625e-7884-4400-a257-39124763c805",
     "approved_at": "2026-10-31T11:55:00.000Z",
     "conditions": "Ensure load testing begins immediately in Stage 3."
   }
@@ -219,9 +219,9 @@ An approved gate does not retain eternal validity if repository state diverges p
 
 To detect any post-approval drift deterministically, the governance engine defines an **Approval Fingerprint** generated at the exact moment of human approval.
 
-#### Fingerprint Inputs
+#### 1. Fingerprint Representation & Inputs
 The fingerprint is computed from the canonical JSON representation (lexicographically sorted keys, compact normalized formatting) of:
-1. **Manifest Identifiers**: `manifest.project_id`, `active_milestone_id`, `active_lifecycle_stage`.
+1. **Manifest Identifiers**: `manifest.project_id`, `manifest.active_milestone_id`.
 2. **Current Stage State**: `state.current_stage`, `state.stage_status`.
 3. **Deliverables List**: For each item in `current_stage_detail.deliverables[]`: `id`, `name`, `status`, `validation_status`, `artifact_path`, `exception_ref`.
 4. **Evidence Records Metadata**: For each deliverable's `evidence[]`: `requirement_id`, `type`, `procedure`, `result`, `summary`, `exit_code`, `evidence_ref`, `evidence_hash`.
@@ -232,16 +232,35 @@ The fingerprint is computed from the canonical JSON representation (lexicographi
 
 $$\text{approval\_fingerprint} = \text{"sha256:"} + \text{SHA256}(\text{CanonicalFingerprintPayload})$$
 
-#### Staleness Triggers & Deterministic Invalidation
-Before `playbook advance` executes, the engine re-evaluates all fingerprint inputs:
+#### 2. Fingerprint Persistence
+- **v1.0.0 Persistence via Dedicated Sidecar**:
+  - To preserve the semantic purity of `signature_reference` (which records PR numbers, chat quotes, or commit references without overloading unrelated metadata), the approval fingerprint is persisted in a dedicated machine-readable sidecar file:
+    `.playbook/approval-fingerprint.json`
+  - Written by `playbook approve --gate <N>` at the conclusion of interactive sign-off.
+  - Read and verified by `playbook advance` before executing state mutations.
+- **Proposed v1.1.0 Schema Evolution**:
+  - Add an optional native property `approval_fingerprint` to `human_approval` in `project-state.schema.json`.
+
+#### 3. Staleness Triggers & Deterministic Invalidation
+Before `playbook advance` executes, the engine recomputes the fingerprint from current repository state and compares it against `.playbook/approval-fingerprint.json`:
 - **Evidence File Modified**: If any local evidence file on disk has changed its hash since approval $\rightarrow$ `APPROVAL_STALE` (`EVIDENCE_MODIFIED_SINCE_APPROVAL`).
 - **New Evidence Record Added or Removed**: If deliverables or evidence array mutates $\rightarrow$ `APPROVAL_STALE` (`DELIVERABLE_MUTATED_SINCE_APPROVAL`).
 - **Exception Expired**: If an active exception reaches `expiration_date < today` (UTC calendar day) prior to advancement $\rightarrow$ `APPROVAL_STALE` (`EXCEPTION_EXPIRED_SINCE_APPROVAL`).
 - **Exit Package Edited**: If the compiled markdown artifact is modified $\rightarrow$ `APPROVAL_STALE` (`EXIT_PACKAGE_MUTATED_SINCE_APPROVAL`).
-- **Manifest Drift**: If `manifest.json` stage or milestone pointers drift independently $\rightarrow$ `STAGE_MISMATCH` / `APPROVAL_STALE`.
+- **Milestone Conflict**: If `manifest.active_milestone_id !== state.milestone_id` $\rightarrow$ `MILESTONE_MISMATCH`.
 - **Unavailable or Unreadable Inputs**: If any referenced evidence file or exit package is deleted, moved, or permissions revoked, the fingerprint cannot be verified. **Any unreadable or missing input immediately invalidates approval** (`APPROVAL_INVALID_UNREADABLE_INPUT`), halting advancement.
 
 When an approval is declared stale, advancement halts immediately. The human engineer must review the repository deltas and issue a fresh approval.
+
+### 3.7 Source-of-Truth and Manifest Drift Rules
+1. **Authoritative State Machine**: `state.json` (`current_stage`) is the sole authoritative state machine for engineering lifecycle execution. `manifest.json` (`active_lifecycle_stage`) is a downstream configuration mirror.
+2. **Approval Eligibility Guard**:
+   - `MILESTONE_MISMATCH`: Blocks gate approval with error across all profiles.
+   - `STAGE_MISMATCH`: Under `strict` and `standard` governance profiles, manifest stage drift blocks gate approval with error. The mirror must be synchronized before formal gate review. Under `lightweight` profile, a warning is emitted and review proceeds for `state.current_stage`.
+3. **Advancement Drift Repair**:
+   - Advancing Stage $N \rightarrow N+1$ atomically updates both `state.current_stage` and `manifest.active_lifecycle_stage` to $N+1$, repairing any previous mirror pointer drift.
+   - Project identity or milestone divergence cannot be repaired automatically; any mismatch halts advancement immediately.
+4. **Zero Silent Overwrite Invariant**: No operation may silently overwrite conflicting milestone or stage state without human authorization.
 
 ---
 
@@ -273,7 +292,7 @@ When `state.current_stage < 6`:
        "approved_by": "Zain Ali",
        "role": "Lead Systems Architect",
        "approval_mode": "solo",
-       "signature_reference": "Interactive CLI Session 8dec625e-7884-4400-a257-39124763c805 | fp:sha256:7a4c9b..."
+       "signature_reference": "Interactive CLI Session 8dec625e-7884-4400-a257-39124763c805"
      }
    }
    ```
@@ -338,15 +357,38 @@ Instead, the orchestrator triggers `CLOSE_LIFECYCLE`:
 - Any attempt by an AI agent to write `"actor_type": "agent"` alongside `stage_status: "approved"` fails schema validation (`STATE_SCHEMA_INVALID`), immediately blocking repository progression.
 - The approval command rejects any reviewer name matching agent identifiers (`agent`, `bot`, `controller`, `playbook`, `orchestrator`, `ai`).
 
-### 5.3 Approval and Rejection Semantics
+### 5.3 Rejection Representation and Review History Preservation
 - **Rejection Protocol (`REJECT_GATE`)**:
   - If the human reviewer rejects a gate submission:
     - `state.stage_status` reverts to `"in_progress"`.
     - `current_stage_detail.exit_package.status` reverts to `"drafted"`.
-    - `current_stage_detail.human_approval` records `status: "rejected"`, `decision: "REJECTED"`, and mandatory `conditions` detailing required rework.
+    - `current_stage_detail.human_approval` records:
+      - `status`: `"rejected"`
+      - `approved_by`: Claimed human reviewer full name.
+      - `role`: Reviewer professional authority.
+      - `approval_mode`: `"solo"` or `"team"`.
+      - `decision`: `"REJECTED"`.
+      - `signature_reference`: Auditable reference string (PR review, session ID).
+      - `approved_at`: ISO 8601 timestamp of rejection verdict.
+      - `conditions`: Mandatory detailed rework items and blocking concerns.
     - Deliverables requiring changes revert to `in_progress`.
-- **Re-Approval After Rejection**:
-  - Once rework is completed, deliverables re-verified, and exit package re-compiled and submitted (`submitted_for_review`), a fresh interactive approval session may be conducted. The new approval record replaces the rejected record in `current_stage_detail.human_approval`.
+- **Preserving Rejection History Without In-State Overwriting**:
+  - In schema v1.0.0, `current_stage_detail.human_approval` is a single object representing current status. Past rejection history is preserved across three immutable media:
+    1. **Stage Gate Exit Package**: Section 6 (Outstanding Issues & Accepted Limitations) and Section 9 (Human Review Record) log all prior review attempts and their outcomes.
+    2. **Git Commit History**: Every rejected decision and rework cycle is committed to git with full diff auditability.
+    3. **Subsequent Approval Record**: When re-approval occurs, `conditions` in the new approval record documents prior rejection resolution (e.g. `"Prior rejection on 2026-10-31 resolved: ADR-002 amended with SQLite WAL limits."`).
+- **Proposed Schema Evolution (v1.1.0)**:
+  - To support multi-cycle review logs directly in `state.json`, we propose adding `current_stage_detail.review_history[]` in v1.1.0:
+    ```jsonc
+    "review_history": {
+      "type": "array",
+      "description": "Immutable ledger of past review decisions within the current stage.",
+      "items": {
+        "type": "object",
+        "required": [ "reviewed_at", "reviewed_by", "role", "decision", "reasons_or_conditions", "signature_reference" ]
+      }
+    }
+    ```
 - **Repeated Approval Invocations**:
   - If `playbook approve` is run on an already approved stage whose fingerprint is unchanged, the CLI reports that the gate is already approved and advises running `playbook advance`.
   - If repository files have drifted, the CLI notifies the engineer that previous approval is stale and initiates a fresh review session.
@@ -366,7 +408,7 @@ Advancement requires updating two separate files: `.playbook/state.json` and `.p
 > **No Kernel Multi-File Atomicity**: Standard operating systems (Windows NTFS, Linux ext4, macOS APFS) provide atomic renaming for a *single file*, but **no OS provides multi-file atomic rename syscalls**. A crash midway between two file renames will leave state and manifest desynchronized (`STAGE_MISMATCH`) unless governed by a write-ahead transaction journal.
 
 ### 6.2 Write-Ahead Transaction Journal & Process Lock Protocol
-To guarantee deterministic recovery across all failure modes, `playbook advance` executes under an exclusive lock and write-ahead transaction journal:
+To guarantee deterministic recovery across all failure modes, `playbook advance` executes under an exclusive lock and write-ahead transaction journal containing **full target payloads**:
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
@@ -374,7 +416,7 @@ To guarantee deterministic recovery across all failure modes, `playbook advance`
 │ 2. Compute target state, manifest, and snapshot in-memory   │
 │ 3. Validate target objects against JSON Schemas             │
 │ 4. Write Transaction Journal (.playbook/tx-journal.json)    │
-│    phase: "PREPARED", target file hashes, actions           │
+│    phase: "PREPARED", target file contents & hashes         │
 │ 5. Write temporary files (.tmp) and backup copies (.bak)    │
 │ 6. Update Transaction Journal phase: "COMMITTING"           │
 │ 7. Rename state.json.tmp -> state.json                      │
@@ -386,16 +428,52 @@ To guarantee deterministic recovery across all failure modes, `playbook advance`
 └─────────────────────────────────────────────────────────────┘
 ```
 
-#### Deterministic Crash Recovery Protocol
-Whenever any CLI command (`playbook inspect`, `playbook advance`, `playbook approve`) initializes, it checks for an existing `.playbook/tx-journal.json` and `.playbook/advancement.lock`:
+#### Durable Information in Journal (`.playbook/tx-journal.json`)
+The journal stores full target content strings, ensuring roll-forward can succeed even if temporary files are lost:
+```json
+{
+  "tx_id": "tx-1730375700000-a1b2",
+  "phase": "PREPARED", // PREPARED -> COMMITTING -> COMMITTED
+  "created_at": "2026-10-31T12:00:00.000Z",
+  "action": "ADVANCE_STAGE",
+  "from_stage": 2,
+  "to_stage": 3,
+  "files": [
+    {
+      "target_path": ".playbook/state.json",
+      "tmp_path": ".playbook/state.json.tmp",
+      "bak_path": ".playbook/state.json.bak",
+      "expected_source_hash": "sha256:1111...",
+      "expected_target_hash": "sha256:2222...",
+      "target_content": "{ ... full serialized state JSON ... }"
+    },
+    {
+      "target_path": ".playbook/manifest.json",
+      "tmp_path": ".playbook/manifest.json.tmp",
+      "bak_path": ".playbook/manifest.json.bak",
+      "expected_source_hash": "sha256:3333...",
+      "expected_target_hash": "sha256:4444...",
+      "target_content": "{ ... full serialized manifest JSON ... }"
+    }
+  ]
+}
+```
 
-| Crash Point | Journal Phase Detected | Recovery Action Executed by CLI |
-| :--- | :--- | :--- |
-| **Crash before renaming (Steps 1–5)** | `PREPARED` | **Roll Backward**: No target files were replaced. Remove `.tmp` and `.bak` files, remove `tx-journal.json`, release lock. State remains in Stage $N$. |
-| **Crash midway during renames (Steps 6–8)** | `COMMITTING` | **Roll Forward**: Replacements were in progress. Verify whether each file matches target hash; if not, complete the rename from `.tmp` or write from journal payload. Transition journal to `COMMITTED`, remove backups, delete journal, release lock. State successfully advances to Stage $N+1$. |
-| **Crash during cleanup (Steps 9–11)** | `COMMITTED` | **Finalize Cleanup**: Both files were successfully replaced. Remove remaining `.bak` and `.tmp` files, delete `tx-journal.json`, release lock. |
-| **Interrupted Recovery** | Any | The journal payload contains target file hashes and recovery intent. Repeating the recovery check is strictly idempotent. |
-| **Concurrent CLI Processes** | Active Lock | Second process detects `.playbook/advancement.lock`. Checks process liveliness (PID). If PID is active, halts with `LOCKED: Another advancement process is running`. If PID is dead, executes journal recovery. |
+#### Crash Recovery Proof Matrix
+Whenever any CLI command initializes, it checks for an existing `.playbook/tx-journal.json` and `.playbook/advancement.lock`:
+
+| Crash Point / Scenario | Disk State at Crash | Recovery Action Executed by CLI | Safety Proof |
+| :--- | :--- | :--- | :--- |
+| **Crash in `PREPARED` with missing/corrupted `.tmp` files** | Live files untouched; journal exists; `.tmp` missing or corrupt. | **Roll Backward**: Remove `.tmp` and `.bak` files, delete `tx-journal.json`, release lock. | Target files were never touched. Rollback restores pristine Stage $N$ state. |
+| **Crash in `COMMITTING` after state rename but before manifest rename** | `state.json` is at Stage $N+1$; `manifest.json` is at Stage $N$. | **Roll Forward**: Verify `state.json` matches target hash. If `manifest.json.tmp` is missing/corrupt, re-write from journal `target_content`. Rename into place. Complete advancement to Stage $N+1$. | Storing `target_content` in journal ensures roll-forward succeeds even if temporary files were destroyed. |
+| **Crash during Rollback** | Process died while restoring `.bak` files. | On next invocation, journal is still in `PREPARED`. Rollback is re-executed. | Every rollback operation (file copy, unlink) is idempotent. Repeating rollback achieves identical, clean state. |
+| **Missing or Corrupted Backup File** | Backup cannot be read during rollback. | If target file is untouched, no restore needed. If target file was modified and backup is corrupt: **Fail Closed**. Emit `CRITICAL_RECOVERY_FAILURE`; require human git restoration. | **Never guess authoritative state.** System prevents silent data synthesis. |
+| **Crash during Journal Phase Updates** | Journal write was interrupted. | Journal writes use atomic replace (`tx-journal.json.tmp` $\rightarrow$ `tx-journal.json`). If journal is corrupt/unparseable, check lock; if lock owner dead, fail closed with inspection report. | Incomplete writes never result in malformed journal states. |
+| **Stale Process Lock Discovered** | Lock exists from previous crashed session. | Check PID liveliness via `process.kill(pid, 0)`. If dead and lock age > 5m, log warning, execute journal recovery, reclaim lock. | Dead processes cannot hold locks indefinitely. Active processes are protected. |
+| **Concurrent Advancement Invocations** | Two processes attempt `playbook advance` simultaneously. | First process creates `.playbook/advancement.lock` with `wx` flag (`O_CREAT \| O_EXCL`). Second process fails with `EEXIST` and halts immediately. | Operating system kernel guarantees mutual exclusion. |
+
+> [!CAUTION]
+> **Fail-Closed Recovery Invariant**: If any transaction recovery condition cannot be proven safe (e.g. source file altered by an external editor during crash, or corrupted backup during rollback), the engine **fails closed immediately**. It logs a critical diagnostic `CRITICAL_RECOVERY_FAILURE`, leaves files untouched, and prompts the human engineer for git-assisted recovery. The engine never guesses or synthesizes authoritative state.
 
 ---
 
@@ -415,7 +493,9 @@ Whenever any CLI command (`playbook inspect`, `playbook advance`, `playbook appr
 | **Repeated `approve` Execution** | State already has `stage_status === "approved"`. | Warns engineer gate is already approved; no-op unless state drifted. | Run `playbook advance` to advance stage. |
 | **Repeated `advance` Execution** | State is in `not_started` (already advanced). | Warns stage is not approved; exit code 0/1. | Begin engineering work on current stage. |
 
-## 7. Proposed CLI Command Specifications
+---
+
+## 8. Proposed CLI Command Specifications
 
 ### 7.1 `playbook approve --gate <N>`
 ```bash
@@ -524,14 +604,14 @@ playbook advance --json
 
 ---
 
-## 8. Schema Conformance & Compatibility Audit
+## 9. Schema Conformance & Compatibility Audit
 
-### 8.1 Manifest Schema Conformance (`schemas/project-manifest.schema.json`)
+### 9.1 Manifest Schema Conformance (`schemas/project-manifest.schema.json`)
 - `active_lifecycle_stage`: Integer `0` to `6`. Synchronized on `advance`. Fully supported.
 - `active_milestone_id`: Pattern `^M-[a-zA-Z0-9.-]+$`. Fully supported.
 - **Verdict**: Zero schema modifications required for manifest.
 
-### 8.2 State Schema Conformance (`schemas/project-state.schema.json`)
+### 9.2 State Schema Conformance (`schemas/project-state.schema.json`)
 - `stage_status`: Supports `"approved"`, `"in_progress"`, `"pending_review"`.
 - `current_stage_detail.human_approval`: Contains `status`, `approved_by`, `role`, `approval_mode`, `decision`, `signature_reference`, `approved_at`, `conditions`. Fully supported.
 - `last_updated`: Enforces `actor_type: "human"` when `stage_status: "approved"`. Fully supported.
@@ -539,20 +619,45 @@ playbook advance --json
 - `archived_milestones[]`: Preserves past milestone histories and frozen snapshot reference. Fully supported.
 - **Verdict**: Existing Draft 2020-12 state schema completely accommodates the approval and advancement architecture with zero breaking changes.
 
-### 8.3 Proposed Schema Enhancement (Non-Breaking, Future v1.1.0)
-To avoid overloading `signature_reference` with fingerprint digests, we propose adding an optional property to `human_approval` in schema version 1.1.0:
-```jsonc
-"approval_fingerprint": {
-  "type": [ "string", "null" ],
-  "pattern": "^sha256:[a-f0-9]{64}$",
-  "description": "Deterministic SHA-256 digest of gate deliverables, evidence file hashes, and exit package contents at the time of human approval."
-}
-```
-In v1.0.0, the CLI records this digest in `signature_reference` (e.g. `PR #42 | fp:sha256:abc...`) or recomputes it dynamically at advancement time.
+### 9.3 Minimal Proposed Schema Evolution (Non-Breaking, Future v1.1.0)
+To natively preserve machine-calculated verification fingerprints and multi-cycle review logs directly within state files without modifying existing v1.0.0 contracts:
+
+1. **Native Approval Fingerprint**:
+   ```jsonc
+   // Under current_stage_detail.human_approval:
+   "approval_fingerprint": {
+     "type": [ "string", "null" ],
+     "pattern": "^sha256:[a-f0-9]{64}$",
+     "description": "Deterministic SHA-256 digest of gate deliverables, evidence file hashes, and exit package contents at the time of human approval."
+   }
+   ```
+   *(In v1.0.0, this value is persisted cleanly in `.playbook/approval-fingerprint.json` sidecar, keeping `signature_reference` unpolluted).*
+
+2. **Immutable Review Decision History**:
+   ```jsonc
+   // Under current_stage_detail:
+   "review_history": {
+     "type": "array",
+     "description": "Immutable ledger of past review decisions (rejections, conditions, prior approval attempts) within the current stage.",
+     "items": {
+       "type": "object",
+       "required": [ "reviewed_at", "reviewed_by", "role", "decision", "reasons_or_conditions", "signature_reference" ],
+       "properties": {
+         "reviewed_at": { "type": "string", "format": "date-time" },
+         "reviewed_by": { "type": "string" },
+         "role": { "type": "string" },
+         "decision": { "type": "string", "enum": [ "GATE_APPROVED", "REJECTED" ] },
+         "reasons_or_conditions": { "type": "string" },
+         "signature_reference": { "type": "string" }
+       }
+     }
+   }
+   ```
+   *(In v1.0.0, past rejection logs are preserved in Exit Package Sections 6 & 9, git history, and subsequent approval `conditions`).*
 
 ---
 
-## 9. Automated Test Strategy for Future Implementation (Task 004D)
+## 10. Automated Test Strategy for Future Implementation (Task 004D)
 
 When Task 004D is implemented, the test harness must execute:
 
@@ -589,16 +694,18 @@ When Task 004D is implemented, the test harness must execute:
    - Milestone snapshot conflict: attempting to close with differing content when snapshot already exists raises `SNAPSHOT_CONFLICT`.
 6. **Transaction Safety & Crash Recovery Tests**:
    - Crash simulation in `PREPARED` phase: recovery rolls backward, restores state, removes `.tmp` and `.bak`.
-   - Crash simulation in `COMMITTING` phase: recovery rolls forward, synchronizes manifest, completes advancement.
+   - Crash simulation in `COMMITTING` phase with missing `.tmp`: recovery rolls forward using journal `target_content`, synchronizes manifest, completes advancement.
    - Concurrent process execution blocked by exclusive lock (`advancement.lock`).
    - Stale lock detection and automatic liveliness reclamation.
+   - Corrupted backup detection triggers fail-closed `CRITICAL_RECOVERY_FAILURE`.
 
 ---
 
-## 10. Confirmed Architectural Decisions & Governance Alignment
+## 11. Confirmed Architectural Decisions & Governance Alignment
 
-1. **Transaction Journal & Process Lock**: Multi-file state and manifest updates are governed by a write-ahead transaction journal (`.playbook/tx-journal.json`) and process lock (`.playbook/advancement.lock`), eliminating any reliance on non-existent filesystem multi-file atomicity.
-2. **Deterministic Stale Approval Invalidation**: Approvals are bound to an 8-part canonical fingerprint digest. Any modification to evidence files, deliverables, exceptions, RFCs, or exit package markdown invalidates approval and blocks advancement.
+1. **Transaction Journal & Process Lock**: Multi-file state and manifest updates are governed by a write-ahead transaction journal (`.playbook/tx-journal.json`) and process lock (`.playbook/advancement.lock`), eliminating any reliance on non-existent filesystem multi-file atomicity. Full serialized payloads in the journal guarantee recoverability across missing/corrupted temporary files.
+2. **Deterministic Stale Approval Invalidation**: Approvals are bound to an 8-part canonical fingerprint digest stored in `.playbook/approval-fingerprint.json` sidecar. Any modification to evidence files, deliverables, exceptions, RFCs, or exit package markdown invalidates approval and blocks advancement.
 3. **Evidence Eligibility Realities**: Existence and hash integrity do not prove engineering correctness; automated checks require `integrity_passed`, manual reviews permit `existence_verified`, and any `failed` result blocks approval.
-4. **Governance-Frozen Snapshots**: Stage 6 milestone snapshots are governance-frozen artifacts marked read-only on disk; physical immutability requires external forge and protected storage controls.
-5. **Schema Fidelity**: `stage_history[].human_approval` strictly restricts properties to the 4 allowed fields, preventing any schema invalidation during lifecycle transitions.
+4. **Authoritative State Machine**: `state.json` (`current_stage`) is the sole execution authority; manifest drift blocks approval under strict/standard profiles and is repaired upon stage advancement.
+5. **Governance-Frozen Snapshots**: Stage 6 milestone snapshots are governance-frozen artifacts marked read-only on disk; physical immutability requires external forge and protected storage controls.
+6. **Schema Fidelity**: `stage_history[].human_approval` strictly restricts properties to the 4 allowed fields, preventing any schema invalidation during lifecycle transitions. Minimal schema evolutions for native fingerprints and review histories are formally documented for future release v1.1.0.
