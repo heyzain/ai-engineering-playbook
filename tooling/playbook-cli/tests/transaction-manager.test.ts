@@ -634,6 +634,7 @@ describe("WriteAheadTransactionManager (WAL Engine)", () => {
       "TRANSACTION_PREPARATION_FAILED",
       "TRANSACTION_COMMIT_FAILED",
       "TARGET_PATH_INVALID",
+      "EXTERNAL_TARGET_MODIFIED",
     ] as const;
 
     for (const code of codes) {
@@ -688,5 +689,473 @@ describe("WriteAheadTransactionManager (WAL Engine)", () => {
     assert.equal(insp3.exists, true);
     assert.equal(insp3.journal, null);
     assert.equal(insp3.isCorrupted, true);
+  });
+
+  // 17. Parent-directory synchronization for each affected target directory (F-01)
+  test("Scenario 17: Parent-directory synchronization is invoked for each affected target directory", async () => {
+    const syncedDirs: string[] = [];
+    const txManager = new WriteAheadTransactionManager({
+      targetDir: tempDir,
+      faultInjection: {
+        onDirectoryFsync: (dirPath) => {
+          syncedDirs.push(path.resolve(dirPath));
+        },
+      },
+    });
+
+    // Create nested directory for a secondary target
+    const docsGatesDir = path.join(tempDir, "docs", "gates");
+    fs.mkdirSync(docsGatesDir, { recursive: true });
+    const gateFilePath = path.join(docsGatesDir, "GATE-1.md");
+    fs.writeFileSync(gateFilePath, "old gate\n", "utf-8");
+
+    const result = await txManager.executeTransaction("ADVANCE_STAGE", [
+      { targetPath: ".playbook/state.json", content: "new state\n" },
+      { targetPath: "docs/gates/GATE-1.md", content: "new gate\n" },
+    ]);
+
+    assert.ok(result.txId);
+    assert.equal(fs.readFileSync(gateFilePath, "utf-8"), "new gate\n");
+
+    // Verify parent directories were synchronized
+    const expectedPlaybookDir = path.resolve(playbookDir);
+    const expectedDocsGatesDir = path.resolve(docsGatesDir);
+
+    assert.ok(
+      syncedDirs.includes(expectedPlaybookDir),
+      "Must synchronize .playbook directory"
+    );
+    assert.ok(
+      syncedDirs.includes(expectedDocsGatesDir),
+      "Must synchronize docs/gates directory"
+    );
+  });
+
+  // 18. Directory synchronization failure prevents unsafe journal cleanup (F-01)
+  test("Scenario 18: Directory synchronization failure prevents unsafe journal cleanup and fails closed", async () => {
+    const txManager = new WriteAheadTransactionManager({
+      targetDir: tempDir,
+      faultInjection: {
+        failDirectoryFsyncOnCommit: true,
+      },
+    });
+
+    await assert.rejects(
+      async () => {
+        await txManager.executeTransaction("ADVANCE_STAGE", [
+          { targetPath: ".playbook/state.json", content: "mutated\n" },
+        ]);
+      },
+      (err: any) => {
+        assert.ok(err instanceof Error);
+        return true;
+      }
+    );
+
+    // Verify journal file was NOT deleted / is safely preserved because sync failed during commit
+    assert.ok(
+      fs.existsSync(journalPath),
+      "Journal file must be preserved on disk when directory synchronization fails"
+    );
+    const insp = await txManager.inspectJournal();
+    assert.equal(insp.journal?.phase, "COMMITTING", "Journal must be preserved in COMMITTING phase");
+  });
+
+  // 19. Malicious journal with path traversal (..) rejected during recovery (F-02)
+  test("Scenario 19: Recovery rejects malicious journal containing path traversal (..) and fails closed", async () => {
+    const lockManager = new TransactionLockManager({
+      targetDir: tempDir,
+      lockDir: playbookDir,
+    });
+
+    const maliciousJournal = {
+      tx_id: "tx-traversal-attack",
+      phase: "COMMITTING",
+      created_at: new Date().toISOString(),
+      action: "ATTACK",
+      lock_nonce: "nonce-attack",
+      files: [
+        {
+          target_path: "../../../escaped-target.txt",
+          tmp_path: "../../../escaped-target.txt.tmp",
+          bak_path: "../../../escaped-target.txt.bak",
+          existed_before: false,
+          expected_source_hash: null,
+          expected_target_hash: computeSha256("malicious content\n"),
+          target_content: "malicious content\n",
+        },
+      ],
+    };
+
+    fs.writeFileSync(journalPath, JSON.stringify(maliciousJournal, null, 2) + "\n", "utf-8");
+
+    const outsidePath = path.resolve(tempDir, "..", "escaped-target.txt");
+    assert.ok(!fs.existsSync(outsidePath), "External file must not exist beforehand");
+
+    const recoveryManager = new WriteAheadTransactionManager({
+      targetDir: tempDir,
+      lockManager,
+    });
+
+    await assert.rejects(
+      async () => {
+        await lockManager.withLock(async (handle) => {
+          await recoveryManager.recover(handle);
+        });
+      },
+      (err: any) => {
+        assert.ok(err instanceof TransactionError);
+        assert.equal(err.code, "CRITICAL_RECOVERY_FAILURE");
+        return true;
+      }
+    );
+
+    // Assert malicious file was NOT written outside project
+    assert.ok(!fs.existsSync(outsidePath), "Recovery must never write files outside project root");
+    // Assert journal was strictly preserved on disk for triage
+    assert.ok(fs.existsSync(journalPath), "Tampered journal must be preserved on disk for operator triage");
+  });
+
+  // 20. Recovery rejects absolute, Windows drive, or UNC paths (F-02)
+  test("Scenario 20: Recovery rejects absolute, Windows drive, and UNC paths in journal", async () => {
+    const lockManager = new TransactionLockManager({
+      targetDir: tempDir,
+      lockDir: playbookDir,
+    });
+
+    const testPaths = [
+      process.platform === "win32" ? "C:\\evil\\target.txt" : "/tmp/evil/target.txt",
+      "\\\\remote-share\\volume\\evil.txt",
+      "//unc-share/volume/evil.txt",
+    ];
+
+    for (const badPath of testPaths) {
+      const badJournal = {
+        tx_id: "tx-bad-path",
+        phase: "COMMITTING",
+        created_at: new Date().toISOString(),
+        action: "ATTACK",
+        lock_nonce: "nonce-1",
+        files: [
+          {
+            target_path: badPath,
+            tmp_path: ".playbook/valid.tmp",
+            bak_path: ".playbook/valid.bak",
+            existed_before: false,
+            expected_source_hash: null,
+            expected_target_hash: computeSha256("payload"),
+            target_content: "payload",
+          },
+        ],
+      };
+
+      fs.writeFileSync(journalPath, JSON.stringify(badJournal, null, 2) + "\n", "utf-8");
+
+      const manager = new WriteAheadTransactionManager({ targetDir: tempDir, lockManager });
+
+      await assert.rejects(
+        async () => {
+          await lockManager.withLock(async (handle) => {
+            await manager.recover(handle);
+          });
+        },
+        (err: any) => {
+          assert.ok(err instanceof TransactionError);
+          assert.equal(err.code, "CRITICAL_RECOVERY_FAILURE");
+          return true;
+        }
+      );
+
+      assert.ok(fs.existsSync(journalPath), "Journal preserved on failure");
+    }
+  });
+
+  // 21. Recovery rejects malicious temporary or backup paths (F-02)
+  test("Scenario 21: Recovery rejects malicious temporary and backup paths in journal", async () => {
+    const lockManager = new TransactionLockManager({
+      targetDir: tempDir,
+      lockDir: playbookDir,
+    });
+
+    const badTmpJournal = {
+      tx_id: "tx-bad-tmp",
+      phase: "COMMITTING",
+      created_at: new Date().toISOString(),
+      action: "ATTACK",
+      lock_nonce: "nonce-1",
+      files: [
+        {
+          target_path: ".playbook/state.json",
+          tmp_path: "../../outside.tmp",
+          bak_path: ".playbook/valid.bak",
+          existed_before: true,
+          expected_source_hash: null,
+          expected_target_hash: computeSha256("payload"),
+          target_content: "payload",
+        },
+      ],
+    };
+
+    fs.writeFileSync(journalPath, JSON.stringify(badTmpJournal, null, 2) + "\n", "utf-8");
+
+    const manager = new WriteAheadTransactionManager({ targetDir: tempDir, lockManager });
+
+    await assert.rejects(
+      async () => {
+        await lockManager.withLock(async (handle) => {
+          await manager.recover(handle);
+        });
+      },
+      (err: any) => {
+        assert.ok(err instanceof TransactionError);
+        assert.equal(err.code, "CRITICAL_RECOVERY_FAILURE");
+        return true;
+      }
+    );
+
+    assert.ok(fs.existsSync(journalPath), "Journal preserved on failure");
+  });
+
+  // 22. Recovery rejects symlink escaping project boundary (F-02)
+  test("Scenario 22: Path validation rejects symlinked parent directory or target escaping project boundary", async () => {
+    const outsideDir = fs.mkdtempSync(path.join(os.tmpdir(), "playbook-outside-"));
+    const symlinkDir = path.join(tempDir, "escaped_link");
+
+    try {
+      // Create junction/symlink directory pointing outside
+      const linkType = process.platform === "win32" ? "junction" : "dir";
+      fs.symlinkSync(outsideDir, symlinkDir, linkType);
+
+      const lockManager = new TransactionLockManager({
+        targetDir: tempDir,
+        lockDir: playbookDir,
+      });
+
+      const symlinkJournal = {
+        tx_id: "tx-symlink-escape",
+        phase: "COMMITTING",
+        created_at: new Date().toISOString(),
+        action: "ATTACK",
+        lock_nonce: "nonce-1",
+        files: [
+          {
+            target_path: "escaped_link/target.txt",
+            tmp_path: "escaped_link/target.txt.tmp",
+            bak_path: "escaped_link/target.txt.bak",
+            existed_before: false,
+            expected_source_hash: null,
+            expected_target_hash: computeSha256("payload"),
+            target_content: "payload",
+          },
+        ],
+      };
+
+      fs.writeFileSync(journalPath, JSON.stringify(symlinkJournal, null, 2) + "\n", "utf-8");
+
+      const manager = new WriteAheadTransactionManager({ targetDir: tempDir, lockManager });
+
+      await assert.rejects(
+        async () => {
+          await lockManager.withLock(async (handle) => {
+            await manager.recover(handle);
+          });
+        },
+        (err: any) => {
+          assert.ok(err instanceof TransactionError);
+          assert.equal(err.code, "CRITICAL_RECOVERY_FAILURE");
+          return true;
+        }
+      );
+
+      assert.ok(fs.existsSync(journalPath), "Journal preserved");
+    } finally {
+      if (fs.existsSync(symlinkDir)) {
+        try {
+          fs.unlinkSync(symlinkDir);
+        } catch {
+          // ignore
+        }
+      }
+      if (fs.existsSync(outsideDir)) {
+        try {
+          fs.rmSync(outsideDir, { recursive: true, force: true });
+        } catch {
+          // ignore
+        }
+      }
+    }
+  });
+
+  // 23. PREPARED rollback hash mismatch detection (F-03)
+  test("Scenario 23: PREPARED rollback detects hash mismatch on restored target and fails closed", async () => {
+    const lockManager = new TransactionLockManager({
+      targetDir: tempDir,
+      lockDir: playbookDir,
+    });
+
+    const originalContent = fs.readFileSync(statePath, "utf-8");
+    const originalHash = computeSha256(originalContent);
+
+    // Staged backup file contains corrupted content
+    const corruptedBackupContent = "CORRUPTED BACKUP CONTENT\n";
+    const bakPath = path.join(playbookDir, "state.json.bak.tx-corrupt-bak");
+    fs.writeFileSync(bakPath, corruptedBackupContent, "utf-8");
+
+    const preparedJournal = {
+      tx_id: "tx-corrupt-bak",
+      phase: "PREPARED",
+      created_at: new Date().toISOString(),
+      action: "ADVANCE_STAGE",
+      lock_nonce: "nonce-1",
+      files: [
+        {
+          target_path: ".playbook/state.json",
+          tmp_path: ".playbook/state.json.tmp.tx-corrupt-bak",
+          bak_path: ".playbook/state.json.bak.tx-corrupt-bak",
+          existed_before: true,
+          expected_source_hash: originalHash,
+          expected_target_hash: computeSha256("new content"),
+          target_content: "new content",
+          original_content: originalContent,
+        },
+      ],
+    };
+
+    fs.writeFileSync(journalPath, JSON.stringify(preparedJournal, null, 2) + "\n", "utf-8");
+
+    const manager = new WriteAheadTransactionManager({ targetDir: tempDir, lockManager });
+
+    await assert.rejects(
+      async () => {
+        await lockManager.withLock(async (handle) => {
+          await manager.recover(handle);
+        });
+      },
+      (err: any) => {
+        assert.ok(err instanceof TransactionError);
+        assert.equal(err.code, "CRITICAL_RECOVERY_FAILURE");
+        assert.ok(err.message.includes("PREPARED rollback verification failed"));
+        return true;
+      }
+    );
+
+    // Journal must be strictly preserved on disk for triage
+    assert.ok(fs.existsSync(journalPath), "Journal preserved on hash mismatch");
+  });
+
+  // 24. External target modification between prepare and commit triggers EXTERNAL_TARGET_MODIFIED (F-05)
+  test("Scenario 24: External target modification between prepare and commit triggers EXTERNAL_TARGET_MODIFIED", async () => {
+    const manager = new WriteAheadTransactionManager({ targetDir: tempDir });
+
+    const externalModifiedContent = JSON.stringify({ stage: 0, status: "externally_edited" }, null, 2) + "\n";
+
+    await assert.rejects(
+      async () => {
+        await manager.withTransaction(
+          "ADVANCE_STAGE",
+          [{ targetPath: ".playbook/state.json", content: "new content\n" }],
+          async () => {
+            // External actor edits target file after prepare() but before commit()
+            fs.writeFileSync(statePath, externalModifiedContent, "utf-8");
+          }
+        );
+      },
+      (err: any) => {
+        assert.ok(err instanceof TransactionError);
+        assert.equal(err.code, "EXTERNAL_TARGET_MODIFIED");
+        assert.equal(err.details?.targetPath, ".playbook/state.json");
+        assert.equal(err.details?.reason, "hash_mismatch");
+        return true;
+      }
+    );
+
+    // Target must retain external modification, not overwritten by transaction
+    assert.equal(fs.readFileSync(statePath, "utf-8"), externalModifiedContent);
+
+    // Journal remains in PREPARED on disk, preserving backups
+    assert.ok(fs.existsSync(journalPath), "Journal in PREPARED remains on disk");
+    const insp = await manager.inspectJournal();
+    assert.equal(insp.journal?.phase, "PREPARED");
+  });
+
+  // 25. External target deletion between prepare and commit triggers EXTERNAL_TARGET_MODIFIED (F-05)
+  test("Scenario 25: External target deletion between prepare and commit triggers EXTERNAL_TARGET_MODIFIED", async () => {
+    const manager = new WriteAheadTransactionManager({ targetDir: tempDir });
+
+    await assert.rejects(
+      async () => {
+        await manager.withTransaction(
+          "ADVANCE_STAGE",
+          [{ targetPath: ".playbook/state.json", content: "new content\n" }],
+          async () => {
+            // External actor deletes target file after prepare() but before commit()
+            fs.unlinkSync(statePath);
+          }
+        );
+      },
+      (err: any) => {
+        assert.ok(err instanceof TransactionError);
+        assert.equal(err.code, "EXTERNAL_TARGET_MODIFIED");
+        assert.equal(err.details?.targetPath, ".playbook/state.json");
+        assert.equal(err.details?.reason, "file_deleted_externally");
+        return true;
+      }
+    );
+
+    // File was deleted externally and must not have been blindly recreated by commit
+    assert.ok(!fs.existsSync(statePath));
+  });
+
+  // 26. Repeated recovery after failed validation fails closed deterministically (F-02)
+  test("Scenario 26: Repeated recovery after failed validation fails closed deterministically", async () => {
+    const lockManager = new TransactionLockManager({
+      targetDir: tempDir,
+      lockDir: playbookDir,
+    });
+
+    const malformedPathJournal = {
+      tx_id: "tx-repeat-failure",
+      phase: "COMMITTING",
+      created_at: new Date().toISOString(),
+      action: "ATTACK",
+      lock_nonce: "nonce-1",
+      files: [
+        {
+          target_path: "subdir/../../escaped.txt",
+          tmp_path: ".playbook/test.tmp",
+          bak_path: ".playbook/test.bak",
+          existed_before: false,
+          expected_source_hash: null,
+          expected_target_hash: computeSha256("payload"),
+          target_content: "payload",
+        },
+      ],
+    };
+
+    fs.writeFileSync(journalPath, JSON.stringify(malformedPathJournal, null, 2) + "\n", "utf-8");
+
+    const manager = new WriteAheadTransactionManager({ targetDir: tempDir, lockManager });
+
+    // Attempt 1: Fails closed
+    await assert.rejects(
+      async () => {
+        await lockManager.withLock(async (handle) => {
+          await manager.recover(handle);
+        });
+      },
+      (err: any) => err instanceof TransactionError && err.code === "CRITICAL_RECOVERY_FAILURE"
+    );
+    assert.ok(fs.existsSync(journalPath));
+
+    // Attempt 2: Re-running recovery still fails closed identically without side effects
+    await assert.rejects(
+      async () => {
+        await lockManager.withLock(async (handle) => {
+          await manager.recover(handle);
+        });
+      },
+      (err: any) => err instanceof TransactionError && err.code === "CRITICAL_RECOVERY_FAILURE"
+    );
+    assert.ok(fs.existsSync(journalPath));
   });
 });

@@ -61,6 +61,16 @@ export function createTransactionDiagnostic(
           "Transaction target path is invalid (contains '..' traversal, absolute path, or symlink boundary escape). Ensure all target paths are relative and within project root.",
       };
 
+    case "EXTERNAL_TARGET_MODIFIED":
+      return {
+        code: "TRANSACTION_FAILED",
+        severity: "error",
+        message: error.message,
+        path: (error.details?.targetPath as string) || targetDir,
+        remediation:
+          "Target file was modified or deleted externally between transaction preparation and commit. Inspect repository changes with git diff before re-running.",
+      };
+
     case "RECOVERY_FAILED":
     case "TRANSACTION_LOCK_FAILED":
     default:

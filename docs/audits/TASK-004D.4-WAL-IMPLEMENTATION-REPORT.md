@@ -105,12 +105,17 @@ Whenever any Playbook CLI operation begins under the protection of `transaction.
 ## 5. Durability Guarantees & Platform Boundaries
 
 ### 5.1 Local Filesystem Atomicity & Durability
-1. **Single-File Replacement**: Uses POSIX `rename(2)` and Windows NTFS `SetFileInformationByHandle` / `MoveFileExW` to atomically replace individual directory entries within the same volume.
-2. **Data Durability**: Every file write executes `fs.fsyncSync(fd)` before closing to force kernel dirty pages to physical media.
-3. **Directory Metadata Synchronization**:
-   - **POSIX (Linux / macOS)**: The containing directory (`.playbook/`) is opened and synchronized via `fs.fsyncSync(dirFd)` to commit directory entry pointers.
-   - **Windows NTFS**: Directory handles cannot be synchronized via POSIX `fsync` (`EISDIR` / `EPERM`); directory metadata updates are committed synchronously as part of transactional NTFS file renaming.
-4. **Transient File Locking Defense (`atomicRenameWithRetry`)**: On Windows, file indexers and antivirus scanners can hold transient read locks on newly written files. The engine implements exponential backoff retries (up to 5 retries over 500ms) on `EBUSY`, `EPERM`, or `EACCES`.
+1. **Single-File Replacement Atomicity**:
+   - Uses POSIX `rename(2)` and Windows NTFS `SetFileInformationByHandle` / `MoveFileExW` (with `MOVEFILE_REPLACE_EXISTING`) to atomically replace individual directory entries within the same physical volume.
+   - Atomicity guarantees that an observing process will either see the old destination file or the new destination file, never an empty or half-written file.
+2. **File Data Durability**:
+   - Every file write executes `fs.fsyncSync(fd)` before closing the file descriptor, forcing kernel dirty data pages and inode metadata to physical media.
+3. **Directory Metadata Synchronization & Platform Boundaries**:
+   - **POSIX (Linux / macOS / FreeBSD)**: Every modified target directory and the `.playbook/` journal directory are opened in read-only mode and synchronized via `fs.fsyncSync(dirFd)`. This commits directory entry (dirent) updates to disk, preventing lost or dangling directory entries across power cuts or kernel crashes.
+   - **Windows NTFS (Deferred Durability)**: Standard Node.js runtime bindings cannot open directory handles (`fs.openSync` on directories throws `EISDIR` or `EPERM`). Opening directory handles on Windows requires native Win32 `CreateFileW` with `FILE_FLAG_BACKUP_SEMANTICS` and `FlushFileBuffers`, which are not supported in standard Node.js without native C++ addons. Consequently, directory metadata updates on Windows NTFS are **deferred and asynchronous**: `MoveFileExW` updates the filesystem namespace in system memory, and physical media synchronization is deferred to periodic NTFS checkpointing threads.
+   - **Atomicity vs Durability Distinction**: On Windows, file renames are atomic in terms of namespace isolation, but power-loss durability of the directory entry update is best-effort and relies on NTFS filesystem journal checkpoint replay.
+4. **Transient File Locking Defense (`atomicRenameWithRetry`)**:
+   - On Windows, file indexers and antivirus scanners can hold transient read locks on newly written files. The engine implements exponential backoff retries (up to 5 retries over 500ms) on `EBUSY`, `EPERM`, or `EACCES`. Retries strictly preserve rename atomicity by invoking `fs.renameSync` on every attempt rather than falling back to non-atomic copy operations.
 
 ### 5.2 Documented Operational Limitations
 - **Multi-File Atomicity Reality**: Standard operating systems do not provide multi-file atomic filesystem calls. The WAL engine provides **crash-recoverability**, not hardware-level multi-file atomicity. If a crash occurs midway through renaming, the system relies on `recover()` to bring files into complete synchronization.

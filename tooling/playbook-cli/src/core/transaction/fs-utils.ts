@@ -32,39 +32,58 @@ export function computeFileSha256(filePath: string): string | null {
 }
 
 /**
+ * Checks whether a relative path contains syntactically safe path tokens.
+ * Rejects absolute paths, UNC prefixes, Windows drive prefixes, leading slashes,
+ * traversal tokens ('..'), current-dir tokens ('.'), and empty tokens.
+ */
+export function isSyntacticallySafeRelativePath(p: unknown): boolean {
+  if (typeof p !== "string" || p.trim().length === 0) {
+    return false;
+  }
+
+  // Reject absolute paths, UNC paths, and drive-relative paths
+  if (
+    path.isAbsolute(p) ||
+    p.startsWith("\\\\") ||
+    p.startsWith("//") ||
+    /^[a-zA-Z]:/.test(p) ||
+    p.startsWith("/") ||
+    p.startsWith("\\")
+  ) {
+    return false;
+  }
+
+  // Reject path traversal tokens, current-dir tokens, and empty segments
+  const parts = p.split(/[/\\]/);
+  if (parts.some((part) => part === ".." || part === "." || part === "")) {
+    return false;
+  }
+
+  return true;
+}
+
+/**
  * Validates that a target path is relative and strictly contained within targetDir.
- * Defends against absolute paths, traversal (..), and symlink escape boundaries.
+ * Defends against absolute paths, traversal (..), UNC paths, and symlink/junction escapes.
+ *
+ * NOTE ON TOCTOU / SYMLINK RACES:
+ * Standard Node.js does not expose kernel-level dirfd-relative primitives (e.g. openat(2) with
+ * RESOLVE_BENEATH / RESOLVE_NO_SYMLINKS). An unprivileged external process could theoretically
+ * attempt to replace a validated parent directory with a symlink between validation and rename.
+ * To mitigate this risk, the engine implements defense-in-depth:
+ * 1. Dual-layer lock exclusion via TransactionLockManager.
+ * 2. Strict ancestor directory lstat / realpath boundary verification.
+ * 3. Same-directory staging of .tmp and .bak files.
+ * 4. Fail-closed abort if any realpath diverges from canonical project root.
  */
 export function validateCanonicalPath(
   targetDir: string,
   relativePath: string
 ): { relativePath: string; absolutePath: string } {
-  if (!relativePath || typeof relativePath !== "string" || relativePath.trim().length === 0) {
+  if (!isSyntacticallySafeRelativePath(relativePath)) {
     throw new TransactionError(
       "TARGET_PATH_INVALID",
-      "Transaction target path cannot be empty."
-    );
-  }
-
-  // Reject absolute paths, UNC paths, and drive-relative paths
-  if (
-    path.isAbsolute(relativePath) ||
-    relativePath.startsWith("\\\\") ||
-    relativePath.startsWith("//") ||
-    /^[a-zA-Z]:/.test(relativePath)
-  ) {
-    throw new TransactionError(
-      "TARGET_PATH_INVALID",
-      `Absolute, UNC, or drive-relative paths are forbidden: "${relativePath}".`
-    );
-  }
-
-  // Reject path traversal tokens
-  const normalizedParts = relativePath.split(/[/\\]/);
-  if (normalizedParts.includes("..")) {
-    throw new TransactionError(
-      "TARGET_PATH_INVALID",
-      `Path traversal ("..") is strictly forbidden: "${relativePath}".`
+      `Target path is invalid or unsafe: "${relativePath}". Absolute, UNC, drive-relative, empty, and traversal paths are strictly forbidden.`
     );
   }
 
@@ -72,31 +91,65 @@ export function validateCanonicalPath(
   const resolvedTarget = path.resolve(resolvedRoot, relativePath);
 
   // Containment check
-  if (
-    resolvedTarget !== resolvedRoot &&
-    !resolvedTarget.startsWith(resolvedRoot + path.sep)
-  ) {
+  const isWin = process.platform === "win32";
+  const normRoot = isWin ? resolvedRoot.toLowerCase() : resolvedRoot;
+  const normTarget = isWin ? resolvedTarget.toLowerCase() : resolvedTarget;
+  const rootPrefix = normRoot.endsWith(path.sep) ? normRoot : normRoot + path.sep;
+
+  if (normTarget !== normRoot && !normTarget.startsWith(rootPrefix)) {
     throw new TransactionError(
       "TARGET_PATH_INVALID",
       `Target path escapes project root boundary: "${relativePath}".`
     );
   }
 
-  // Symlink boundary check: if file or parent exists, verify realpath does not escape resolvedRoot
+  // Symlink boundary check: check both lstat and realpath for target and all ancestors up to resolvedRoot
   try {
     let checkPath = resolvedTarget;
-    while (!fs.existsSync(checkPath) && checkPath !== resolvedRoot) {
+    while (checkPath !== resolvedRoot) {
+      try {
+        const lstat = fs.lstatSync(checkPath);
+        if (lstat.isSymbolicLink()) {
+          const linkTarget = fs.readlinkSync(checkPath);
+          const resolvedLink = path.isAbsolute(linkTarget)
+            ? path.resolve(linkTarget)
+            : path.resolve(path.dirname(checkPath), linkTarget);
+          const normLink = isWin ? resolvedLink.toLowerCase() : resolvedLink;
+          if (normLink !== normRoot && !normLink.startsWith(rootPrefix)) {
+            throw new TransactionError(
+              "TARGET_PATH_INVALID",
+              `Target path escapes project boundary via symlink: "${relativePath}".`
+            );
+          }
+        }
+      } catch (lstatErr: unknown) {
+        if (lstatErr instanceof TransactionError) throw lstatErr;
+        // File or segment does not exist yet; continue checking ancestors
+      }
+
       const parent = path.dirname(checkPath);
       if (parent === checkPath) break;
       checkPath = parent;
     }
 
-    if (fs.existsSync(checkPath)) {
-      const realTarget = fs.realpathSync(checkPath);
+    // Now verify existing realpath does not escape root
+    let existingAncestor = resolvedTarget;
+    while (!fs.existsSync(existingAncestor) && existingAncestor !== resolvedRoot) {
+      const parent = path.dirname(existingAncestor);
+      if (parent === existingAncestor) break;
+      existingAncestor = parent;
+    }
+
+    if (fs.existsSync(existingAncestor)) {
+      const realAncestor = fs.realpathSync(existingAncestor);
       const realRoot = fs.realpathSync(resolvedRoot);
+      const normRealAncestor = isWin ? realAncestor.toLowerCase() : realAncestor;
+      const normRealRoot = isWin ? realRoot.toLowerCase() : realRoot;
+      const realRootPrefix = normRealRoot.endsWith(path.sep) ? normRealRoot : normRealRoot + path.sep;
+
       if (
-        realTarget !== realRoot &&
-        !realTarget.startsWith(realRoot + path.sep)
+        normRealAncestor !== normRealRoot &&
+        !normRealAncestor.startsWith(realRootPrefix)
       ) {
         throw new TransactionError(
           "TARGET_PATH_INVALID",
@@ -141,25 +194,55 @@ export function safeWriteAndSync(filePath: string, content: string): void {
 
 /**
  * Synchronizes containing directory metadata to disk on POSIX.
- * On Windows, directory fsync is not supported and is a safe no-op.
+ * On Windows, directory fsync is unsupported by Node.js and is a safe no-op.
+ *
+ * Requirements:
+ * - On supported POSIX filesystems, opens directory descriptor and executes fsyncSync.
+ * - Throws on genuine filesystem synchronization failures (I/O error, EACCES, EPERM)
+ *   so callers fail closed and preserve recovery information.
+ * - Always dispatches to faultInjection.onDirectoryFsync so tests can assert directory fsync.
  */
-export function safeFsyncDir(dirPath: string): void {
+export function safeFsyncDir(
+  dirPath: string,
+  faultInjectionHooks?: {
+    failDirectoryFsync?: boolean;
+    failDirectoryFsyncOnCommit?: boolean;
+    isCommitPhase?: boolean;
+    onDirectoryFsync?: (dirPath: string) => void;
+  }
+): void {
+  // Notify spy hook for regression tests regardless of platform
+  faultInjectionHooks?.onDirectoryFsync?.(dirPath);
+
+  if (
+    faultInjectionHooks?.failDirectoryFsync ||
+    (faultInjectionHooks?.failDirectoryFsyncOnCommit && faultInjectionHooks?.isCommitPhase)
+  ) {
+    const fakeErr = new Error("EIO: simulated i/o error, fsync directory") as NodeJS.ErrnoException;
+    fakeErr.code = "EIO";
+    throw fakeErr;
+  }
+
   if (process.platform === "win32") {
+    // Windows NTFS directory fsync is unsupported without native Win32 bindings (FILE_FLAG_BACKUP_SEMANTICS).
+    // Durability is deferred to NTFS checkpointing.
     return;
   }
 
+  if (!fs.existsSync(dirPath)) {
+    return;
+  }
+
+  // On POSIX, open directory in read-only mode to fsync directory entry
+  const dirFd = fs.openSync(dirPath, "r");
   try {
-    if (fs.existsSync(dirPath)) {
-      // On POSIX, open directory in read-only mode to fsync directory entry
-      const dirFd = fs.openSync(dirPath, "r");
-      try {
-        fs.fsyncSync(dirFd);
-      } finally {
-        fs.closeSync(dirFd);
-      }
+    fs.fsyncSync(dirFd);
+  } finally {
+    try {
+      fs.closeSync(dirFd);
+    } catch {
+      // ignore close errors
     }
-  } catch {
-    // Non-fatal if OS restricts directory open
   }
 }
 

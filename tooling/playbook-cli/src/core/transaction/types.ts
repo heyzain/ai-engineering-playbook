@@ -83,6 +83,7 @@ export type TransactionFailureCode =
   | "TRANSACTION_COMMIT_FAILED"
   | "TARGET_PATH_INVALID"
   | "TRANSACTION_LOCK_FAILED"
+  | "EXTERNAL_TARGET_MODIFIED"
   | "RECOVERY_FAILED";
 
 /**
@@ -118,6 +119,14 @@ export interface TransactionFaultInjectionHooks {
   failAfterCommittedBeforeCleanup?: boolean;
   /** Simulate Windows EBUSY / EPERM file locking on rename for N attempts */
   simulateRenameEbusyCount?: number;
+  /** Simulate I/O failure on parent directory fsync */
+  failDirectoryFsync?: boolean;
+  /** Simulate I/O failure on parent directory fsync during commit phase */
+  failDirectoryFsyncOnCommit?: boolean;
+  /** Internal flag indicating commit phase is active */
+  isCommitPhase?: boolean;
+  /** Callback fired whenever parent directory fsync is invoked */
+  onDirectoryFsync?: (dirPath: string) => void;
 }
 
 /**

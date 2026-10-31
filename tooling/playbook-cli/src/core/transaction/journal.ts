@@ -1,10 +1,17 @@
 import fs from "node:fs";
 import path from "node:path";
-import { safeWriteAndSync, atomicRenameWithRetry, safeFsyncDir, safeUnlink } from "./fs-utils.js";
+import {
+  safeWriteAndSync,
+  atomicRenameWithRetry,
+  safeFsyncDir,
+  safeUnlink,
+  isSyntacticallySafeRelativePath,
+} from "./fs-utils.js";
 import {
   type TransactionJournal,
   type TransactionPhase,
   type JournalFileEntry,
+  type TransactionFaultInjectionHooks,
   TransactionError,
 } from "./types.js";
 
@@ -51,12 +58,9 @@ export function parseJournal(content: string): TransactionJournal | null {
       if (
         !f ||
         typeof f !== "object" ||
-        typeof f.target_path !== "string" ||
-        f.target_path.trim().length === 0 ||
-        typeof f.tmp_path !== "string" ||
-        f.tmp_path.trim().length === 0 ||
-        typeof f.bak_path !== "string" ||
-        f.bak_path.trim().length === 0 ||
+        !isSyntacticallySafeRelativePath(f.target_path) ||
+        !isSyntacticallySafeRelativePath(f.tmp_path) ||
+        !isSyntacticallySafeRelativePath(f.bak_path) ||
         typeof f.existed_before !== "boolean" ||
         (f.expected_source_hash !== null && typeof f.expected_source_hash !== "string") ||
         typeof f.expected_target_hash !== "string" ||
@@ -125,7 +129,7 @@ export function readJournal(journalPath: string): {
       exists: true,
       journal: null,
       isCorrupted: true,
-      rawError: "Journal file exists on disk but is 0-byte, incomplete, or contains malformed JSON.",
+      rawError: "Journal file exists on disk but is 0-byte, incomplete, malformed JSON, or contains invalid/escaping paths.",
     };
   }
 
@@ -138,7 +142,11 @@ export function readJournal(journalPath: string): {
 export function writeJournalDurable(
   journalPath: string,
   journal: TransactionJournal,
-  options?: { maxRenameRetries?: number; renameRetryDelayMs?: number }
+  options?: {
+    maxRenameRetries?: number;
+    renameRetryDelayMs?: number;
+    faultInjection?: TransactionFaultInjectionHooks;
+  }
 ): void {
   const tmpPath = `${journalPath}.tmp.${journal.tx_id}`;
   const payload = serializeJournal(journal);
@@ -152,7 +160,8 @@ export function writeJournalDurable(
       tmpPath,
       journalPath,
       options?.maxRenameRetries ?? 5,
-      options?.renameRetryDelayMs ?? 50
+      options?.renameRetryDelayMs ?? 50,
+      options?.faultInjection
     );
   } catch (err: unknown) {
     safeUnlink(tmpPath);
@@ -166,16 +175,30 @@ export function writeJournalDurable(
   }
 
   // 3. Sync containing directory metadata on POSIX
-  safeFsyncDir(path.dirname(journalPath));
+  try {
+    safeFsyncDir(path.dirname(journalPath), options?.faultInjection);
+  } catch (err: unknown) {
+    throw new TransactionError(
+      "TRANSACTION_COMMIT_FAILED",
+      `Failed to synchronize journal directory metadata for "${journalPath}": ${
+        err instanceof Error ? err.message : String(err)
+      }`,
+      { originalError: err, journalPath }
+    );
+  }
 }
 
 /**
  * Deletes the transaction journal file and any transient backup/temp journal files.
  */
-export function cleanupJournalDurable(journalPath: string, txId?: string): void {
+export function cleanupJournalDurable(
+  journalPath: string,
+  txId?: string,
+  options?: { faultInjection?: TransactionFaultInjectionHooks }
+): void {
   safeUnlink(journalPath);
   if (txId) {
     safeUnlink(`${journalPath}.tmp.${txId}`);
   }
-  safeFsyncDir(path.dirname(journalPath));
+  safeFsyncDir(path.dirname(journalPath), options?.faultInjection);
 }
