@@ -89,19 +89,25 @@ export function setupStageProject(
     ],
   }));
 
-  // 3. Exit package on disk (minimum 200 bytes)
+  // 3. Exit package on disk (minimum 200 bytes with canonical sections)
   const exitPackageRelPath = `docs/gates/GATE-${stage}-EXIT-PACKAGE.md`;
   const exitPackageAbsPath = path.join(targetDir, exitPackageRelPath);
   const exitPackageContent = `# Stage Gate Exit Package — Stage ${stage}: ${STAGE_NAMES[stage]}
 
-## Executive Summary
+## 1. Executive Summary & Objectives
 This exit package documents all verified deliverables and supporting evidence for Stage ${stage}.
 All mandatory engineering invariants and gate criteria have been satisfied in full compliance with the constitution.
 
-## Deliverables and Traceability
+## 2. Deliverables Manifest & Status
 - Deliverables verified: ${verifiedDeliverables.map((d) => d.id).join(", ")}.
+
+## 3. Verifiable Validation Evidence
 - Quality evidence: 100% passing automated test logs attached.
+- Automated tests: 0 failures, all assertions passed.
+
+## 4. Traceability & Sign-Off Record
 - Residual risk: Zero outstanding critical or high defects.
+- Review status: Ready for formal human review.
 `;
   fs.writeFileSync(exitPackageAbsPath, exitPackageContent, "utf-8");
 

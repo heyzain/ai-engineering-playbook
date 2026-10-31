@@ -61,6 +61,7 @@ export type DiagnosticCode =
   | "EVIDENCE_RESULT_FAILED"
   | "TARGET_PATH_INVALID"
   | "PROJECT_ID_MISMATCH"
+  | "GATE_REQUIRED_DELIVERABLE_MISSING"
   | "MANIFEST_STAGE_DRIFT";
 
 export interface DiagnosticIssue {

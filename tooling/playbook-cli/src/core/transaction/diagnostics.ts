@@ -121,6 +121,16 @@ export function createTransactionDiagnostic(
           "Cannot approve stage gate: deliverables are incomplete, unverified, or failing. Ensure all deliverables are verified or validly waived.",
       };
 
+    case "GATE_REQUIRED_DELIVERABLE_MISSING":
+      return {
+        code: "GATE_REQUIRED_DELIVERABLE_MISSING",
+        severity: "error",
+        message: error.message,
+        path: ".playbook/state.json",
+        remediation:
+          "Declare and verify all mandatory baseline deliverables for this stage before requesting approval.",
+      };
+
     case "APPROVAL_FINGERPRINT_MISSING":
       return {
         code: "APPROVAL_FINGERPRINT_MISSING",

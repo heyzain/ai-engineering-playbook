@@ -1,3 +1,4 @@
+import fs from "node:fs";
 import path from "node:path";
 import { TerminalPrompter, type PromptInterface } from "../utils/prompt.js";
 import { checkGateEligibility, approveGate, rejectGate, isForbiddenAgentName } from "../core/approval.js";
@@ -98,19 +99,76 @@ export async function runApprove(options: ApproveCommandOptions = {}): Promise<A
     const state = eligibility.state;
     const stageDetail = state.current_stage_detail;
 
-    // Display review summary
-    if (!options.json) {
-      console.log("\n" + "=".repeat(64));
-      console.log(` AI ENGINEERING PLAYBOOK — GATE ${gate} APPROVAL REVIEW`);
-      console.log("=".repeat(64));
-      console.log(` Project:       ${state.project_id} (Milestone: ${state.milestone_id})`);
-      console.log(` Active Stage:  Stage ${gate} (${stageDetail.stage_name})`);
-      console.log(
-        ` Deliverables:  ${stageDetail.deliverables.filter((d) => d.status === "verified").length} verified, ` +
-          `${stageDetail.deliverables.filter((d) => d.status === "waived").length} waived`
+    // Read exit package content before presentation; fail closed if unreadable
+    const exitPkgAbs = path.resolve(targetDir, stageDetail.exit_package.path);
+    let exitPkgContent = "";
+    try {
+      exitPkgContent = fs.readFileSync(exitPkgAbs, "utf-8");
+    } catch (err: unknown) {
+      throw new TransactionError(
+        "EXIT_PACKAGE_INCOMPLETE",
+        `Cannot read Stage Exit Package at "${stageDetail.exit_package.path}": ${
+          err instanceof Error ? err.message : String(err)
+        }`
       );
-      console.log(` Exit Package:  ${stageDetail.exit_package.path}`);
-      console.log("=".repeat(64) + "\n");
+    }
+
+    // Display rich review context before requesting confirmation
+    if (!options.json) {
+      console.log("\n" + "=".repeat(68));
+      console.log(` AI ENGINEERING PLAYBOOK — GATE ${gate} FORMAL HUMAN APPROVAL REVIEW`);
+      console.log("=".repeat(68));
+      console.log(` Project ID:       ${state.project_id}`);
+      console.log(` Milestone ID:     ${state.milestone_id} (${state.milestone_name || "N/A"})`);
+      console.log(` Active Stage:     Stage ${gate} (${stageDetail.stage_name})`);
+      console.log(` Exit Package:     ${stageDetail.exit_package.path} (${Buffer.byteLength(exitPkgContent, "utf-8")} bytes)`);
+      console.log("-".repeat(68));
+      console.log(" MANDATORY DELIVERABLES & VERIFICATION STATUS:");
+      for (const deliv of stageDetail.deliverables) {
+        const symbol = deliv.status === "verified" ? "✔" : deliv.status === "waived" ? "⚠" : "✖";
+        console.log(`  ${symbol} [${deliv.status.toUpperCase()}] ${deliv.id}: ${deliv.name}`);
+        console.log(`    Artifact Path:  ${deliv.artifact_path}`);
+        console.log(`    Validation:     ${deliv.validation_status}`);
+        if (deliv.status === "waived") {
+          console.log(`    Waiver Ref:     Exception ${deliv.exception_ref}`);
+        } else if (deliv.evidence && deliv.evidence.length > 0) {
+          for (const ev of deliv.evidence) {
+            console.log(`    Evidence:       [${ev.type}] result=${ev.result} -> ${ev.evidence_ref}`);
+            if (ev.evidence_hash) {
+              console.log(`                    hash=${ev.evidence_hash}`);
+            }
+          }
+        }
+      }
+      console.log("-".repeat(68));
+      console.log(" EXCEPTIONS & WAIVERS:");
+      if (!stageDetail.exceptions || stageDetail.exceptions.length === 0) {
+        console.log("  None (0 active exceptions)");
+      } else {
+        for (const exc of stageDetail.exceptions) {
+          console.log(`  • ${exc.exception_id}: ${exc.title} (status: ${exc.status}, expires: ${exc.expiration_date})`);
+          console.log(`    Waived:         ${exc.waived_requirement} (authorized by: ${exc.authorized_by})`);
+        }
+      }
+      console.log("-".repeat(68));
+      console.log(" CLARIFICATION RFCS:");
+      if (!stageDetail.rfcs || stageDetail.rfcs.length === 0) {
+        console.log("  None (0 RFCs)");
+      } else {
+        for (const rfc of stageDetail.rfcs) {
+          const blockingTag = rfc.is_blocking ? "[BLOCKING]" : "[non-blocking]";
+          console.log(`  • ${rfc.rfc_id}: ${rfc.title} ${blockingTag} (status: ${rfc.status})`);
+        }
+      }
+      console.log("-".repeat(68));
+      console.log(" STAGE GATE EXIT PACKAGE CONTENT:");
+      const exitLines = exitPkgContent.split(/\r?\n/);
+      const displayLines = exitLines.slice(0, 30);
+      console.log(displayLines.map((line) => "  | " + line).join("\n"));
+      if (exitLines.length > 30) {
+        console.log(`  | ... [${exitLines.length - 30} more lines in ${stageDetail.exit_package.path}]`);
+      }
+      console.log("=".repeat(68) + "\n");
     }
 
     // 3. Collect Reviewer Details

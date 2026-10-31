@@ -217,6 +217,124 @@ describe("Gate Approval Engine & CLI (playbook approve)", () => {
     assert.ok(!fs.existsSync(path.join(tempDir, DEFAULT_PATHS.approvalFingerprintFile)));
   });
 
+  // Scenario 5a: Missing mandatory baseline deliverable
+  test("Scenario 5a: Missing mandatory baseline deliverable rejects with GATE_REQUIRED_DELIVERABLE_MISSING", async () => {
+    const { state, statePath } = setupStageProject(tempDir, { stage: 0, status: "pending_review" });
+
+    // Remove PRD-CORE (mandatory for Stage 0)
+    state.current_stage_detail.deliverables = state.current_stage_detail.deliverables.filter(
+      (d) => d.id !== "PRD-CORE"
+    );
+    fs.writeFileSync(statePath, JSON.stringify(state, null, 2) + "\n", "utf-8");
+
+    await assert.rejects(
+      async () => {
+        await approveGate(tempDir, {
+          gate: 0,
+          reviewerName: "Alice Human",
+          role: "Lead Engineer",
+          confirmationPhrase: "CONFIRM APPROVAL GATE 0",
+          isTTY: true,
+        });
+      },
+      (err: unknown) => {
+        assert.ok(err instanceof TransactionError);
+        assert.equal(err.code, "GATE_REQUIRED_DELIVERABLE_MISSING");
+        return true;
+      }
+    );
+  });
+
+  // Scenario 5b: Optional deliverable cannot substitute for missing mandatory deliverable
+  test("Scenario 5b: Optional deliverable cannot substitute for missing mandatory baseline deliverable", async () => {
+    const { state, statePath, evidencePath } = setupStageProject(tempDir, { stage: 0, status: "pending_review" });
+
+    // Filter out PRD-CORE, add an optional/extra deliverable
+    state.current_stage_detail.deliverables = state.current_stage_detail.deliverables.filter(
+      (d) => d.id !== "PRD-CORE"
+    );
+    state.current_stage_detail.deliverables.push({
+      id: "OPTIONAL-DISCOVERY-DOC",
+      name: "Optional Discovery Notes",
+      description: "Non-baseline exploratory findings",
+      status: "verified",
+      validation_status: "passed",
+      artifact_path: "docs/prd/notes.md",
+      exception_ref: null,
+      evidence: [
+        {
+          requirement_id: null,
+          type: "automated_test",
+          procedure: "npm test",
+          result: "passed",
+          summary: "Passing test",
+          exit_code: 0,
+          evidence_ref: ".playbook/logs/test-stage-0.log",
+          evidence_hash: computeSha256(fs.readFileSync(evidencePath, "utf-8")),
+          verified_at: "2026-10-31T10:30:00.000Z",
+          verified_by: "human:Alice Human",
+          actor_type: "human",
+        },
+      ],
+    });
+    fs.writeFileSync(statePath, JSON.stringify(state, null, 2) + "\n", "utf-8");
+
+    await assert.rejects(
+      async () => {
+        await approveGate(tempDir, {
+          gate: 0,
+          reviewerName: "Alice Human",
+          role: "Lead Engineer",
+          confirmationPhrase: "CONFIRM APPROVAL GATE 0",
+          isTTY: true,
+        });
+      },
+      (err: unknown) => {
+        assert.ok(err instanceof TransactionError);
+        assert.equal(err.code, "GATE_REQUIRED_DELIVERABLE_MISSING");
+        return true;
+      }
+    );
+  });
+
+  // Scenario 5c: Validly waived mandatory deliverable clears gate approval
+  test("Scenario 5c: Validly waived mandatory deliverable with active exception clears gate approval", async () => {
+    const { state, statePath } = setupStageProject(tempDir, { stage: 0, status: "pending_review" });
+
+    // Mark PRD-CORE as waived with valid active exception
+    const excId = "EXC-20261031-001";
+    const prdCore = state.current_stage_detail.deliverables.find((d) => d.id === "PRD-CORE")!;
+    prdCore.status = "waived";
+    prdCore.validation_status = "waived";
+    prdCore.exception_ref = excId;
+    prdCore.evidence = [];
+
+    state.current_stage_detail.exceptions = [
+      {
+        exception_id: excId,
+        title: "Authorized waiver for PRD-CORE",
+        waived_requirement: "PRD-CORE",
+        status: "active",
+        path: `docs/exceptions/${excId}.md`,
+        expiration_date: "2030-12-31",
+        authorized_by: "Security Lead",
+        authorized_at: "2026-10-01T00:00:00.000Z",
+      },
+    ];
+    fs.writeFileSync(statePath, JSON.stringify(state, null, 2) + "\n", "utf-8");
+
+    const res = await approveGate(tempDir, {
+      gate: 0,
+      reviewerName: "Alice Human",
+      role: "Lead Engineer",
+      confirmationPhrase: "CONFIRM APPROVAL GATE 0",
+      isTTY: true,
+    });
+
+    assert.equal(res.success, true);
+    assert.ok(res.fingerprint?.startsWith("sha256:"));
+  });
+
   // Scenario 6: Expired or revoked exceptions
   test("Scenario 6: Expired or revoked exceptions block gate approval with EXCEPTION_EXPIRED", async () => {
     const { state, statePath } = setupStageProject(tempDir, { stage: 0, status: "in_progress" });
@@ -351,6 +469,247 @@ describe("Gate Approval Engine & CLI (playbook approve)", () => {
       (err: unknown) => {
         assert.ok(err instanceof TransactionError);
         assert.equal(err.code, "EVIDENCE_HASH_MISMATCH");
+        return true;
+      }
+    );
+  });
+
+  // Scenario 8c: Exit package missing required sections
+  test("Scenario 8c: Exit package missing required sections rejects with EXIT_PACKAGE_INCOMPLETE", async () => {
+    const { exitPackagePath } = setupStageProject(tempDir, { stage: 0, status: "pending_review" });
+
+    // Missing Section 3: Deliverables Manifest
+    const incompleteContent = `# Stage Gate Exit Package — Stage 0
+
+## 1. Executive Summary & Objectives
+Summary content here that exceeds minimum length requirements for the structural checks.
+
+## 4. Verifiable Validation Evidence
+Evidence details here with passing results.
+
+## 9. Traceability & Sign-Off Record
+All sign-offs verified.
+`.padEnd(250, " ");
+
+    fs.writeFileSync(exitPackagePath, incompleteContent, "utf-8");
+
+    await assert.rejects(
+      async () => {
+        await approveGate(tempDir, {
+          gate: 0,
+          reviewerName: "Alice Human",
+          role: "Lead Engineer",
+          confirmationPhrase: "CONFIRM APPROVAL GATE 0",
+          isTTY: true,
+        });
+      },
+      (err: unknown) => {
+        assert.ok(err instanceof TransactionError);
+        assert.equal(err.code, "EXIT_PACKAGE_INCOMPLETE");
+        assert.match(err.message, /Deliverables Manifest/i);
+        return true;
+      }
+    );
+  });
+
+  // Scenario 8d: Exit package with unresolved placeholders
+  test("Scenario 8d: Exit package with unresolved placeholders rejects with EXIT_PACKAGE_INCOMPLETE", async () => {
+    const { exitPackagePath } = setupStageProject(tempDir, { stage: 0, status: "pending_review" });
+
+    fs.appendFileSync(exitPackagePath, "\n<!-- TODO: Complete architectural risk assessment -->\n", "utf-8");
+
+    await assert.rejects(
+      async () => {
+        await approveGate(tempDir, {
+          gate: 0,
+          reviewerName: "Alice Human",
+          role: "Lead Engineer",
+          confirmationPhrase: "CONFIRM APPROVAL GATE 0",
+          isTTY: true,
+        });
+      },
+      (err: unknown) => {
+        assert.ok(err instanceof TransactionError);
+        assert.equal(err.code, "EXIT_PACKAGE_INCOMPLETE");
+        assert.match(err.message, /placeholder/i);
+        return true;
+      }
+    );
+  });
+
+  // Scenario 8e: Truncated exit package (< 200 bytes)
+  test("Scenario 8e: Truncated exit package (< 200 bytes) rejects with EXIT_PACKAGE_INCOMPLETE", async () => {
+    const { exitPackagePath } = setupStageProject(tempDir, { stage: 0, status: "pending_review" });
+
+    fs.writeFileSync(exitPackagePath, "# Short exit package\n", "utf-8");
+
+    await assert.rejects(
+      async () => {
+        await approveGate(tempDir, {
+          gate: 0,
+          reviewerName: "Alice Human",
+          role: "Lead Engineer",
+          confirmationPhrase: "CONFIRM APPROVAL GATE 0",
+          isTTY: true,
+        });
+      },
+      (err: unknown) => {
+        assert.ok(err instanceof TransactionError);
+        assert.equal(err.code, "EXIT_PACKAGE_INCOMPLETE");
+        assert.match(err.message, /200 bytes/i);
+        return true;
+      }
+    );
+  });
+
+  // Scenario 8f: Evidence record with result 'failed'
+  test("Scenario 8f: Evidence record with result 'failed' rejects with EVIDENCE_RESULT_FAILED", async () => {
+    const { state, statePath } = setupStageProject(tempDir, { stage: 0, status: "pending_review" });
+
+    state.current_stage_detail.deliverables[0].evidence[0].result = "failed";
+    fs.writeFileSync(statePath, JSON.stringify(state, null, 2) + "\n", "utf-8");
+
+    await assert.rejects(
+      async () => {
+        await approveGate(tempDir, {
+          gate: 0,
+          reviewerName: "Alice Human",
+          role: "Lead Engineer",
+          confirmationPhrase: "CONFIRM APPROVAL GATE 0",
+          isTTY: true,
+        });
+      },
+      (err: unknown) => {
+        assert.ok(err instanceof TransactionError);
+        assert.equal(err.code, "EVIDENCE_RESULT_FAILED");
+        return true;
+      }
+    );
+  });
+
+  // Scenario 8g: Evidence record with result 'inconclusive'
+  test("Scenario 8g: Evidence record with result 'inconclusive' rejects with EVIDENCE_RESULT_FAILED", async () => {
+    const { state, statePath } = setupStageProject(tempDir, { stage: 0, status: "pending_review" });
+
+    state.current_stage_detail.deliverables[0].evidence[0].result = "inconclusive";
+    fs.writeFileSync(statePath, JSON.stringify(state, null, 2) + "\n", "utf-8");
+
+    await assert.rejects(
+      async () => {
+        await approveGate(tempDir, {
+          gate: 0,
+          reviewerName: "Alice Human",
+          role: "Lead Engineer",
+          confirmationPhrase: "CONFIRM APPROVAL GATE 0",
+          isTTY: true,
+        });
+      },
+      (err: unknown) => {
+        assert.ok(err instanceof TransactionError);
+        assert.equal(err.code, "EVIDENCE_RESULT_FAILED");
+        return true;
+      }
+    );
+  });
+
+  // Scenario 8h: Null or absent hash in automated evidence
+  test("Scenario 8h: Null or absent hash in automated evidence rejects with EVIDENCE_HASH_MISMATCH", async () => {
+    const { state, statePath } = setupStageProject(tempDir, { stage: 0, status: "pending_review" });
+
+    state.current_stage_detail.deliverables[0].evidence[0].evidence_hash = null;
+    fs.writeFileSync(statePath, JSON.stringify(state, null, 2) + "\n", "utf-8");
+
+    await assert.rejects(
+      async () => {
+        await approveGate(tempDir, {
+          gate: 0,
+          reviewerName: "Alice Human",
+          role: "Lead Engineer",
+          confirmationPhrase: "CONFIRM APPROVAL GATE 0",
+          isTTY: true,
+        });
+      },
+      (err: unknown) => {
+        assert.ok(err instanceof TransactionError);
+        assert.equal(err.code, "EVIDENCE_HASH_MISMATCH");
+        return true;
+      }
+    );
+  });
+
+  // Scenario 8i: Manual review evidence without hash is accepted when file exists on disk
+  test("Scenario 8i: Manual review evidence without hash is accepted when file exists on disk", async () => {
+    const { state, statePath } = setupStageProject(tempDir, { stage: 0, status: "pending_review" });
+
+    const manualDocRelPath = "docs/prd/architecture-checklist.md";
+    const manualDocAbsPath = path.join(tempDir, manualDocRelPath);
+    fs.writeFileSync(manualDocAbsPath, "# Architecture Checklist\nManual inspection completed.\n", "utf-8");
+
+    state.current_stage_detail.deliverables[0].evidence[0] = {
+      requirement_id: null,
+      type: "architecture_review",
+      procedure: "Manual review of architecture invariants against constitution",
+      result: "passed",
+      summary: "Manual architectural inspection passed.",
+      exit_code: null,
+      evidence_ref: manualDocRelPath,
+      evidence_hash: null,
+      verified_at: "2026-10-31T10:30:00.000Z",
+      verified_by: "human:Alice Human",
+      actor_type: "human",
+    };
+    fs.writeFileSync(statePath, JSON.stringify(state, null, 2) + "\n", "utf-8");
+
+    const res = await approveGate(tempDir, {
+      gate: 0,
+      reviewerName: "Alice Human",
+      role: "Lead Engineer",
+      confirmationPhrase: "CONFIRM APPROVAL GATE 0",
+      isTTY: true,
+    });
+
+    assert.equal(res.success, true);
+    assert.ok(res.fingerprint?.startsWith("sha256:"));
+  });
+
+  // Scenario 8j: Multi-evidence deliverable where second evidence fails
+  test("Scenario 8j: Multi-evidence deliverable where second evidence fails rejects with EVIDENCE_RESULT_FAILED", async () => {
+    const { state, statePath, evidencePath } = setupStageProject(tempDir, { stage: 0, status: "pending_review" });
+
+    const secondLogRelPath = ".playbook/logs/secondary-test.log";
+    fs.writeFileSync(path.join(tempDir, secondLogRelPath), "Secondary test suite log\n", "utf-8");
+
+    const ev1 = state.current_stage_detail.deliverables[0].evidence[0];
+    const ev2 = {
+      requirement_id: null,
+      type: "automated_test" as const,
+      procedure: "npm run test:integration",
+      result: "failed" as const,
+      summary: "Integration test failed.",
+      exit_code: 1,
+      evidence_ref: secondLogRelPath,
+      evidence_hash: computeSha256("Secondary test suite log\n"),
+      verified_at: "2026-10-31T10:35:00.000Z",
+      verified_by: "human:Alice Human",
+      actor_type: "human" as const,
+    };
+
+    state.current_stage_detail.deliverables[0].evidence = [ev1, ev2];
+    fs.writeFileSync(statePath, JSON.stringify(state, null, 2) + "\n", "utf-8");
+
+    await assert.rejects(
+      async () => {
+        await approveGate(tempDir, {
+          gate: 0,
+          reviewerName: "Alice Human",
+          role: "Lead Engineer",
+          confirmationPhrase: "CONFIRM APPROVAL GATE 0",
+          isTTY: true,
+        });
+      },
+      (err: unknown) => {
+        assert.ok(err instanceof TransactionError);
+        assert.equal(err.code, "EVIDENCE_RESULT_FAILED");
         return true;
       }
     );

@@ -159,6 +159,86 @@ describe("Lifecycle Advancement Engine & CLI (playbook advance)", () => {
     assert.equal(stateAfter.current_stage, 0);
   });
 
+  // Scenario 14a: Missing approval sidecar on approved stage
+  test("Scenario 14a: Missing approval sidecar on approved stage rejects with APPROVAL_FINGERPRINT_MISSING", async () => {
+    const { sidecarPath } = setupStageProject(tempDir, { stage: 0, status: "approved" });
+
+    // Unlink sidecar
+    fs.unlinkSync(sidecarPath);
+
+    await assert.rejects(
+      async () => {
+        await advanceStage(tempDir);
+      },
+      (err: unknown) => {
+        assert.ok(err instanceof TransactionError);
+        assert.equal(err.code, "APPROVAL_FINGERPRINT_MISSING");
+        return true;
+      }
+    );
+  });
+
+  // Scenario 14b: Corrupted or malformed JSON sidecar
+  test("Scenario 14b: Corrupted or malformed JSON sidecar rejects with APPROVAL_FINGERPRINT_MALFORMED", async () => {
+    const { sidecarPath } = setupStageProject(tempDir, { stage: 0, status: "approved" });
+
+    // Write malformed JSON
+    fs.writeFileSync(sidecarPath, "This is not valid JSON {\n", "utf-8");
+
+    await assert.rejects(
+      async () => {
+        await advanceStage(tempDir);
+      },
+      (err: unknown) => {
+        assert.ok(err instanceof TransactionError);
+        assert.equal(err.code, "APPROVAL_FINGERPRINT_MALFORMED");
+        return true;
+      }
+    );
+  });
+
+  // Scenario 14c: Sidecar gate mismatch
+  test("Scenario 14c: Sidecar gate mismatch rejects with APPROVAL_FINGERPRINT_MALFORMED", async () => {
+    const { sidecarPath } = setupStageProject(tempDir, { stage: 0, status: "approved" });
+
+    // Set sidecar gate to 1 when state is at stage 0
+    const sidecar = JSON.parse(fs.readFileSync(sidecarPath, "utf-8"));
+    sidecar.gate = 1;
+    fs.writeFileSync(sidecarPath, JSON.stringify(sidecar, null, 2) + "\n", "utf-8");
+
+    await assert.rejects(
+      async () => {
+        await advanceStage(tempDir);
+      },
+      (err: unknown) => {
+        assert.ok(err instanceof TransactionError);
+        assert.equal(err.code, "APPROVAL_FINGERPRINT_MALFORMED");
+        return true;
+      }
+    );
+  });
+
+  // Scenario 14d: Tampered sidecar fingerprint
+  test("Scenario 14d: Tampered sidecar fingerprint rejects with APPROVAL_STALE", async () => {
+    const { sidecarPath } = setupStageProject(tempDir, { stage: 0, status: "approved" });
+
+    // Tamper with fingerprint
+    const sidecar = JSON.parse(fs.readFileSync(sidecarPath, "utf-8"));
+    sidecar.fingerprint = "sha256:0000000000000000000000000000000000000000000000000000000000000000";
+    fs.writeFileSync(sidecarPath, JSON.stringify(sidecar, null, 2) + "\n", "utf-8");
+
+    await assert.rejects(
+      async () => {
+        await advanceStage(tempDir);
+      },
+      (err: unknown) => {
+        assert.ok(err instanceof TransactionError);
+        assert.equal(err.code, "APPROVAL_STALE");
+        return true;
+      }
+    );
+  });
+
   // Scenario 15: Stage 6 lifecycle closure
   test("Scenario 15: Advancing approved Stage 6 executes CLOSE_LIFECYCLE, severs advancement, and writes milestone snapshot", async () => {
     setupStageProject(tempDir, { stage: 6, status: "approved", milestoneId: "M-1.0.0" });

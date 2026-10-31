@@ -1,8 +1,9 @@
 import fs from "node:fs";
 import path from "node:path";
 import crypto from "node:crypto";
-import { DEFAULT_PATHS, type ApprovalMode } from "../constants.js";
+import { DEFAULT_PATHS, type ApprovalMode, type StageNumber } from "../constants.js";
 import { SchemaValidator } from "./validator.js";
+import { getStageBaselineDeliverables } from "./stage-defaults.js";
 import {
   WriteAheadTransactionManager,
   TransactionError,
@@ -11,7 +12,7 @@ import {
   safeUnlink,
 } from "./transaction/index.js";
 import { buildApprovalFingerprintSidecar } from "./fingerprint.js";
-import type { ProjectState } from "../types/state.js";
+import type { ProjectState, Deliverable } from "../types/state.js";
 import type { ProjectManifest } from "../types/manifest.js";
 import type { DiagnosticIssue } from "./diagnostics/types.js";
 
@@ -30,6 +31,80 @@ export function isForbiddenAgentName(name: string): boolean {
     return true;
   }
   return false;
+}
+
+export interface ExitPackageValidationResult {
+  valid: boolean;
+  errors: string[];
+}
+
+/**
+ * Validates the markdown structural completeness of a Stage Gate Exit Package
+ * against canonical template requirements (sections, headings, placeholder absence).
+ */
+export function validateExitPackageStructure(
+  content: string,
+  gate: number
+): ExitPackageValidationResult {
+  const errors: string[] = [];
+
+  // Minimum size check (must be at least 200 bytes)
+  if (Buffer.byteLength(content, "utf-8") < 200) {
+    errors.push(`Exit package is too short (${Buffer.byteLength(content, "utf-8")} bytes; minimum 200 bytes required).`);
+  }
+
+  // 1. Top-level Title (# Stage Gate Exit Package or # Stage Gate [0-6] Exit Package)
+  if (!/^#\s+.*(?:Stage\s+Gate.*Exit\s+Package|Exit\s+Package)/im.test(content)) {
+    errors.push("Missing top-level header: '# Stage Gate Exit Package' (or equivalent).");
+  }
+
+  // 2. Identification or Summary section
+  if (
+    !/^##\s+(?:\d+\.\s+)?(?:Package\s+&\s+Stage\s+Identification|Stage\s+Objectives|Executive\s+Summary)/im.test(
+      content
+    )
+  ) {
+    errors.push("Missing required section: '## 1. Package & Stage Identification' (or 'Executive Summary').");
+  }
+
+  // 3. Deliverables Manifest section
+  if (
+    !/^##\s+(?:\d+\.\s+)?(?:Deliverables\s+Manifest|Stage\s+Deliverables|Deliverables(?:\s+and\s+Traceability|\s+Manifest\s+&\s+Status)?)/im.test(
+      content
+    )
+  ) {
+    errors.push("Missing required section: '## 2. Deliverables Manifest & Status' (or 'Deliverables').");
+  }
+
+  // 4. Validation Evidence section
+  if (
+    !/^##\s+(?:\d+\.\s+)?(?:Verifiable\s+Validation\s+Evidence|Validation\s+Evidence|Evidence)/im.test(
+      content
+    )
+  ) {
+    errors.push("Missing required section: '## 3. Verifiable Validation Evidence' (or 'Evidence').");
+  }
+
+  // 5. Traceability Matrix or Sign-off section
+  if (
+    !/^##\s+(?:\d+\.\s+)?(?:Traceability(?:\s+Matrix)?|Human\s+Gate\s+Sign-Off|Sign-Off|Residual\s+Risk)/im.test(
+      content
+    )
+  ) {
+    errors.push("Missing required section: '## 4. Traceability & Sign-Off Record' (or 'Sign-Off').");
+  }
+
+  // 6. Check for unresolved template placeholders
+  // Matches <!-- TODO ..., [TODO..., [INSERT..., [PLACEHOLDER...
+  const placeholderRegex = /(?:<!--\s*TODO\b|\[TODO\b|\[INSERT\s+|\[PLACEHOLDER\b|<!--\s*REPLACE\b)/i;
+  if (placeholderRegex.test(content)) {
+    errors.push("Exit package contains unresolved template placeholders (e.g. 'TODO', 'INSERT', 'PLACEHOLDER').");
+  }
+
+  return {
+    valid: errors.length === 0,
+    errors,
+  };
 }
 
 export interface GateEligibilityResult {
@@ -172,6 +247,28 @@ export function checkGateEligibility(
       path: DEFAULT_PATHS.stateFile,
       remediation: "Run 'playbook advance' to advance to the next lifecycle stage.",
     });
+  }
+
+  // 1. Mandatory Baseline Deliverables Enforcement
+  if (requestedGate >= 0 && requestedGate <= 6) {
+    const baselineDeliverables = getStageBaselineDeliverables(requestedGate as StageNumber);
+    const declaredDeliverables = state.current_stage_detail?.deliverables || [];
+    const declaredMap = new Map<string, Deliverable>();
+    for (const d of declaredDeliverables) {
+      declaredMap.set(d.id, d);
+    }
+
+    for (const baseDeliv of baselineDeliverables) {
+      if (!declaredMap.has(baseDeliv.id)) {
+        diagnostics.push({
+          code: "GATE_REQUIRED_DELIVERABLE_MISSING",
+          severity: "error",
+          message: `Missing mandatory baseline deliverable "${baseDeliv.id}" (${baseDeliv.name}) for Stage ${requestedGate}.`,
+          path: DEFAULT_PATHS.stateFile,
+          remediation: `Declare mandatory deliverable "${baseDeliv.id}" in current_stage_detail.deliverables and verify it.`,
+        });
+      }
+    }
   }
 
   // Deliverables completeness & verification
@@ -358,15 +455,34 @@ export function checkGateEligibility(
           remediation: `Author and compile Stage Exit Package at "${exitPackage.path}".`,
         });
       } else {
-        const stat = fs.statSync(absExitPkg);
-        if (stat.size < 200) {
+        let content = "";
+        try {
+          content = fs.readFileSync(absExitPkg, "utf-8");
+        } catch (err: unknown) {
           diagnostics.push({
             code: "EXIT_PACKAGE_INCOMPLETE",
             severity: "error",
-            message: `Stage Gate Exit Package at "${exitPackage.path}" is incomplete (size: ${stat.size} bytes; minimum: 200 bytes).`,
+            message: `Failed to read Stage Gate Exit Package at "${exitPackage.path}": ${
+              err instanceof Error ? err.message : String(err)
+            }`,
             path: exitPackage.path,
-            remediation: "Populate exit package according to template specifications.",
+            remediation: "Ensure the exit package file exists and has read permissions.",
           });
+        }
+
+        if (content) {
+          const structResult = validateExitPackageStructure(content, requestedGate);
+          if (!structResult.valid) {
+            for (const err of structResult.errors) {
+              diagnostics.push({
+                code: "EXIT_PACKAGE_INCOMPLETE",
+                severity: "error",
+                message: `Stage Gate Exit Package at "${exitPackage.path}" validation failed: ${err}`,
+                path: exitPackage.path,
+                remediation: "Complete all required template sections and resolve placeholders in the exit package.",
+              });
+            }
+          }
         }
       }
     } catch (err: unknown) {

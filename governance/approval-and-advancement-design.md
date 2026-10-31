@@ -168,7 +168,13 @@ Before prompting the human, the engine inspects the markdown artifact at `curren
   - Section 7: Related Governance Artifacts (ADRs, RFCs, Exceptions)
   - Section 8: AI Agent Completion Assertion (must contain non-approving agent assertion)
   - Section 9: Human Gate Sign-Off & Approval Record
+- Must not contain unresolved template placeholders (`<!-- TODO`, `[TODO`, `[INSERT`, `[PLACEHOLDER`).
 - If waived deliverables exist, Section 3 and Section 7 must explicitly list compensating controls and reference the authorized `EXC-YYYYMMDD-###.md` exception record.
+
+> [!IMPORTANT]
+> **Structural Exit Package Validation vs. Semantic Human Judgment**:
+> The automated exit package validator (`validateExitPackageStructure`) inspects purely structural and syntactic properties: document length ($\ge 200$ bytes), presence of canonical markdown section headers, and the absence of unresolved template placeholders.
+> This structural verification is necessary but not sufficient: automated routines cannot evaluate whether the recorded claims are truthful, whether the architectural designs are sound, or whether acceptance criteria are genuinely satisfied. Substantive engineering evaluation and semantic judgment remain the exclusive, non-delegable responsibility of the human reviewer during interactive gate review.
 
 ### 3.4 Interactive TTY Protocol & Human Review Prompts
 To ensure gate sign-off reflects active human judgment rather than automated script execution:
@@ -180,13 +186,13 @@ To ensure gate sign-off reflects active human judgment rather than automated scr
      Automated, scripted, or piped approval invocations are strictly prohibited.
      ```
 2. **Interactive Presentation & Review**:
-   - The CLI presents a structured terminal summary:
+   - The CLI presents a structured terminal summary before requesting confirmation:
      - Project ID, Name, Governance Profile, Milestone ID.
      - Active Stage number and name.
      - Deliverables verified count and waived count.
      - Active exceptions list with expiration dates.
      - Evidence verification summary (all passing hashes).
-     - Link to Exit Package markdown document.
+     - Link to Exit Package markdown document and a content preview.
 3. **Human Prompts**:
    - **Reviewer Name**: Claimed full name of human engineer (e.g., `Zain Ali`). Must not contain forbidden keywords (`agent`, `bot`, `controller`, `playbook`, `orchestrator`, `ai`).
    - **Professional Role**: Engineering title or authority (e.g., `Lead Systems Architect`).
@@ -198,6 +204,11 @@ To ensure gate sign-off reflects active human judgment rather than automated scr
    - If approving, the human must explicitly type the exact phrase:
      `CONFIRM APPROVAL GATE <N>`
    - Any typo, empty input, or cancellation aborts without modifying `state.json`.
+
+> [!WARNING]
+> **Heuristic Anti-Scripting Safeguards vs. Cryptographic Identity Proof**:
+> The interactive terminal checks (`process.stdin.isTTY`), forbidden reviewer keyword filtering (`agent`, `bot`, `ai`), and typed confirmation phrase (`CONFIRM APPROVAL GATE <N>`) are heuristic guardrails designed to prevent accidental, unattended, or piped script execution in headless environments.
+> These checks do **NOT** constitute cryptographic identity proof, non-repudiation, or authenticated actor verification. In environments where cryptographic non-repudiation is required, organizations must layer external controls such as Git GPG commit/tag signing, hardware security keys (FIDO2/WebAuthn), and mandatory peer pull-request approvals on protected repository branches.
 
 ### 3.5 Persisted State Mutations (`APPROVE_GATE` vs. `REJECT_GATE`)
 
@@ -578,19 +589,19 @@ Instead, the orchestrator triggers `CLOSE_LIFECYCLE`:
 - Outputs completion verdict: Milestone is officially sealed in production. Future enhancements require formal `REOPEN_LIFECYCLE`.
 
 #### 3. Governance Immutability vs. Physical Mutability Realities
-- **Governance Frozen Artifact**: The snapshot and sealed state files are *conventionally frozen* by the Playbook governance layer.
-- **Physical Mutability Reality**: Files stored in a standard Git working tree remain physically mutable by any user or script with local filesystem write permissions. Technical immutability is achieved only when commits are pushed to protected Git branches with required linear histories, signed tags, and immutable remote storage (WORM/S3 Object Lock).
+- **Governance-Frozen Artifact**: The milestone snapshot (`.playbook/milestones/state-<milestone_id>.json`) and sealed state history are *conventionally frozen* by the Playbook governance layer. The CLI strictly blocks modification or overwriting of terminal milestones (`ADVANCEMENT_BLOCKED`, `SNAPSHOT_CONFLICT`) and sets filesystem permissions to read-only (`0o444`).
+- **Technical/Hardware Mutability Realities**: Files stored in a standard operating system directory and Git working tree are **NOT** hardware-immutable (such as WORM optical media, hardware security modules, or cloud storage buckets with compliance-mode Object Lock). Any process or administrative user with filesystem write access can modify or delete files out-of-band. Technical non-repudiation and permanent tamper resistance require pushing commits to protected Git branches with required linear history, enforced peer reviews, cryptographic GPG-signed tags, and immutable remote archive backups.
 
 ---
 
 ## 5. Security & Trust Boundaries
 
-### 5.1 Claimed Reviewer Identity vs. Authenticated Identity
-- **Claimed Identity**: In the local CLI prompt (`playbook approve`), the reviewer provides their name and role as strings. This represents a *claimed identity*.
-- **Authorization Barrier (TTY Guardrail)**: The interactive TTY check (`process.stdin.isTTY === true`) enforces that approval is executed by an interactive user rather than an automated script or background agent subprocess. It is an **execution mode safeguard**, not a cryptographic identity verification system.
-- **Upstream Identity Assurance**: True human authentication is enforced at the Git forge boundary:
-  - **Solo Mode**: Relies on local workstation OS login and personal Git commit signing keys (GPG/SSH).
-  - **Team Mode**: Enforced via GitHub/GitLab Branch Protection Rules, Required Pull Request Reviews, CODEOWNERS authorization, and GPG-signed merge commits. The CLI captures the authenticated PR number in `signature_reference`.
+### 5.1 Claimed Reviewer Identity vs. Authenticated Cryptographic Identity
+- **Claimed Identity**: In the local CLI prompt (`playbook approve`), the reviewer provides their name and role as strings. This represents a *claimed identity*, not a cryptographically proven credential.
+- **Authorization Barrier (TTY & Anti-Scripting Guardrails)**: The interactive TTY check (`process.stdin.isTTY === true`) and forbidden name filtering (`isForbiddenAgentName`) enforce that approval is executed in an interactive terminal session rather than an automated script or background agent subprocess. They are **heuristic operational execution safeguards**, not cryptographic identity proofs or digital signature verifications.
+- **Upstream Cryptographic Identity Assurance**: True human authentication and non-repudiation are enforced at the Git forge and cryptographic identity boundaries:
+  - **Solo Mode**: Relies on local workstation OS login, GPG/SSH commit and tag signing, and cryptographic hardware tokens (e.g. YubiKey).
+  - **Team Mode**: Enforced via GitHub/GitLab Branch Protection Rules, Required Pull Request Reviews, CODEOWNERS authorization, multi-factor authentication (MFA), and GPG-signed merge commits. The CLI captures the authenticated PR number or cryptographic commit reference in `signature_reference`.
 
 ### 5.2 Strict Prohibition on Agent Self-Approval
 - Schema invariants in `project-state.schema.json` enforce:

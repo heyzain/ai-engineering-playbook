@@ -2,6 +2,13 @@ import type { StageNumber } from "../constants.js";
 import type { Deliverable } from "../types/state.js";
 
 /**
+ * Returns canonical baseline deliverable IDs for a given lifecycle stage.
+ */
+export function getStageBaselineDeliverableIds(stage: StageNumber): string[] {
+  return getStageBaselineDeliverables(stage).map((d) => d.id);
+}
+
+/**
  * Returns canonical baseline deliverables for a given lifecycle stage.
  */
 export function getStageBaselineDeliverables(stage: StageNumber): Deliverable[] {
