@@ -1,0 +1,28 @@
+{
+  "$schema": "https://ai-engineering-playbook.org/schemas/project-manifest.schema.json",
+  "schema_version": "1.0.0",
+  "project_id": "INVALID PROJECT ID WITH UPPERCASE",
+  "project_name": "Broken Manifest Example",
+  "playbook": {
+    "version": "1.0.0",
+    "governance_profile": "unrestricted",
+    "approval_mode": "solo"
+  },
+  "tech_stack": {
+    "ecosystem": "node",
+    "primary_language": "typescript"
+  },
+  "paths": {
+    "docs_root": "docs",
+    "prd_dir": "docs/prd",
+    "adr_dir": "docs/adr",
+    "rfc_dir": "docs/rfcs",
+    "gates_dir": "docs/gates",
+    "exceptions_dir": "docs/exceptions"
+  },
+  "active_lifecycle_stage": 9,
+  "capabilities": [
+    "automated_testing",
+    "unsupported_capability_flag"
+  ]
+}

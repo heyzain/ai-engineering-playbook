@@ -51,12 +51,13 @@ When assigned a task, every AI agent must execute this standardized operational 
 
 ### Step 1: Context & State Inspection
 - Check current directory topology, Git status, and active branch.
-- Locate existing specifications, ADRs, and active stage deliverables.
+- Inspect machine-readable state (`.playbook/manifest.json` and `.playbook/state.json`) where configured, per [downstream-storage-convention.md](governance/downstream-storage-convention.md).
+- Locate existing specifications, ADRs, active stage deliverables, and blocking RFCs.
 - Establish the current baseline without modifying any files.
 
 ### Step 2: Stage & Prerequisite Validation
-- Determine the target lifecycle stage according to [stage-gate-rules.md](governance/stage-gate-rules.md).
-- Verify that preceding stage artifacts exist and have been formally approved.
+- Determine the target lifecycle stage according to [stage-gate-rules.md](governance/stage-gate-rules.md) and state file.
+- Verify that preceding stage artifacts exist and have been formally approved (confirmed in `stage_history`).
 - If prerequisites are missing or unapproved, **halt** and notify the human operator.
 
 ### Step 3: Requirement Gap Analysis
@@ -64,7 +65,7 @@ When assigned a task, every AI agent must execute this standardized operational 
   - Undefined edge cases or negative flows.
   - Vague or unquantifiable acceptance criteria.
   - Unstated security, performance, or accessibility expectations.
-- If ambiguities or gaps exist, halt and issue a **Clarification Request (RFC)** using [templates/clarification-rfc-template.md](templates/clarification-rfc-template.md).
+- If ambiguities or gaps exist, halt, trigger transition `TRIGGER_HALT`, and issue a **Clarification Request (RFC)** using [templates/clarification-rfc-template.md](templates/clarification-rfc-template.md). Record the RFC in `current_stage_detail.rfcs` with `status: "pending_decision"` and `is_blocking: true`.
 
 ### Step 4: Planning & Architecture Alignment
 - Formulate a brief, actionable implementation plan.
@@ -76,21 +77,24 @@ When assigned a task, every AI agent must execute this standardized operational 
 
 ### Step 5: Implementation & Local Verification
 - Implement the minimal sufficient solution to satisfy the verified requirements.
+- Record created artifacts in `.playbook/state.json` under `current_stage_detail.deliverables` with status `completed` and `validation_status: "unvalidated"`.
 - Write or update automated unit tests to verify behavior and edge cases.
 - Maintain documentation integrity: do not delete or overwrite existing comments or docs without intent.
 
 ### Step 6: Work Verification & Evidence Gathering
 - Execute all relevant test suites, static analysis tools, and type checks.
-- Collect verifiable evidence (command output, test counts, linter output).
-- Stage completion requires concrete evidence, not merely an unverified agent claim.
+- Collect verifiable evidence (command output, test counts, linter output, exit code).
+- Update deliverable in `.playbook/state.json`: if exit code is 0, transition status to `verified`, set `validation_status: "passed"`, and append proof to `evidence[]`.
+- Stage completion requires concrete evidence, not merely an unverified agent claim. **Never treat `completed`, `verified`, and `approved` as interchangeable states.**
 
 ### Step 7: Handover & Stage Gate Approval
 - Assemble a concise Stage Exit Package formatted per [templates/gate-exit-package-template.md](templates/gate-exit-package-template.md) (deliverable summary, proof evidence, requirement traceability).
-- AI agents cannot self-approve stage transitions.
+- Update `.playbook/state.json`: set `exit_package.status` to `submitted_for_review` and `human_approval.status` to `pending_review`.
+- **AI agents cannot self-approve stage transitions.** Only an authorized human engineer may sign off on gate transitions.
 - Await human approval:
   - **Solo Developer Mode**: Explicit human confirmation in the development conversation (PR optional).
   - **Team Mode**: Formal Pull Request review sign-off.
-- Advance to the subsequent stage only after explicit human approval is granted.
+- Advance to the subsequent stage (`ADVANCE_STAGE`) only after explicit human approval is granted.
 
 ---
 
@@ -111,5 +115,8 @@ When interacting with human engineers, AI agents must:
 | **Engineering Values & Principles** | [core/engineering-constitution.md](core/engineering-constitution.md) |
 | **Controller Architecture & Halt Rules** | [governance/ENGINEERING_CONTROLLER.md](governance/ENGINEERING_CONTROLLER.md) |
 | **Stage Gates, Criteria & Deliverables** | [governance/stage-gate-rules.md](governance/stage-gate-rules.md) |
+| **Deterministic State Machine & Transitions** | [governance/state-machine.md](governance/state-machine.md) |
+| **Downstream Storage Architecture** | [governance/downstream-storage-convention.md](governance/downstream-storage-convention.md) |
+| **Machine-Readable Schemas & Contracts** | [schemas/README.md](schemas/README.md) |
 | **Standard Engineering Templates** | [templates/README.md](templates/README.md) |
 | **Repository Vision & Layout** | [README.md](README.md) |

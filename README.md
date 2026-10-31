@@ -52,7 +52,24 @@ ai-engineering-playbook/
 ├── governance/
 │   ├── ENGINEERING_CONTROLLER.md       # AI Controller architecture, halt mechanisms, and RFC protocol
 │   ├── stage-gate-rules.md             # 7-stage engineering lifecycle, entry/exit criteria, and gates
+│   ├── state-machine.md                # Deterministic FSM, transition rules, and validation checks
+│   ├── downstream-storage-convention.md# Storage architecture and folder layout for downstream projects
 │   └── exceptions/                     # Directory for individual gate exception records (EXC-YYYYMMDD-###.md)
+│
+├── schemas/                            # Machine-readable project schemas & examples
+│   ├── README.md                       # Schema specifications, taxonomy, and validation rules
+│   ├── project-manifest.schema.json    # JSON Schema for project identity, stack, and paths
+│   ├── project-state.schema.json       # JSON Schema for lifecycle progression and approvals
+│   └── examples/                       # Canonical valid and invalid test fixtures
+│       ├── README.md                   # Examples catalog and assertion criteria
+│       ├── valid-manifest.json
+│       ├── invalid-manifest.json
+│       ├── valid-state-stage1-verified.json
+│       ├── valid-state-stage2-approved.json
+│       ├── invalid-state-agent-self-approval.json
+│       ├── invalid-state-unverified-advance.json
+│       ├── invalid-state-unresolved-rfc.json
+│       └── invalid-state-expired-exception.json
 │
 └── templates/                          # Standardized operational engineering templates
     ├── README.md                       # Template catalog and usage guide
@@ -72,6 +89,9 @@ ai-engineering-playbook/
 | [core/engineering-constitution.md](core/engineering-constitution.md) | Immutable engineering values, YAGNI, simplicity, and spec-first rules | Humans & Agents |
 | [governance/ENGINEERING_CONTROLLER.md](governance/ENGINEERING_CONTROLLER.md) | Controller mechanics, state inspection, gap analysis, and halts | Humans & Agents |
 | [governance/stage-gate-rules.md](governance/stage-gate-rules.md) | Lifecycle stages (0–6), entry/exit criteria, and gate validation | Humans & Agents |
+| [governance/state-machine.md](governance/state-machine.md) | Deterministic FSM transition matrix, preconditions, and guards | Humans, Agents & Tools |
+| [governance/downstream-storage-convention.md](governance/downstream-storage-convention.md) | Downstream directory layout, state storage, and log retention | Humans & Agents |
+| [schemas/README.md](schemas/README.md) | Machine-readable JSON Schema specifications and validation rules | Humans, Agents & Tools |
 | [templates/README.md](templates/README.md) | Standardized artifact templates (PRD, ADR, RFC, Exit Package, Exception) | Humans & Agents |
 
 ---
@@ -83,16 +103,17 @@ A core tenet of this playbook is **intellectual honesty**. Markdown instructions
 ### The Enforcement Spectrum
 
 ```
-Current State:                           Target Future State:
-Agent Cognitive Compliance              Automated Deterministic Tooling
-├─ Structured prompt directives         ├─ Spec linters & schema checkers
-├─ Explicit halt mechanisms             ├─ Pre-commit & pre-push git hooks
-├─ Self-verification checklists         ├─ CI/CD branch protection gates
-└─ Human-in-the-loop sign-offs           └─ AST-based architecture validators
+Current Baseline:             Machine-Readable State Layer:       Target Future State:
+Agent Cognitive Compliance    Deterministic Schema Contracts       Automated Tool Validation
+├─ Structured prompt directives├─ project.manifest.json            ├─ Automated CLI (playbook validate)
+├─ Explicit halt mechanisms   ├─ state.json (auditable FSM)        ├─ Spec linters & schema checkers
+├─ Self-verification checks   ├─ Verifiable evidence blocks        ├─ Pre-commit & pre-push git hooks
+└─ Human-in-the-loop sign-offs └─ Explicit human approval guards   └─ CI/CD branch protection gates
 ```
 
 1. **Current Foundation (Agent Compliance)**: The Controller operates through structured cognitive self-governance by the agent, backed by explicit human checkpoints and mandatory review sign-offs.
-2. **Evolutionary Path (Automated Tooling)**: As the playbook expands, deterministic quality gates (linters, pre-commit hooks, CI checks, and policy-as-code engines) will be introduced to automate verification.
+2. **Machine-Readable State (Task 003)**: Formal JSON schemas and finite state machine rules define verifiable boundaries, ensuring project state, deliverables, and evidence are deterministically structured.
+3. **Evolutionary Path (Automated Tooling)**: As the playbook expands, deterministic quality gates (CLI validators, pre-commit hooks, CI checks, and policy-as-code engines) will be introduced to automate verification directly against `.playbook/state.json`.
 
 ---
 
@@ -101,12 +122,13 @@ Agent Cognitive Compliance              Automated Deterministic Tooling
 ### For AI Coding Agents
 1. Ingest [AGENTS.md](AGENTS.md) immediately upon workspace initialization.
 2. Follow the 7 operational controller steps sequentially within the active lifecycle stage.
-3. If an input or requirement is ambiguous, halt and trigger a structured Clarification Request using [templates/clarification-rfc-template.md](templates/clarification-rfc-template.md).
-4. Verify every deliverable with concrete evidence before reporting completion.
-5. **Never self-approve mandatory stage transitions**: Always assemble a Stage Exit Package using [templates/gate-exit-package-template.md](templates/gate-exit-package-template.md) and await explicit human sign-off.
+3. Inspect and update `.playbook/manifest.json` and `.playbook/state.json` per [state-machine.md](governance/state-machine.md).
+4. If an input or requirement is ambiguous, halt and trigger a structured Clarification Request using [templates/clarification-rfc-template.md](templates/clarification-rfc-template.md).
+5. Verify every deliverable with concrete evidence before reporting completion. Never conflate `completed` with `verified` or `approved`.
+6. **Never self-approve mandatory stage transitions**: Always assemble a Stage Exit Package using [templates/gate-exit-package-template.md](templates/gate-exit-package-template.md) and await explicit human sign-off.
 
 ### For Human Engineers and Architects
-1. Use the [Stage-Gate Rules](governance/stage-gate-rules.md) to evaluate agent progress at each gate.
+1. Use the [Stage-Gate Rules](governance/stage-gate-rules.md) and [State Machine](governance/state-machine.md) to evaluate agent progress at each gate.
 2. Review and authorize stage transitions:
    - **Solo Developer Mode**: Explicit in-chat confirmation with recorded evidence (PRs optional).
    - **Team Mode**: Formal Pull Request code reviews and approval sign-offs.
@@ -117,6 +139,6 @@ Agent Cognitive Compliance              Automated Deterministic Tooling
 
 ## 6. Next Implementation Steps
 
-With the foundational methodology established, audited, and standard templates implemented, subsequent tasks will address:
-1. **Automated Governance Tooling** (`tooling/`): Lightweight pre-commit hooks and gate checklist runners.
+With the foundational methodology, standard templates, and machine-readable project state system established, subsequent tasks will address:
+1. **Automated Governance CLI & Tooling** (`tooling/`): A lightweight CLI (e.g. `playbook validate`, `playbook advance`) implementing the state machine checks against `.playbook/state.json`, pre-commit hooks, and CI gate validators.
 2. **Technology Stacks** (`stacks/<technology>/`): Specific engineering standards and scaffolds for Next.js, React, React Native, and Expo.

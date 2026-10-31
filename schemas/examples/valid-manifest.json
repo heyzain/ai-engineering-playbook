@@ -1,0 +1,40 @@
+{
+  "$schema": "https://ai-engineering-playbook.org/schemas/project-manifest.schema.json",
+  "schema_version": "1.0.0",
+  "project_id": "zentrix-lms",
+  "project_name": "Zentrix Learning Management System",
+  "description": "Multi-role educational platform supporting modular course delivery, interactive assessments, and real-time tutoring sessions.",
+  "playbook": {
+    "version": "1.0.0",
+    "repository_uri": "https://github.com/org/ai-engineering-playbook",
+    "governance_profile": "standard",
+    "approval_mode": "solo"
+  },
+  "tech_stack": {
+    "ecosystem": "node",
+    "primary_language": "typescript",
+    "runtimes": ["node20", "browser"],
+    "frameworks": ["nextjs", "tailwind"],
+    "package_manager": "pnpm"
+  },
+  "paths": {
+    "docs_root": "docs",
+    "prd_dir": "docs/prd",
+    "adr_dir": "docs/adr",
+    "rfc_dir": "docs/rfcs",
+    "gates_dir": "docs/gates",
+    "exceptions_dir": "docs/exceptions",
+    "state_file": ".playbook/state.json"
+  },
+  "active_lifecycle_stage": 1,
+  "capabilities": [
+    "automated_testing",
+    "contract_testing",
+    "static_type_checking",
+    "ast_linting"
+  ],
+  "metadata": {
+    "team_lead": "Zain Ali",
+    "tier": "tier-1-internal"
+  }
+}

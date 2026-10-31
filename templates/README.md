@@ -23,3 +23,12 @@ This directory provides operational templates used by AI agents and human engine
 1. **Non-Negotiable Completeness**: Mandatory sections must never be omitted. If information is unavailable, agents must halt and issue an RFC.
 2. **Deterministic Evidence Over Claims**: Exit packages and deliverables must include concrete command logs, test counts, and artifact links.
 3. **No Self-Approval**: AI agents draft and assemble artifacts; authorized human engineers retain exclusive sign-off authority.
+
+---
+
+## Machine-Readable Schemas & Storage Conventions
+
+Operational markdown templates work in tandem with the machine-readable state model and downstream storage conventions:
+- **Project Schemas**: See [schemas/README.md](../schemas/README.md) for manifest and lifecycle state JSON schemas.
+- **Storage Conventions**: See [governance/downstream-storage-convention.md](../governance/downstream-storage-convention.md) for standard repository directory layouts.
+- **State Machine**: See [governance/state-machine.md](../governance/state-machine.md) for deterministic stage transition and verification rules.

@@ -32,16 +32,20 @@ To ensure consistent communication and avoid ambiguity, this playbook strictly d
 Before an AI agent proposes any plan or executes any code, the Controller requires a systematic inspection of the current project state.
 
 ### Inspection Procedure
-1. **Repository Topology**:
+1. **Repository Topology & Governance Manifest**:
    - Inspect top-level files and directories to understand directory layout and module distribution.
+   - Inspect machine-readable manifest (`.playbook/manifest.json`) where configured, validating project identity, active stage, and path mappings per [downstream-storage-convention.md](downstream-storage-convention.md).
    - Detect configuration manifests (e.g., package manifests, build scripts, workspace configurations) without executing untrusted scripts.
 2. **Version Control State**:
    - Check current branch, active working tree status (clean vs. modified), and recent commit history to establish context.
-3. **Documentation and Specification Baseline**:
-   - Inspect existing playbook files, Architecture Decision Records (ADRs), Product Requirement Documents (PRDs), and stage artifacts.
-   - Determine what decisions have already been codified.
-4. **Active Stage Identification**:
-   - Correlate current repository artifacts against the [Stage-Gate Rules](stage-gate-rules.md) to establish the currently active lifecycle stage.
+3. **Machine State Baseline (`.playbook/state.json`)**:
+   - Inspect `.playbook/state.json` against [schemas/project-state.schema.json](../schemas/project-state.schema.json).
+   - Identify deliverable statuses, recorded validation evidence, unresolved RFCs, active exceptions, and previous stage approval history.
+4. **Documentation and Specification Baseline**:
+   - Inspect existing playbook files, Architecture Decision Records (ADRs), Product Requirement Documents (PRDs), and stage exit packages.
+   - Correlate recorded state with physical files on disk.
+5. **Active Stage Identification**:
+   - Correlate current repository artifacts and state against [Stage-Gate Rules](stage-gate-rules.md) and [state-machine.md](state-machine.md) to establish the currently active lifecycle stage.
 
 Agents must not guess project state based on training priors. If a file is not read or a command is not executed, its state is considered unverified.
 
@@ -54,11 +58,11 @@ Work within any lifecycle stage cannot begin until the Controller validates that
 ### Validation Sequence
 1. **Identify Target Stage**: Determine the stage corresponding to the requested task.
 2. **Prerequisite Check**: Consult [stage-gate-rules.md](stage-gate-rules.md) for the target stage.
-3. **Artifact Verification**:
-   - Verify that all required input artifacts from preceding stages exist, are non-empty, and are committed or officially approved.
-   - Confirm that preceding stage gates have been formally approved and not skipped.
+3. **Artifact and Ledger Verification**:
+   - Verify that all required input artifacts from preceding stages exist, are non-empty, and are committed.
+   - If `current_stage > 0`, confirm that preceding stage gates are recorded as `approved` in `stage_history` in `.playbook/state.json`.
 4. **Invariant Assertion**:
-   - If a prerequisite artifact is missing, outdated, or incomplete, the Controller enters a **blocked state**.
+   - If a prerequisite artifact is missing, outdated, or incomplete, or if an open blocking RFC is active, the Controller executes `TRIGGER_HALT` and enters a **blocked state**.
 
 ---
 
@@ -166,16 +170,18 @@ Stage transitions represent irreversible or high-cost milestones. Transitions mu
    - Verifiable evidence (passing test logs, build outputs, static analysis results, artifact links).
    - Traceability matrix linking deliverables to specifications.
    - Known limitations or deferred items (if any).
+   - The agent updates `.playbook/state.json`: `exit_package.status = "submitted_for_review"`, `human_approval.status = "pending_review"`.
 2. **Human Review and Sign-Off**:
    - **Solo Developer Mode**:
      - Pull requests are **optional** for solo projects to minimize overhead.
      - The human engineer reviews the Stage Exit Package and issues an explicit confirmation directly in the development conversation (e.g., *"Approved Stage 1 Exit Package: Proceed to Stage 2"*).
-     - The agent records this explicit confirmation and the accompanying verification evidence in the task completion log and commit message before proceeding.
+     - The agent records this explicit confirmation and the accompanying verification evidence in `.playbook/state.json` under `human_approval` (`approved_by`, `role`, `decision: "GATE_APPROVED"`, `signature_reference`) and in the commit message before proceeding.
    - **Team / Multi-Contributor Mode**:
      - Stage transitions are formally requested and approved via Pull Request review approvals, designated issue sign-offs, or formal code review ceremonies before merge.
-3. **Transition Milestone**:
-   - Upon explicit human approval, the repository advances to the subsequent stage.
-   - The state transition is committed to version control or logged.
+3. **Transition Milestone (`ADVANCE_STAGE`)**:
+   - Upon explicit human approval, the repository advances to the subsequent stage per [state-machine.md](state-machine.md).
+   - The completed stage is appended to `stage_history` in `.playbook/state.json`.
+   - The state transition is committed to version control.
 
 ---
 
@@ -186,7 +192,7 @@ In exceptional engineering situations (e.g., critical hotfixes, spike prototypes
 ### Exception Rules
 - **No Self-Granted Exceptions**: AI agents are strictly forbidden from waiving, bypassing, or deferring any stage gate rule independently.
 - **Human Authority**: Only an authorized human engineer may grant an exception.
-- **Mandatory Individual Exception Record**: Every exception must be stored as an individual record under `governance/exceptions/` (e.g., `governance/exceptions/EXC-YYYYMMDD-###.md`) using the [Gate Exception Record Template](../templates/exception-record-template.md) and committed to version control before progression proceeds. Loose, unrecorded, or verbal exceptions are invalid.
+- **Mandatory Individual Exception Record**: Every exception must be stored as an individual record under `governance/exceptions/` (e.g., `governance/exceptions/EXC-YYYYMMDD-###.md`) using the [Gate Exception Record Template](../templates/exception-record-template.md) and recorded in `.playbook/state.json` (`exceptions[]`) before progression proceeds. Loose, unrecorded, or verbal exceptions are invalid.
 
 ### Exception Record Format
 
@@ -212,11 +218,11 @@ To maintain intellectual honesty, the table below documents the current enforcem
 
 | Controller Responsibility | Current Enforcement Method | Target Future Enforcement Method |
 | :--- | :--- | :--- |
-| **Project State Inspection** | Agent compliance via prompt directives | Automated agent runner with read-only sandbox inspection |
-| **Prerequisite Validation** | Agent compliance & human verification | Pre-stage automated checklist runner / GitHub Actions |
-| **Missing Requirement Detection** | Agent compliance (gap heuristics) | Spec-linter / Schema validation / Automated PR reviewer |
-| **Progression Blocking** | Agent cognitive halt | Branch protection rules / Required status checks |
-| **Clarification Protocol** | Agent compliance (RFC template) | Interactive agent CLI / Structured UI modal prompt |
-| **Work Verification** | Verifiable evidence (test/lint logs) + Human review | Automated CI test pipelines, static analysis, type checks |
-| **Stage Transition Approval** | Explicit human sign-off (in-chat for solo, PR for team) | Formal GitHub PR approval / Signed release gates |
-| **Exception Recording** | Individual record under `governance/exceptions/` | Policy-as-code exception registry with TTL expiration |
+| **Project State Inspection** | Agent inspection of `.playbook/manifest.json` & `.playbook/state.json` | Automated state schema validation CLI (`playbook validate`) |
+| **Prerequisite Validation** | Agent verification of `stage_history` in state file | Pre-stage automated checklist runner / GitHub Actions |
+| **Missing Requirement Detection** | Agent compliance (gap heuristics) + RFC recording | Spec-linter / Schema validation / Automated PR reviewer |
+| **Progression Blocking** | Agent cognitive halt (`TRIGGER_HALT`) | Branch protection rules / Required status checks |
+| **Clarification Protocol** | Agent compliance (RFC template + state `rfcs[]`) | Interactive agent CLI / Structured UI modal prompt |
+| **Work Verification** | Verifiable evidence (test/lint logs in `.playbook/logs/`) | Automated CI test pipelines, static analysis, type checks |
+| **Stage Transition Approval** | Explicit human sign-off recorded in `human_approval` | Formal GitHub PR approval / Signed release gates |
+| **Exception Recording** | Individual markdown record + state `exceptions[]` | Policy-as-code exception registry with TTL expiration |

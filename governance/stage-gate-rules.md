@@ -36,9 +36,12 @@ Skipping stages or gates is prohibited. If defects or design gaps are discovered
 > **No Agent Self-Approval**: AI agents are strictly forbidden from approving their own mandatory stage transitions. Stage completion requires verifiable evidence, not merely an unverified AI claim, and requires explicit human sign-off.
 
 ### Dual Approval Protocols (Solo vs. Team)
-Stage gates enforce human governance under two operational models, each utilizing the standardized [Stage Gate Exit Package Template](../templates/gate-exit-package-template.md):
-- **Solo Developer Mode**: Pull requests are optional to eliminate unnecessary friction. Stage gate approval is granted via explicit human confirmation directly in the development conversation (e.g., *"Approved Stage 1 Exit Package: Proceed to Stage 2"*). The agent must verify and record concrete evidence (test outputs, artifact links, logs) before advancing.
-- **Team / Multi-Contributor Mode**: Stage gate approval requires formal Pull Request reviews, designated reviewer sign-offs, or issue checklist checkoffs before merge.
+Stage gates enforce human governance under two operational models, each utilizing the standardized [Stage Gate Exit Package Template](../templates/gate-exit-package-template.md) and governed by the deterministic state machine defined in [state-machine.md](state-machine.md):
+- **Solo Developer Mode**: Pull requests are optional to eliminate unnecessary friction. Stage gate approval is granted via explicit human confirmation directly in the development conversation (e.g., *"Approved Stage 1 Exit Package: Proceed to Stage 2"*). The agent must verify and record concrete evidence (test outputs, artifact links, logs) in `.playbook/state.json` before advancing.
+- **Team / Multi-Contributor Mode**: Stage gate approval requires formal Pull Request reviews, designated reviewer sign-offs, or issue checklist checkoffs before merge, with approval recorded in `.playbook/state.json`.
+
+### Machine-Readable State Alignment
+Every lifecycle stage and deliverable maps to the canonical schema [schemas/project-state.schema.json](../schemas/project-state.schema.json). Deliverables evolve through strictly distinct states (`not_started` -> `in_progress` -> `completed` -> `verified` -> `approved`), preventing unverified or unauthorized stage transitions.
 
 ---
 
