@@ -1,7 +1,7 @@
 # Project State Transition Machine & Validation Specifications
 
-> **Specification Version**: 1.1.0  
-> **Applicable Scope**: Engineering Lifecycle Stages 0–6, Agent Execution Loop Steps 1–7  
+> **Specification Version**: 1.2.0  
+> **Applicable Scope**: Engineering Lifecycle Stages 0–6, Agent Execution Loop Steps 1–7, Milestone Cycles  
 > **Status**: Mandatory Governance Specification
 
 ---
@@ -12,38 +12,40 @@ This document establishes the deterministic state transition rules governing the
 
 ```mermaid
 stateDiagram-v2
-    [*] --> not_started : INIT_PROJECT (Stage 0)
+    [*] --> not_started : INIT_PROJECT (Milestone Initialized at Stage 0)
     not_started --> in_progress : START_STAGE
     in_progress --> blocked : TRIGGER_HALT (Gap / RFC / Check Fail)
     blocked --> in_progress : RESOLVE_HALT (RFC Resolved / Prereq Fixed)
     in_progress --> pending_review : REQUEST_HUMAN_APPROVAL (Deliverables Verified/Waived)
-    pending_review --> approved : APPROVE_GATE (Human Sign-Off)
+    pending_review --> approved : APPROVE_GATE (Interactive Human Sign-Off)
     pending_review --> in_progress : REJECT_GATE (Human Requests Changes)
     approved --> not_started : ADVANCE_STAGE (Stages 0-5)
-    approved --> completed_terminal : CLOSE_LIFECYCLE (Stage 6 Sealed)
-    completed_terminal --> in_progress : REOPEN_LIFECYCLE (Human Milestone Authorization)
+    approved --> completed_terminal : CLOSE_LIFECYCLE (Stage 6 Sealed & Snapshot Archived)
+    completed_terminal --> not_started : REOPEN_LIFECYCLE (Stage 0 for New Scope / Stage 1 for Enhancements)
 ```
 
 ### The Cardinal Governance Invariants
 
-1. **Human Sovereignty Invariant**: AI agents are strictly prohibited from setting `human_approval.status` to `approved` or transitioning `stage_status` to `approved` on their own authority. Only an authorized human engineer may sign off on a stage gate transition.
-2. **Orthogonal Status Invariant**: Macro lifecycle stage statuses (`stage_status`) and micro deliverable statuses (`deliverables[].status`) are strictly separate. Stages transition through review and approval; deliverables transition through authoring, multi-modal verification, or authorized exception waiver.
-3. **Evidence Precondition Invariant**: A deliverable cannot transition from `completed` to `verified` without recorded verification evidence (`result: "passed"`). Automated checks must record an exit code (0 for success); manual reviews must record a verified procedure, summary, and reviewer identity.
-4. **No Unverified Advancement Invariant**: A stage cannot transition to `pending_review` or `approved` if any required deliverable is `not_started`, `in_progress`, `blocked`, or `unvalidated`, unless formally waived under an active human exception record (`EXC-YYYYMMDD-###.md`).
-5. **Strict Stage 6 Boundary Invariant**: The engineering lifecycle strictly terminates at Stage 6. Any transition to a hypothetical "Stage 7" is physically barred by schema constraints (`maximum: 6`) and state machine guards. Stage 6 approval triggers `CLOSE_LIFECYCLE`.
+1. **Human Sovereignty Invariant**: AI agents are strictly prohibited from setting `human_approval.status` to `approved` or transitioning `stage_status` to `approved` on their own authority. Only an authorized human engineer may sign off on a stage gate transition via an interactive verification workflow.
+2. **Interactive TTY Enforcement Guard**: Automated or non-interactive execution of gate approval (e.g. scripts passing `--yes`, `--force`, or piping inputs) is strictly rejected by the governance engine. Gate approval requires an active interactive terminal session (`isatty`).
+3. **Orthogonal Status Invariant**: Macro lifecycle stage statuses (`stage_status`) and micro deliverable statuses (`deliverables[].status`) are strictly separate. Stages transition through review and approval; deliverables transition through authoring, multi-modal verification, or authorized exception waiver.
+4. **Waiver vs. Verification Invariant**: A waiver is **not** verification. A deliverable with `status: "waived"` represents an unverified requirement whose residual risk has been accepted by an authorized human under a valid, non-expired exception record (`EXC-YYYYMMDD-###.md`). Waived deliverables remain prominent in exit packages.
+5. **Evidence Precondition Invariant**: A deliverable cannot transition from `completed` to `verified` without recorded verification evidence (`result: "passed"`). Automated checks must record an exit code (0 for success); manual reviews must record a verified procedure, summary, and reviewer identity.
+6. **Strict Stage 6 Terminal Boundary**: The engineering lifecycle strictly terminates at Stage 6. Any transition to a hypothetical "Stage 7" is physically barred by schema constraints (`maximum: 6`) and state machine guards. Stage 6 approval triggers `CLOSE_LIFECYCLE`.
+7. **Milestone History Preservation Invariant**: When a project is reopened for a new milestone, prior milestone histories and evidence snapshots must remain permanently preserved in `archived_milestones[]`. A new milestone never silently overwrites previous approved states.
 
 ---
 
 ## 2. Status Taxonomy Definitions
 
-To eliminate semantic ambiguity, status definitions are cleanly divided into **Stage Status**, **Deliverable Status**, **Validation Status**, and **Project Lifecycle Status**.
+Status definitions are cleanly divided into **Stage Status**, **Deliverable Status**, **Validation Status**, and **Project Lifecycle Status**.
 
 ### 2.1 Stage Status (`stage_status`)
 Represents the macro lifecycle phase of the currently active stage:
 
 | Stage State | Semantic Meaning | Permitted Operations | Next Legal States |
 | :--- | :--- | :--- | :--- |
-| `not_started` | Stage initialized in project scope; work has not begun. | Inspect, Initialize | `in_progress` |
+| `not_started` | Stage scope initialized in project scope; work has not begun. | Inspect, Initialize | `in_progress` |
 | `in_progress` | Active development, drafting, testing, or rework is underway. | Edit, Test, Lint, Audit | `blocked`, `pending_review` |
 | `blocked` | Progression halted by an open blocking RFC, failed prerequisite, or gate blocker. | Resolve RFC, Grant Exception | `in_progress` |
 | `pending_review` | All stage deliverables are verified or waived; Stage Exit Package submitted. Awaiting human judgment. | Review, Audit | `approved`, `in_progress` (rejection) |
@@ -57,7 +59,7 @@ Represents the micro lifecycle of an individual deliverable artifact:
 | `not_started` | Deliverable specified in stage rules; artifact file does not exist. | Scope definition | `in_progress` |
 | `in_progress` | Artifact file created; actively being drafted, implemented, or reworked. | File creation | `completed`, `blocked` |
 | `completed` | Primary deliverable file authored and committed; not yet verified. | File written to disk | `verified`, `in_progress`, `blocked` |
-| `verified` | Verification checks (automated or manual) passed with evidence recorded. | Evidence `result: "passed"` | `in_progress` (if regressed) |
+| `verified` | Verification checks (automated or manual) passed with proof recorded. | Evidence `result: "passed"` | `in_progress` (if regressed) |
 | `waived` | Mandatory requirement waived under an active, authorized exception (`EXC-*`). | Active `EXC-*` record with TTL | `in_progress` (if remediated) |
 | `blocked` | Deliverable work halted due to an external dependency or unresolved gap. | Blocker detected | `in_progress` |
 
@@ -68,9 +70,9 @@ Represents the micro lifecycle of an individual deliverable artifact:
 - `waived`: Requirement waived by an active human exception record (`EXC-YYYYMMDD-###.md`).
 
 ### 2.4 Overall Project Lifecycle Status (`lifecycle_status`)
-- `active`: Project actively moving through Stages 0 to 6.
-- `completed_terminal`: Stage 6 approved and sealed. System is live in production under operational monitoring.
-- `reopened_maintenance`: Reopened for a subsequent release cycle (e.g. v1.1 or v2.0) under explicit human authorization.
+- `active`: Project actively moving through Stages 0 to 6 within current milestone.
+- `completed_terminal`: Stage 6 approved and sealed. Milestone is frozen in production.
+- `reopened_maintenance`: Reopened for a subsequent milestone cycle (e.g. v1.1 or v2.0) under explicit human authorization.
 - `paused`: Project temporarily shelved by stakeholder instruction.
 
 ---
@@ -78,15 +80,18 @@ Represents the micro lifecycle of an individual deliverable artifact:
 ## 3. Transition Event Specifications
 
 ### 3.1 `INIT_PROJECT`
-- **Purpose**: Initializes project manifest and initial state file.
+- **Purpose**: Initializes project manifest and initial state file for Milestone 1.
 - **Trigger**: Project bootstrap initiated.
 - **Preconditions**:
   - `project.manifest.json` conforms to `schemas/project-manifest.schema.json`.
 - **State Mutation**:
+  - `milestone_id` set to initial milestone (e.g. `M-1.0.0`).
+  - `milestone_name` set to initial title (e.g. `Initial MVP Release`).
   - `lifecycle_status` set to `active`.
   - `current_stage` set to `0` (Discovery & Problem Formulation).
   - `stage_status` set to `not_started`.
   - `stage_history` initialized as empty array `[]`.
+  - `archived_milestones` initialized as empty array `[]`.
   - `current_stage_detail.deliverables` populated with Stage 0 mandatory deliverables (`PRD-CORE`).
 
 ---
@@ -126,7 +131,7 @@ Represents the micro lifecycle of an individual deliverable artifact:
   - If `result == "passed"`:
     - Deliverable `validation_status` set to `passed`.
     - Deliverable `status` transitions to `verified`.
-    - Evidence object appended to `deliverable.evidence[]`.
+    - Evidence object appended to `deliverable.evidence[]` capturing `type`, `procedure`, `result: "passed"`, `summary`, `exit_code` (nullable), `commit_sha`, `evidence_hash` (nullable), `evidence_ref`, `verified_at`, `verified_by`, `actor_type`.
   - If `result == "failed"`:
     - Deliverable `validation_status` set to `failed`.
     - Deliverable `status` reverts to `in_progress`.
@@ -152,7 +157,7 @@ Represents the micro lifecycle of an individual deliverable artifact:
 - **Purpose**: Halts stage progression upon detecting an unresolvable requirement gap, missing prerequisite, or failing gate invariant.
 - **Trigger**: Controller Halt rule triggered.
 - **Preconditions**:
-  - Requirement gap or validation failure identified.
+  - Requirement gap, expired exception, or validation failure identified.
 - **State Mutation**:
   - `stage_status` transitions to `blocked`.
   - Affected deliverable `status` set to `blocked`.
@@ -181,6 +186,7 @@ Represents the micro lifecycle of an individual deliverable artifact:
   - Zero open RFCs with `is_blocking: true`.
   - Zero expired exceptions (`expiration_date < current_date()`).
   - Stage Gate Exit Package compiled at `current_stage_detail.exit_package.path` matching `gate-exit-package-template.md`.
+  - All waived deliverables are explicitly recorded in Section 3 and Section 7 of the Exit Package with compensating controls and residual risks.
 - **State Mutation**:
   - `exit_package.status` set to `submitted_for_review`.
   - `exit_package.submitted_at` set to current timestamp.
@@ -190,14 +196,22 @@ Represents the micro lifecycle of an individual deliverable artifact:
 
 ---
 
-### 3.9 `APPROVE_GATE` (Two-Phase Handshake: Phase 2)
-- **Purpose**: Authorized human grants gate exit approval.
-- **Trigger**: Explicit human confirmation in development chat (Solo Mode) or approved PR review (Team Mode).
+### 3.9 `APPROVE_GATE` (Two-Phase Handshake: Phase 2 — Interactive Protocol)
+- **Purpose**: Authorized human grants gate exit approval through an interactive workflow.
+- **Trigger**: Human executes `playbook approve --gate <N>` in interactive terminal OR issues explicit in-chat confirmation (Solo Mode) / PR review sign-off (Team Mode).
+- **Interactive TTY Enforcement Guard**:
+  - The CLI gate approval command requires an interactive terminal (`isatty(stdin) == true`).
+  - Any non-interactive invocation (e.g. headless script, piped stdin, automated subagent call, `--yes`, `--force`) **must be rejected immediately** with an error code.
+  - The human is prompted interactively to confirm:
+    1. Human Reviewer Full Name.
+    2. Professional Role / Authority.
+    3. Approval Mode (`solo` or `team`).
+    4. Typed confirmation phrase: `CONFIRM APPROVAL GATE <N>`.
 - **Preconditions**:
   - `stage_status` is `pending_review`.
   - `human_approval.status` is `pending_review`.
   - Approver is an authorized human (AI agent identity strictly prohibited).
-  - Approver provides explicit verifiable reference (chat quote timestamp, PR number, commit SHA).
+  - Verifiable signature reference provided (interactive session ID, chat quote with timestamp, PR review number).
 - **State Mutation**:
   - `human_approval.status` set to `approved`.
   - `human_approval.approved_by` populated with human name/ID.
@@ -254,59 +268,89 @@ Represents the micro lifecycle of an individual deliverable artifact:
   - `lifecycle_status` transitions from `active` to `completed_terminal`.
   - `stage_status` remains `approved`.
   - `current_stage` remains `6` (Locked).
-  - No further stage advancement permitted. Project is officially delivered.
+  - Frozen milestone state snapshot written to `.playbook/milestones/state-<milestone_id>.json`.
+  - No further stage advancement permitted. Milestone is officially sealed.
 
 ---
 
-### 3.13 `REOPEN_LIFECYCLE` (Milestone Iteration)
-- **Purpose**: Reopens a sealed project for a subsequent major release or maintenance milestone (e.g. v1.1 or v2.0).
+### 3.13 `REOPEN_LIFECYCLE` (Milestone Iteration Protocol)
+- **Purpose**: Reopens a sealed project for a subsequent milestone cycle (e.g. v1.1 or v2.0) while permanently preserving prior milestone history.
 - **Trigger**: Authorized human decision to initiate a new milestone.
 - **Preconditions**:
   - `lifecycle_status` is `completed_terminal`.
-  - Authorized human instruction provided.
+  - Explicit human authorization provided.
+- **Milestone Archival Procedure**:
+  - A milestone snapshot entry is constructed and appended to `archived_milestones[]`:
+    - `milestone_id`: Current milestone ID (e.g. `M-1.0.0`).
+    - `milestone_name`: Current milestone title.
+    - `completed_at`: Timestamp of Stage 6 closure.
+    - `final_stage`: `6`.
+    - `stage_history`: Full array of completed stages for that milestone.
+    - `exit_package_ref`: `docs/gates/GATE-6-EXIT-PACKAGE.md`.
+    - `state_snapshot_ref`: `.playbook/milestones/state-<milestone_id>.json`.
+  - Active `milestone_id` updated to new milestone (e.g. `M-1.1.0` or `M-2.0.0`).
+  - Active `milestone_name` updated.
+  - Manifest `active_milestone_id` updated synchronously.
+- **Target Stage Selection**:
+  - **Stage 0 (Discovery & Problem Formulation)**:
+    - Selected when the new milestone represents a fundamental domain expansion, new market audience, major architectural pivot, or new core problem statement.
+    - Requires authoring a new or significantly amended PRD Core.
+  - **Stage 1 (Requirements & Specification)**:
+    - Selected when the new milestone represents incremental feature enhancements, technical debt remediation, or scaling where the foundational problem statement remains valid.
+    - Re-links existing approved Stage 0 Problem Statement from `archived_milestones` and begins with new feature specifications (`REQ-XXX`).
 - **State Mutation**:
-  - `lifecycle_status` transitions to `reopened_maintenance`.
-  - `current_stage` set to target stage (Stage 0 for new problem scope, Stage 1 for defined feature expansion).
+  - `lifecycle_status` set to `reopened_maintenance`.
+  - `current_stage` set to selected target stage (0 or 1).
   - `stage_status` set to `not_started`.
-  - `project.manifest.json` version updated to reflect new milestone target.
+  - `stage_history` re-initialized to empty array `[]` for the active milestone.
+  - `current_stage_detail` populated with deliverables for the target stage.
 
 ---
 
-## 4. Deterministic Transition Matrix
+## 4. The Four Levels of Evidence Assurance
 
-| Current Stage Status | Event | Preconditions Satisfied? | New Stage Status | Deliverable Status Impact | Permitted Actor |
-| :--- | :--- | :--- | :--- | :--- | :--- |
-| `not_started` | `START_STAGE` | Prior stage approved in history | `in_progress` | All stay `not_started` | Agent / Human |
-| `in_progress` | `RECORD_DELIVERABLE` | File physically exists on disk | `in_progress` | Target deliverable -> `completed` | Agent / Human |
-| `in_progress` | `RECORD_EVIDENCE` | Verification `result == "passed"` | `in_progress` | Target deliverable -> `verified` | Agent / CI / Human |
-| `in_progress` | `RECORD_EVIDENCE` | Verification `result == "failed"` | `in_progress` | Target deliverable -> `in_progress` | Agent / CI / Human |
-| `in_progress` | `RECORD_EXCEPTION` | Valid human exception record | `in_progress` | Target deliverable -> `waived` | **Human Only** |
-| `in_progress` | `TRIGGER_HALT` | Requirement gap or check failure | `blocked` | Target deliverable -> `blocked` | Controller / Agent |
-| `blocked` | `RESOLVE_HALT` | Open blocking RFC resolved | `in_progress` | Blocked deliverable -> `in_progress` | Human / Agent |
-| `in_progress` | `REQUEST_HUMAN_APPROVAL` | 100% deliverables verified/waived | `pending_review` | No deliverable change | Agent |
-| `pending_review` | `APPROVE_GATE` | Human sign-off verified | `approved` | All deliverables remain locked | **Human Only** |
-| `pending_review` | `REJECT_GATE` | Human requests rework | `in_progress` | Flagged deliverables -> `in_progress` | **Human Only** |
-| `approved` | `ADVANCE_STAGE` | `current_stage < 6` | `not_started` | New stage deliverables allocated | Agent / Human |
-| `approved` | `CLOSE_LIFECYCLE` | `current_stage == 6` | `approved` (terminal) | All deliverables sealed | **Human Only** |
-| `completed_terminal` | `REOPEN_LIFECYCLE` | Human milestone authorization | `not_started` | Reopened stage deliverables allocated | **Human Only** |
+To maintain intellectual honesty, validation evidence is evaluated across four distinct assurance levels:
+
+```
+┌────────────────────────────────────────────────────────┐
+│ Level 4: Validation Correctness                        │
+│ (Human review & AST checks assert requirement validity)│
+└────────────────────────────────────────────────────────┘
+                           ▲
+┌────────────────────────────────────────────────────────┐
+│ Level 3: Evidence Authenticity                         │
+│ (Signed Git commits, OIDC CI tokens, verified actor)   │
+└────────────────────────────────────────────────────────┘
+                           ▲
+┌────────────────────────────────────────────────────────┐
+│ Level 2: File Integrity                                │
+│ (SHA-256 hash match proves file has not been altered)  │
+└────────────────────────────────────────────────────────┘
+                           ▲
+┌────────────────────────────────────────────────────────┐
+│ Level 1: File Existence                                │
+│ (File physically exists at evidence_ref relative path) │
+└────────────────────────────────────────────────────────┘
+```
+
+1. **Level 1: File Existence**:
+   - Asserts that the referenced proof file physically exists on disk (`file_exists(evidence_ref) == true`).
+   - Verified deterministically by CLI.
+2. **Level 2: File Integrity (SHA-256 Hash)**:
+   - For file-based proof (logs, reports, screenshots), computes SHA-256 and asserts `sha256(file) == evidence_hash`.
+   - Proves the evidence file has not been tampered with or corrupted after verification was recorded.
+   - *Limitation*: A hash proves file immutability; it **does not** prove authenticity (an agent or attacker could generate dummy logs and compute their valid hash).
+   - *Optional for non-file reviews*: Null for inline manual review notes where no dedicated file artifact is generated.
+3. **Level 3: Evidence Authenticity**:
+   - Asserts that the recorded `verified_by` actor genuinely executed the verification in a trusted environment.
+   - Enforced by server-side CI runners (e.g. GitHub Actions executing checks and outputting signed attestations), signed Git commits (`commit_sha`), or cryptographic identity tokens.
+4. **Level 4: Validation Correctness**:
+   - Asserts that the verification procedure genuinely tested the required invariant (e.g. that unit tests asserted real boundary conditions rather than empty assertions `assert True`).
+   - Evaluated by Human Peer Review (Tier 4) or advanced AST semantic checkers (Tier 5).
 
 ---
 
-## 5. Five Tiers of Governance Verification
-
-To maintain intellectual honesty, automated tools and agents evaluate rules according to five distinct validation tiers:
-
-| Tier | Validation Level | Capabilities | Limitations |
-| :--- | :--- | :--- | :--- |
-| **Tier 1** | **JSON Schema Validation** | Validates structural shape, mandatory keys, data types, and enum values. | Cannot verify semantic truth, file existence, or human identity. |
-| **Tier 2** | **Deterministic CLI Checks** | Verifies physical file existence, non-empty files, git working tree state, RFC blocking flags, and exception expiration dates. | Cannot verify the quality of prose or whether tests provide real coverage. |
-| **Tier 3** | **External Evidence Checks** | Verifies tool exit codes, parses test runner summaries, inspects CI artifact hashes. | Cannot prevent local mock tampering unless run in an isolated hermetic CI runner. |
-| **Tier 4** | **Human Review & Authority** | Verifies business problem alignment, architecture trade-offs, UX acceptability, exception necessity, and gate sign-off. | Dependent on human diligence and domain review; not real-time. |
-| **Tier 5** | **AI Semantic Reasoning** | Detects unstated assumptions, ambiguous requirements, constitutional misalignments, and drafting gaps. | Non-deterministic; prone to completion bias if unconstrained; strictly forbidden from self-approving gates. |
-
----
-
-## 6. Machine Validation Invariants (Tooling Rules)
+## 5. Machine Validation Invariants (Tooling Rules)
 
 Automated governance tools (e.g. `playbook validate`) enforce compliance by evaluating these invariant rules against `.playbook/state.json`:
 
@@ -323,8 +367,11 @@ RULE 03: VERIFICATION_EVIDENCE_INTEGRITY
            - deliverable.validation_status == "passed"
            - length(deliverable.evidence) >= 1
            - At least one evidence entry has result == "passed"
-           - If evidence.type IN ["automated_test", "build_typecheck", "static_analysis", "schema_validation"],
-             THEN evidence.exit_code == 0.
+           - If evidence.type IN ["automated_test", "build_typecheck", "static_analysis", "schema_validation"]:
+               THEN evidence.exit_code == 0
+           - If evidence.evidence_hash IS NOT NULL:
+               THEN file_exists(evidence.evidence_ref) == TRUE
+               AND sha256(evidence.evidence_ref) == evidence.evidence_hash.
 
 RULE 04: WAIVER_EXCEPTION_INTEGRITY
          For every deliverable where status == "waived":
@@ -332,7 +379,9 @@ RULE 04: WAIVER_EXCEPTION_INTEGRITY
            - deliverable.exception_ref IS NOT NULL
            - An exception record with matching exception_id exists in current_stage_detail.exceptions
            - exception.status == "active"
-           - exception.expiration_date >= current_date().
+           - exception.expiration_date >= current_date()
+           - IF exception.status != "active" OR exception.expiration_date < current_date():
+               THEN waiver is INVALID and stage_status CANNOT be "pending_review" or "approved".
 
 RULE 05: NO_BLOCKING_RFCS_ON_REVIEW
          If stage_status IN ["pending_review", "approved"],
@@ -346,9 +395,11 @@ RULE 06: HUMAN_SOVEREIGNTY_GUARD
            - human_approval.signature_reference IS NOT NULL AND human_approval.signature_reference != ""
            - human_approval.approved_at IS NOT NULL.
 
-RULE 07: STAGE_BOUNDARY_INTEGRITY
+RULE 07: STAGE_BOUNDARY_AND_MILESTONE_INTEGRITY
          - current_stage >= 0 AND current_stage <= 6
          - IF current_stage == 6 AND stage_status == "approved":
-           lifecycle_status CANNOT be "active" (must transition to "completed_terminal").
+           lifecycle_status CANNOT be "active" (must be "completed_terminal").
          - ADVANCE_STAGE cannot execute when current_stage == 6.
+         - IF lifecycle_status == "reopened_maintenance":
+           length(archived_milestones) >= 1.
 ```

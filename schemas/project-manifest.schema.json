@@ -2,13 +2,14 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://ai-engineering-playbook.org/schemas/project-manifest.schema.json",
   "title": "AI Engineering Playbook - Project Manifest Schema",
-  "description": "Technology-agnostic configuration manifest defining project identity, playbook standards, artifact paths, active lifecycle stage, and enabled governance capabilities.",
+  "description": "Technology-agnostic configuration manifest defining project identity, playbook standards, artifact paths, active lifecycle stage, milestone pointer, and enabled governance capabilities.",
   "type": "object",
   "required": [
     "$schema",
     "schema_version",
     "project_id",
     "project_name",
+    "active_milestone_id",
     "playbook",
     "tech_stack",
     "paths",
@@ -36,6 +37,11 @@
       "minLength": 1,
       "maxLength": 100,
       "description": "Human-readable display name of the project."
+    },
+    "active_milestone_id": {
+      "type": "string",
+      "pattern": "^M-[a-zA-Z0-9.-]+$",
+      "description": "Active milestone identifier (e.g. M-1.0.0, M-2026.Q4) matching project state."
     },
     "description": {
       "type": "string",

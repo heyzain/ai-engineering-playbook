@@ -3,6 +3,8 @@
   "schema_version": "1.0.0",
   "project_id": "zentrix-lms",
   "playbook_version": "1.0.0",
+  "milestone_id": "M-1.0.0",
+  "milestone_name": "MVP Course Platform",
   "lifecycle_status": "active",
   "current_stage": 2,
   "stage_status": "approved",
@@ -27,6 +29,8 @@
             "result": "passed",
             "summary": "Constitutional compliance verified by human architect.",
             "exit_code": 0,
+            "commit_sha": "7b3f9a1",
+            "evidence_hash": "sha256:b94d27b9934d3e08a52e52d7da7dabfac484efe37a5380ee9088f7ace2efcde9",
             "evidence_ref": ".playbook/logs/stage-2-arch-audit.log",
             "verified_at": "2026-10-31T11:30:00Z",
             "verified_by": "human:zain",
@@ -50,6 +54,8 @@
             "result": "passed",
             "summary": "All 18 JSON schemas validate under Draft 2020-12 meta-schema.",
             "exit_code": 0,
+            "commit_sha": "7b3f9a1",
+            "evidence_hash": "sha256:c3ab8ff13720e8ad9047dd39466b3c8974e592f2fa383d4a3960714caef0c4f2",
             "evidence_ref": ".playbook/logs/stage-2-schema-compilation.log",
             "verified_at": "2026-10-31T11:40:00Z",
             "verified_by": "agent:controller",
@@ -73,6 +79,8 @@
             "result": "passed",
             "summary": "Benchmark deliverable waived per authorized exception EXC-20261031-001.",
             "exit_code": null,
+            "commit_sha": "7b3f9a1",
+            "evidence_hash": null,
             "evidence_ref": "docs/exceptions/EXC-20261031-001.md",
             "verified_at": "2026-10-31T11:45:00Z",
             "verified_by": "human:zain",
@@ -151,6 +159,7 @@
       }
     }
   ],
+  "archived_milestones": [],
   "last_updated": {
     "timestamp": "2026-10-31T12:00:00Z",
     "updated_by": "Zain Ali",

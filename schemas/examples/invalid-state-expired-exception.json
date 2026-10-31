@@ -3,6 +3,8 @@
   "schema_version": "1.0.0",
   "project_id": "zentrix-lms",
   "playbook_version": "1.0.0",
+  "milestone_id": "M-1.0.0",
+  "milestone_name": "MVP Course Platform",
   "lifecycle_status": "active",
   "current_stage": 4,
   "stage_status": "approved",
@@ -27,6 +29,8 @@
             "result": "passed",
             "summary": "Integration tests waived temporarily.",
             "exit_code": null,
+            "commit_sha": "7b3f9a1",
+            "evidence_hash": null,
             "evidence_ref": "docs/exceptions/EXC-20260901-001.md",
             "verified_at": "2026-09-01T10:00:00Z",
             "verified_by": "human:zain",
@@ -66,6 +70,7 @@
     }
   },
   "stage_history": [],
+  "archived_milestones": [],
   "last_updated": {
     "timestamp": "2026-10-31T10:00:00Z",
     "updated_by": "Zain Ali",

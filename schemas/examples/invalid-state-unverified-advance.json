@@ -3,6 +3,8 @@
   "schema_version": "1.0.0",
   "project_id": "zentrix-lms",
   "playbook_version": "1.0.0",
+  "milestone_id": "M-1.0.0",
+  "milestone_name": "MVP Course Platform",
   "lifecycle_status": "active",
   "current_stage": 3,
   "stage_status": "pending_review",
@@ -42,6 +44,7 @@
     }
   },
   "stage_history": [],
+  "archived_milestones": [],
   "last_updated": {
     "timestamp": "2026-10-31T09:00:00Z",
     "updated_by": "agent:controller",

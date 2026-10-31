@@ -2,18 +2,21 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://ai-engineering-playbook.org/schemas/project-state.schema.json",
   "title": "AI Engineering Playbook - Project State Schema",
-  "description": "Technology-agnostic machine-readable state model representing lifecycle progression, deliverable completion, multi-modal verification evidence, active exceptions, blocking RFCs, and human approvals.",
+  "description": "Technology-agnostic machine-readable state model representing lifecycle progression, deliverable completion, multi-modal verification evidence, active exceptions, blocking RFCs, milestone preservation, and human approvals.",
   "type": "object",
   "required": [
     "$schema",
     "schema_version",
     "project_id",
     "playbook_version",
+    "milestone_id",
+    "milestone_name",
     "lifecycle_status",
     "current_stage",
     "stage_status",
     "current_stage_detail",
     "stage_history",
+    "archived_milestones",
     "last_updated"
   ],
   "additionalProperties": false,
@@ -36,6 +39,15 @@
       "type": "string",
       "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$",
       "description": "Playbook standard version governing this state (e.g. 1.0.0)."
+    },
+    "milestone_id": {
+      "type": "string",
+      "pattern": "^M-[a-zA-Z0-9.-]+$",
+      "description": "Active milestone identifier (e.g. M-1.0.0, M-2026.Q4) matching project manifest."
+    },
+    "milestone_name": {
+      "type": "string",
+      "description": "Human-readable title of current project milestone."
     },
     "lifecycle_status": {
       "type": "string",
@@ -227,6 +239,22 @@
                         "null"
                       ],
                       "description": "Process exit code if automated execution (0 for success); null for manual reviews."
+                    },
+                    "commit_sha": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "pattern": "^([a-f0-9]{7}|[a-f0-9]{40})$",
+                      "description": "Git commit SHA of workspace at the time verification was performed."
+                    },
+                    "evidence_hash": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "pattern": "^sha256:[a-f0-9]{64}$",
+                      "description": "SHA-256 integrity hash of evidence file (e.g. log, report, screenshot); null for manual reviews."
                     },
                     "evidence_ref": {
                       "type": "string",
@@ -544,7 +572,7 @@
     },
     "stage_history": {
       "type": "array",
-      "description": "Immutable ledger of previously completed and approved lifecycle stages.",
+      "description": "Immutable ledger of previously completed and approved lifecycle stages for the active milestone.",
       "items": {
         "type": "object",
         "required": [
@@ -623,6 +651,55 @@
                 "type": "string"
               }
             }
+          }
+        }
+      }
+    },
+    "archived_milestones": {
+      "type": "array",
+      "description": "Immutable archive of previously completed milestones, preserving full stage histories, exit packages, and state snapshots.",
+      "items": {
+        "type": "object",
+        "required": [
+          "milestone_id",
+          "milestone_name",
+          "completed_at",
+          "final_stage",
+          "stage_history",
+          "exit_package_ref"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "milestone_id": {
+            "type": "string",
+            "description": "Identifier of archived milestone."
+          },
+          "milestone_name": {
+            "type": "string",
+            "description": "Title of archived milestone."
+          },
+          "completed_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Timestamp when milestone was sealed."
+          },
+          "final_stage": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 6,
+            "description": "Terminal stage number of milestone."
+          },
+          "stage_history": {
+            "type": "array",
+            "description": "Preserved stage history of archived milestone."
+          },
+          "exit_package_ref": {
+            "type": "string",
+            "description": "Relative path to final Stage 6 exit package for milestone."
+          },
+          "state_snapshot_ref": {
+            "type": "string",
+            "description": "Relative path to frozen milestone state JSON snapshot."
           }
         }
       }

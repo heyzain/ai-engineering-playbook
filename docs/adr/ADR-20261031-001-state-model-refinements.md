@@ -64,12 +64,14 @@ Task 003 introduced machine-readable governance via `schemas/project-manifest.sc
 
 ## 5. Chosen Solution & Rationale
 
-We chose **Alternative B**.
+We chose **Alternative B** with Task 003.2 design hardening:
 
 1. **Orthogonal Taxonomy**: A stage is `in_progress` while its deliverables are being authored (`completed`) and tested (`verified` or `waived`). Once all deliverables are verified/waived and the Exit Package is submitted, the stage transitions to `pending_review`.
-2. **Multi-Modal Evidence**: The `evidence[]` block now captures `type` (automated, manual, visual, accessibility, architecture), `procedure` (command or inspection protocol), `result` (`passed` | `failed`), `exit_code` (nullable), and `evidence_ref`.
-3. **Two-Phase Handshake**: The agent's authority boundary strictly terminates upon setting `pending_review`. Human approval is required to transition to `approved`.
-4. **Lifecycle Boundaries**: `lifecycle_status` added to state schema (`active`, `completed_terminal`, `reopened_maintenance`, `paused`). Stage 6 approved triggers `CLOSE_LIFECYCLE`.
+2. **Multi-Modal Evidence & Integrity**: The `evidence[]` block captures `type`, `procedure`, `result`, `exit_code` (nullable), `commit_sha`, `evidence_hash` (nullable SHA-256 for file proof), and `evidence_ref`. Four assurance levels (Existence, Integrity, Authenticity, Correctness) are formally differentiated.
+3. **Interactive Human Approval Guard**: The `playbook approve --gate <N>` command mandates an active interactive terminal session (`isatty`). Scripted, piped, or non-interactive executions (`--yes`, `--force`) are strictly rejected. The agent's authority boundary terminates upon setting `pending_review`.
+4. **Milestone History Preservation**: `milestone_id`, `milestone_name`, and `archived_milestones[]` added to schema. Completed milestones are frozen to `.playbook/milestones/state-<milestone_id>.json` and preserved without overwriting historical audit trails upon `REOPEN_LIFECYCLE`.
+5. **Waiver vs. Verification Rigor**: A waiver is not verification. Waived deliverables require active, non-expired exception records (`EXC-*`) and must remain prominent in exit packages with compensating controls and residual risks.
+6. **Lifecycle Boundaries**: `lifecycle_status` added to state schema (`active`, `completed_terminal`, `reopened_maintenance`, `paused`). Stage 6 approved triggers `CLOSE_LIFECYCLE`. Transition to Stage 7 is barred.
 
 ---
 
@@ -80,24 +82,27 @@ We chose **Alternative B**.
 - Manual verification (e.g. accessibility, UI contrast, responsive design) is first-class and verifiable.
 - Accidental progression to non-existent Stage 7 is physically blocked.
 - Honest, practical human approval boundary for both Solo Developer Mode and Team Mode.
+- Previous milestone histories are permanently archived and traceable across major release cycles.
+- Evidence integrity is verified via SHA-256 without over-claiming cryptographic authenticity on local files.
 
 ### Negative Consequences
 - Existing Task 003 examples required refactoring to align with the refined schema.
-- Automated tooling must handle nullable `exit_code` when inspecting non-automated evidence.
+- Automated tooling must handle nullable `exit_code` and `evidence_hash` when inspecting non-file or non-automated evidence.
 
 ---
 
 ## 7. Reversibility & Migration Strategy
 
 - **Reversibility**: High. The state model remains pure JSON Schema Draft 2020-12 without external library coupling.
-- **Migration**: Update `.playbook/state.json` files by adding `lifecycle_status: "active"`, replacing deliverable `status: "approved"` with `status: "verified"` or `status: "waived"`, and replacing stage `completed` with `pending_review` when awaiting human review.
+- **Migration**: Update `.playbook/state.json` files by adding `lifecycle_status: "active"`, `milestone_id: "M-1.0.0"`, `milestone_name`, `archived_milestones: []`, replacing deliverable `status: "approved"` with `status: "verified"` or `status: "waived"`, and replacing stage `completed` with `pending_review` when awaiting human review.
 
 ---
 
 ## 8. Traceability
 
-- **Resolves**: Task 003.1 Audit Findings (Inconsistent taxonomy, restrictive evidence, ambiguous human approval, Stage 6 boundary).
+- **Resolves**: Task 003.1 & Task 003.2 Hardening (Inconsistent taxonomy, restrictive evidence, interactive approval guards, milestone history preservation, waiver semantics).
 - **Related Playbook Documents**:
+  - [`schemas/project-manifest.schema.json`](../../schemas/project-manifest.schema.json)
   - [`schemas/project-state.schema.json`](../../schemas/project-state.schema.json)
   - [`governance/state-machine.md`](../../governance/state-machine.md)
   - [`schemas/README.md`](../../schemas/README.md)

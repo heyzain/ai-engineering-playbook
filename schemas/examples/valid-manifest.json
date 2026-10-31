@@ -3,6 +3,7 @@
   "schema_version": "1.0.0",
   "project_id": "zentrix-lms",
   "project_name": "Zentrix Learning Management System",
+  "active_milestone_id": "M-1.0.0",
   "description": "Multi-role educational platform supporting modular course delivery, interactive assessments, and real-time tutoring sessions.",
   "playbook": {
     "version": "1.0.0",

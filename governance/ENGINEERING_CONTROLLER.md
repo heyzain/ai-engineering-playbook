@@ -173,26 +173,31 @@ Stage transitions represent irreversible or high-cost milestones. Transitions mu
    - The agent updates `.playbook/state.json`: sets `exit_package.status = "submitted_for_review"`, `human_approval.status = "pending_review"`, and `stage_status = "pending_review"`.
    - **The agent's authority boundary strictly halts here.**
 2. **Human Review and Sign-Off (Phase 2 — Human Sovereign Decision)**:
+   - **Interactive CLI Guard**:
+     - The CLI approval command (`playbook approve --gate <N>`) strictly enforces an active interactive terminal session (`isatty`). Non-interactive script invocations, automated tool calls, or bypass flags (`--yes`, `--force`) are immediately rejected.
+     - The human reviewer interactively inputs reviewer credentials and explicitly types the confirmation phrase (`CONFIRM APPROVAL GATE <N>`).
    - **Solo Developer Mode**:
      - Pull requests are **optional** for solo projects to minimize overhead.
-     - The human engineer reviews the Stage Exit Package and issues an explicit confirmation directly in the development conversation (e.g., *"Approved Stage 1 Exit Package: Proceed to Stage 2"*).
-     - The agent records this explicit confirmation in `.playbook/state.json` under `human_approval` (`approved_by`, `role`, `approval_mode: "solo"`, `decision: "GATE_APPROVED"`, `signature_reference: "chat-msg-timestamp"`, `approved_at`), sets `stage_status = "approved"`, and logs the commit message before proceeding.
+     - The human engineer reviews the Stage Exit Package and issues explicit confirmation via interactive CLI or development chat.
+     - The approval record captures `approved_by`, `role`, `approval_mode: "solo"`, `decision: "GATE_APPROVED"`, `signature_reference`, and `approved_at`.
    - **Team / Multi-Contributor Mode**:
      - Stage transitions are formally requested and approved via Pull Request review approvals, designated issue sign-offs, or formal code review ceremonies before merge, recording PR review ID and commit SHA.
 3. **Transition Milestone (`ADVANCE_STAGE` / `CLOSE_LIFECYCLE`)**:
    - For Stages 0 through 5: Upon explicit human approval, the repository advances to the subsequent stage (`ADVANCE_STAGE`) per [state-machine.md](state-machine.md). The completed stage is appended to `stage_history` in `.playbook/state.json`.
-   - For Stage 6: Approval triggers `CLOSE_LIFECYCLE`, transitioning `lifecycle_status` to `completed_terminal`. Stage advancement beyond Stage 6 is strictly barred.
+   - For Stage 6: Approval triggers `CLOSE_LIFECYCLE`, transitioning `lifecycle_status` to `completed_terminal` and archiving a frozen milestone snapshot to `.playbook/milestones/state-<milestone_id>.json`. Stage advancement beyond Stage 6 is strictly barred.
    - The state transition is committed to version control.
 
 ---
 
-## 9. Exception Handling and Recording
+## 9. Exception Handling and Waiver Semantics
 
 In exceptional engineering situations (e.g., critical hotfixes, spike prototypes, temporary external dependency outages), a stage-gate requirement may need to be waived or conditionally bypassed.
 
-### Exception Rules
+### Exception and Waiver Rules
+- **Waiver is NOT Verification**: A waived requirement (`status: "waived"`, `validation_status: "waived"`) is strictly distinct from verified completion. It explicitly represents unverified risk accepted by human authority.
 - **No Self-Granted Exceptions**: AI agents are strictly forbidden from waiving, bypassing, or deferring any stage gate rule independently.
-- **Human Authority**: Only an authorized human engineer may grant an exception.
+- **Active Exception Precondition**: A waiver is legally valid only while backed by an active, authorized exception record (`EXC-YYYYMMDD-###.md`) with a valid expiration date (`expiration_date >= current_date()`). If an exception expires or is revoked, the waiver is voided and stage progression is blocked.
+- **Exit Package Visibility**: Waived deliverables must remain prominently documented in Section 3 and Section 7 of the Stage Gate Exit Package, recording justification, residual risks, compensating controls, and expiration date.
 - **Mandatory Individual Exception Record**: Every exception must be stored as an individual record under `governance/exceptions/` (e.g., `governance/exceptions/EXC-YYYYMMDD-###.md`) using the [Gate Exception Record Template](../templates/exception-record-template.md) and recorded in `.playbook/state.json` (`exceptions[]`) before progression proceeds. Loose, unrecorded, or verbal exceptions are invalid.
 
 ### Exception Record Format
