@@ -104,6 +104,64 @@ describe("SchemaValidator Core", () => {
     assert.match(formatted, /Schema validation failed/);
   });
 
+  test("correctly rejects canonical invalid-state-agent-self-approval.json fixture", () => {
+    const fixturePath = path.join(examplesDir, "invalid-state-agent-self-approval.json");
+    const data = JSON.parse(fs.readFileSync(fixturePath, "utf-8"));
+
+    const result = validator.validateState(data);
+    assert.equal(result.valid, false, "Expected agent self-approval to fail validation");
+    assert.ok(result.errors.length > 0, "Expected validation errors for agent self-approval");
+    assert.ok(
+      result.errors.some((e) => e.instancePath.includes("actor_type") || e.keyword === "const" || e.keyword === "if"),
+      "Expected actor_type human sovereignty failure"
+    );
+  });
+
+  test("correctly rejects canonical invalid-state-unverified-advance.json fixture", () => {
+    const fixturePath = path.join(examplesDir, "invalid-state-unverified-advance.json");
+    const data = JSON.parse(fs.readFileSync(fixturePath, "utf-8"));
+
+    const result = validator.validateState(data);
+    assert.equal(result.valid, false, "Expected unverified advancement to fail validation");
+    assert.ok(result.errors.length > 0, "Expected validation errors for unverified advancement");
+    assert.ok(
+      result.errors.some(
+        (e) =>
+          e.instancePath.includes("validation_status") ||
+          e.instancePath.includes("evidence") ||
+          e.keyword === "minItems" ||
+          e.keyword === "const"
+      ),
+      "Expected deliverable verification evidence failure"
+    );
+  });
+
+  test("correctly rejects canonical invalid-state-unresolved-rfc.json fixture", () => {
+    const fixturePath = path.join(examplesDir, "invalid-state-unresolved-rfc.json");
+    const data = JSON.parse(fs.readFileSync(fixturePath, "utf-8"));
+
+    const result = validator.validateState(data);
+    assert.equal(result.valid, false, "Expected unresolved blocking RFC to fail validation");
+    assert.ok(result.errors.length > 0, "Expected validation errors for blocking RFC");
+    assert.ok(
+      result.errors.some((e) => e.instancePath.includes("rfcs") || e.keyword === "not"),
+      "Expected blocking RFC failure"
+    );
+  });
+
+  test("correctly rejects canonical invalid-state-expired-exception.json fixture", () => {
+    const fixturePath = path.join(examplesDir, "invalid-state-expired-exception.json");
+    const data = JSON.parse(fs.readFileSync(fixturePath, "utf-8"));
+
+    const result = validator.validateState(data);
+    assert.equal(result.valid, false, "Expected expired exception to fail validation");
+    assert.ok(result.errors.length > 0, "Expected validation errors for expired exception");
+    assert.ok(
+      result.errors.some((e) => e.instancePath.includes("exceptions") || e.keyword === "not"),
+      "Expected expired exception failure"
+    );
+  });
+
   test("rejects manifest with missing required fields", () => {
     const invalidManifest = {
       $schema: "https://ai-engineering-playbook.org/schemas/project-manifest.schema.json",

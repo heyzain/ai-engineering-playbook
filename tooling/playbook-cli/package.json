@@ -14,7 +14,8 @@
     "README.md"
   ],
   "scripts": {
-    "build": "tsc && node -e \"const fs = require('fs'); fs.cpSync('src/schemas', 'dist/src/schemas', {recursive: true});\"",
+    "sync-schemas": "node -e \"const fs = require('fs'); const path = require('path'); const src = path.resolve('../../schemas'); if (fs.existsSync(src)) { fs.copyFileSync(path.join(src, 'project-manifest.schema.json'), 'src/schemas/project-manifest.schema.json'); fs.copyFileSync(path.join(src, 'project-state.schema.json'), 'src/schemas/project-state.schema.json'); }\"",
+    "build": "npm run sync-schemas && tsc && node -e \"const fs = require('fs'); fs.cpSync('src/schemas', 'dist/src/schemas', {recursive: true});\"",
     "watch": "tsc --watch",
     "test": "node --test dist/tests/**/*.test.js",
     "pretest": "npm run build",

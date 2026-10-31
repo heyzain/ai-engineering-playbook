@@ -118,13 +118,31 @@ export class SchemaValidator {
       return `[${target}] Schema validation passed.`;
     }
 
+    // Filter out generic meta-errors (e.g. "must match then schema") if specific constraint errors exist
+    const specificErrors = errors.filter((e) => e.keyword !== "if");
+    const displayErrors = specificErrors.length > 0 ? specificErrors : errors;
+
     const lines: string[] = [
-      `[${target}] Schema validation failed with ${errors.length} error${errors.length > 1 ? "s" : ""}:`,
+      `[${target}] Schema validation failed with ${displayErrors.length} error${displayErrors.length > 1 ? "s" : ""}:`,
     ];
 
-    for (const [index, err] of errors.entries()) {
+    for (const [index, err] of displayErrors.entries()) {
       const field = err.instancePath === "/" || !err.instancePath ? "root" : err.instancePath;
-      lines.push(`  ${index + 1}. Field: ${field} - ${err.message} (${err.keyword})`);
+      let hint = "";
+
+      if (err.keyword === "not" && err.instancePath.includes("/rfcs/")) {
+        hint = " [Unresolved blocking RFC detected; stage cannot be in review or approved]";
+      } else if (err.keyword === "not" && err.instancePath.includes("/exceptions/")) {
+        hint = " [Expired or revoked exception detected; stage cannot be in review or approved]";
+      } else if (err.keyword === "const" && err.instancePath === "/last_updated/actor_type") {
+        hint = " [Human Sovereignty violation: AI agent cannot approve stage transitions]";
+      } else if (err.keyword === "const" && err.instancePath.endsWith("/validation_status")) {
+        hint = " [Deliverables with status 'verified' must have validation_status: 'passed']";
+      } else if (err.keyword === "minItems" && err.instancePath.endsWith("/evidence")) {
+        hint = " [Deliverables with status 'verified' must contain at least 1 evidence record]";
+      }
+
+      lines.push(`  ${index + 1}. Field: ${field} - ${err.message}${hint} (${err.keyword})`);
     }
 
     return lines.join("\n");

@@ -100,44 +100,77 @@ export class ProjectScaffolder {
       path.join(targetDir, DEFAULT_PATHS.exceptionsDir),
     ];
 
-    const createdDirs: string[] = [];
-    for (const dir of dirsToCreate) {
-      if (!fs.existsSync(dir)) {
-        fs.mkdirSync(dir, { recursive: true });
-        createdDirs.push(dir);
-      }
-    }
+    const gitkeepDirs = [
+      path.join(targetDir, DEFAULT_PATHS.logsDir),
+      path.join(targetDir, DEFAULT_PATHS.prdDir),
+      path.join(targetDir, DEFAULT_PATHS.adrDir),
+      path.join(targetDir, DEFAULT_PATHS.rfcDir),
+      path.join(targetDir, DEFAULT_PATHS.gatesDir),
+      path.join(targetDir, DEFAULT_PATHS.exceptionsDir),
+    ];
 
-    // 5. Optionally place .gitkeep files in leaf documentation and log folders
-    if (createGitkeeps) {
-      const gitkeepDirs = [
-        path.join(targetDir, DEFAULT_PATHS.logsDir),
-        path.join(targetDir, DEFAULT_PATHS.prdDir),
-        path.join(targetDir, DEFAULT_PATHS.adrDir),
-        path.join(targetDir, DEFAULT_PATHS.rfcDir),
-        path.join(targetDir, DEFAULT_PATHS.gatesDir),
-        path.join(targetDir, DEFAULT_PATHS.exceptionsDir),
-      ];
-      for (const dir of gitkeepDirs) {
-        const gitkeepFile = path.join(dir, ".gitkeep");
-        if (!fs.existsSync(gitkeepFile)) {
-          fs.writeFileSync(gitkeepFile, "", "utf-8");
-        }
-      }
-    }
-
-    // 6. Write manifest and state files
     const manifestPath = path.join(targetDir, DEFAULT_PATHS.manifestFile);
     const statePath = path.join(targetDir, DEFAULT_PATHS.stateFile);
 
-    fs.writeFileSync(manifestPath, JSON.stringify(manifest, null, 2) + "\n", "utf-8");
-    fs.writeFileSync(statePath, JSON.stringify(state, null, 2) + "\n", "utf-8");
+    const createdDirs: string[] = [];
+    const createdFiles: string[] = [];
 
-    return {
-      manifestPath,
-      statePath,
-      createdDirs,
-      overwritten: existing.exists && force,
-    };
+    try {
+      for (const dir of dirsToCreate) {
+        if (!fs.existsSync(dir)) {
+          fs.mkdirSync(dir, { recursive: true });
+          createdDirs.push(dir);
+        }
+      }
+
+      // 5. Optionally place .gitkeep files in leaf documentation and log folders
+      if (createGitkeeps) {
+        for (const dir of gitkeepDirs) {
+          const gitkeepFile = path.join(dir, ".gitkeep");
+          if (!fs.existsSync(gitkeepFile)) {
+            fs.writeFileSync(gitkeepFile, "", "utf-8");
+            createdFiles.push(gitkeepFile);
+          }
+        }
+      }
+
+      // 6. Write manifest and state files
+      fs.writeFileSync(manifestPath, JSON.stringify(manifest, null, 2) + "\n", "utf-8");
+      createdFiles.push(manifestPath);
+
+      fs.writeFileSync(statePath, JSON.stringify(state, null, 2) + "\n", "utf-8");
+      createdFiles.push(statePath);
+
+      return {
+        manifestPath,
+        statePath,
+        createdDirs,
+        overwritten: existing.exists && force,
+      };
+    } catch (err) {
+      // Atomic Rollback: Clean up partially written files and empty directories
+      for (const file of createdFiles) {
+        try {
+          if (fs.existsSync(file)) {
+            fs.unlinkSync(file);
+          }
+        } catch {
+          // ignore cleanup errors
+        }
+      }
+      for (const dir of [...createdDirs].reverse()) {
+        try {
+          if (fs.existsSync(dir)) {
+            const contents = fs.readdirSync(dir);
+            if (contents.length === 0) {
+              fs.rmdirSync(dir);
+            }
+          }
+        } catch {
+          // ignore cleanup errors
+        }
+      }
+      throw err;
+    }
   }
 }

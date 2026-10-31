@@ -280,7 +280,38 @@
                   }
                 }
               }
-            }
+            },
+            "allOf": [
+              {
+                "if": {
+                  "properties": {
+                    "status": { "const": "verified" }
+                  }
+                },
+                "then": {
+                  "properties": {
+                    "validation_status": { "const": "passed" },
+                    "evidence": { "minItems": 1 }
+                  }
+                }
+              },
+              {
+                "if": {
+                  "properties": {
+                    "status": { "const": "waived" }
+                  }
+                },
+                "then": {
+                  "properties": {
+                    "validation_status": { "const": "waived" },
+                    "exception_ref": {
+                      "type": "string",
+                      "pattern": "^EXC-[0-9]{8}-[0-9]{3}$"
+                    }
+                  }
+                }
+              }
+            ]
           }
         },
         "rfcs": {
@@ -738,5 +769,144 @@
         }
       }
     }
-  }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "stage_status": {
+            "const": "approved"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "last_updated": {
+            "properties": {
+              "actor_type": {
+                "const": "human"
+              }
+            }
+          },
+          "current_stage_detail": {
+            "properties": {
+              "human_approval": {
+                "properties": {
+                  "status": {
+                    "const": "approved"
+                  },
+                  "decision": {
+                    "const": "GATE_APPROVED"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "current_stage_detail": {
+            "properties": {
+              "human_approval": {
+                "properties": {
+                  "status": {
+                    "const": "approved"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "last_updated": {
+            "properties": {
+              "actor_type": {
+                "const": "human"
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "stage_status": {
+            "enum": [
+              "pending_review",
+              "approved"
+            ]
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "current_stage_detail": {
+            "properties": {
+              "rfcs": {
+                "items": {
+                  "not": {
+                    "properties": {
+                      "status": {
+                        "const": "pending_decision"
+                      },
+                      "is_blocking": {
+                        "const": true
+                      }
+                    },
+                    "required": [
+                      "status",
+                      "is_blocking"
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "stage_status": {
+            "enum": [
+              "pending_review",
+              "approved"
+            ]
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "current_stage_detail": {
+            "properties": {
+              "exceptions": {
+                "items": {
+                  "not": {
+                    "properties": {
+                      "status": {
+                        "enum": [
+                          "expired",
+                          "revoked"
+                        ]
+                      }
+                    },
+                    "required": [
+                      "status"
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  ]
 }

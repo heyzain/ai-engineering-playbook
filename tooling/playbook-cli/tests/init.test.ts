@@ -170,4 +170,71 @@ describe("ProjectScaffolder and Template Generation", () => {
     // Verify .playbook directory was NOT created
     assert.equal(fs.existsSync(path.join(tempDir, ".playbook")), false);
   });
+
+  test("fails fast before touching disk if state fails schema validation", () => {
+    const manifest = createInitialManifest({
+      projectId: "valid-id",
+      projectName: "Valid Name",
+    });
+    const state = createInitialState({ projectId: "valid-id" });
+    state.current_stage = 7 as any; // Invalid stage
+
+    assert.throws(
+      () => {
+        scaffolder.scaffold({
+          targetDir: tempDir,
+          manifest,
+          state,
+        });
+      },
+      (err: Error) => {
+        assert.match(err.message, /State schema validation failed/);
+        return true;
+      }
+    );
+
+    // Verify .playbook directory was NOT created
+    assert.equal(fs.existsSync(path.join(tempDir, ".playbook")), false);
+  });
+
+  test("atomic rollback cleans up files and empty directories if write failure occurs", () => {
+    const manifest = createInitialManifest({
+      projectId: "rollback-test",
+      projectName: "Rollback Test",
+    });
+    const state = createInitialState({ projectId: "rollback-test" });
+
+    // Mock fs.writeFileSync to throw on state.json
+    const originalWriteFileSync = fs.writeFileSync;
+    let writeCount = 0;
+    fs.writeFileSync = ((filePath: fs.PathOrFileDescriptor, data: any, options: any) => {
+      writeCount++;
+      if (typeof filePath === "string" && filePath.endsWith("state.json")) {
+        throw new Error("Simulated disk write failure for state.json");
+      }
+      return originalWriteFileSync(filePath, data, options);
+    }) as any;
+
+    try {
+      assert.throws(
+        () => {
+          scaffolder.scaffold({
+            targetDir: tempDir,
+            manifest,
+            state,
+          });
+        },
+        (err: Error) => {
+          assert.match(err.message, /Simulated disk write failure for state\.json/);
+          return true;
+        }
+      );
+    } finally {
+      fs.writeFileSync = originalWriteFileSync;
+    }
+
+    // Verify rollback: manifest.json and state.json do not exist
+    assert.equal(fs.existsSync(path.join(tempDir, ".playbook/manifest.json")), false);
+    assert.equal(fs.existsSync(path.join(tempDir, ".playbook/state.json")), false);
+  });
 });
