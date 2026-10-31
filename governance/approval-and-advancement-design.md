@@ -127,21 +127,36 @@ The governance engine strictly distinguishes between four levels of validation p
 - **Failed or Inconclusive Outcomes**: If an evidence record has `result: "failed"` or `"inconclusive"`, the deliverable cannot be verified. Gate eligibility is immediately blocked.
 - **Unsupported Remote URIs**: References with remote schemes (`http://`, `https://`) receive status `unsupported`. Because hermetic, offline reproducibility is required for verifiable governance, remote references strictly block gate approval.
 
-#### Three-Tier Verification Enforcement Matrix
+#### Five-Tier Verification Enforcement Matrix
 
-| Check / Verification Domain | Schema-Enforced | CLI-Enforced | Human-Reviewed |
-| :--- | :---: | :---: | :---: |
-| **`evidence[]` non-empty on `verified` deliverable (`minItems: 1`)** | ✔ | ✔ | — |
-| **`validation_status: "passed"` on `verified` deliverable** | ✔ | ✔ | — |
-| **`evidence_hash` format matches `^sha256:[a-f0-9]{64}$`** | ✔ | ✔ | — |
-| **Local evidence file existence on disk** | — | ✔ | — |
-| **Computed SHA-256 matches recorded hash (`integrity_passed`)** | — | ✔ | — |
-| **Path traversal & symlink escape defenses** | — | ✔ | — |
-| **Unreadable file and directory target detection** | — | ✔ | — |
-| **Acceptable document discipline (`architecture_review`, etc.)** | ✔ | ✔ | — |
-| **Acceptance criteria satisfaction & business logic correctness** | — | — | ✔ |
-| **Adequacy of test coverage and edge-case assertions** | — | — | ✔ |
-| **Manual review checklist evaluation & visual sign-off** | — | — | ✔ |
+Every verification check and governance policy is categorized into one of five authoritative enforcement tiers:
+1. **Schema-Enforced**: Formally constrained by Draft 2020-12 schema rules (`schemas/project-state.schema.json` and `project-manifest.schema.json`). Any violation renders the JSON document schema-invalid.
+2. **Existing CLI-Enforced**: Formally evaluated and reported by the existing Playbook CLI diagnostics and evidence verification engine (`verifier.ts`, `diagnostics/`).
+3. **Future CLI-Enforced**: Programmatically evaluated and enforced by the Task 004D CLI implementation (`playbook approve`, `playbook advance`, `playbook repair-manifest`, Write-Ahead Journal).
+4. **Human-Reviewed**: Substantive qualitative engineering evaluation performed by the human reviewer during interactive gate review.
+5. **Agent-Instruction-Only**: Normative guidelines for AI agents specified in `AGENTS.md` and lifecycle stage definitions.
+
+| Rule / Verification Policy | Schema-Enforced | Existing CLI-Enforced | Future CLI-Enforced | Human-Reviewed | Agent-Instruction-Only |
+| :--- | :---: | :---: | :---: | :---: | :---: |
+| **`evidence[]` non-empty on `verified` deliverable (`minItems: 1`)** | ✔ | ✔ | — | — | — |
+| **`validation_status: "passed"` on `verified` deliverable** | ✔ | ✔ | — | — | — |
+| **`evidence_hash` format matches `^sha256:[a-f0-9]{64}$` when present** | ✔ | ✔ | — | — | — |
+| **Deliverable `status` enum (`not_started`, `verified`, etc.)** | ✔ | ✔ | — | — | — |
+| **Evidence metadata completeness (`procedure`, `verified_by`, etc.)** | ✔ | ✔ | — | — | — |
+| **Local evidence file existence on disk** | — | ✔ | — | — | — |
+| **SHA-256 integrity verification (`integrity_passed`)** | — | ✔ | — | — | — |
+| **Path traversal & symlink escape defenses** | — | ✔ | — | — | — |
+| **Unreadable file and directory target detection** | — | ✔ | — | — | — |
+| **All active supporting evidence records have `result: "passed"`** | — | — | ✔ | — | — |
+| **Evidence supersession / decoupling of historical failures** | — | — | ✔ | — | ✔ |
+| **Interactive TTY prompt and confirmation phrase verification** | — | — | ✔ | — | — |
+| **Write-ahead transaction journal & crash recovery execution** | — | — | ✔ | — | — |
+| **Approval fingerprint sidecar creation and verification** | — | — | ✔ | — | — |
+| **Manifest drift repair execution and audit logging** | — | — | ✔ | — | — |
+| **Acceptable document discipline (`architecture_review`, etc.)** | — | — | — | ✔ | ✔ |
+| **Acceptance criteria satisfaction & business logic correctness** | — | — | — | ✔ | — |
+| **Adequacy of test coverage and edge-case assertions** | — | — | — | ✔ | — |
+| **Manual review checklist evaluation & visual UX sign-off** | — | — | — | ✔ | — |
 
 ### 3.3 Gate Exit Package Validation
 Before prompting the human, the engine inspects the markdown artifact at `current_stage_detail.exit_package.path`:
@@ -242,20 +257,94 @@ An approved gate does not retain eternal validity if repository state diverges p
 
 To detect any post-approval drift deterministically, the governance engine defines an **Approval Fingerprint** generated at the exact moment of human approval.
 
-#### 1. Fingerprint Representation & Inputs
-The fingerprint is computed from the canonical JSON representation (lexicographically sorted keys, compact normalized formatting per RFC 8785) of:
-1. **Manifest Identifiers**: `manifest.project_id`, `manifest.active_milestone_id`.
-2. **Current Stage State**: `state.current_stage`, `state.stage_status`.
-3. **Deliverables List**: For each item in `current_stage_detail.deliverables[]`: `id`, `name`, `status`, `validation_status`, `artifact_path`, `exception_ref`.
-4. **Evidence Records Metadata**: For each deliverable's `evidence[]`: `requirement_id`, `type`, `procedure`, `result`, `summary`, `exit_code`, `evidence_ref`, `evidence_hash`.
-5. **Disk Evidence Hashes**: Real-time computed SHA-256 digest of every local evidence file referenced on disk.
-6. **Active Exceptions**: For each item in `current_stage_detail.exceptions[]`: `exception_id`, `status`, `waived_requirement`, `expiration_date`.
-7. **Blocking RFCs**: For each item in `current_stage_detail.rfcs[]`: `rfc_id`, `status`, `is_blocking`.
-8. **Exit Package Hash**: Real-time computed SHA-256 digest of the markdown file at `current_stage_detail.exit_package.path`.
+#### 1. Fingerprint Representation & Authoritative Scope
+The approval fingerprint binds **strictly to authoritative lifecycle state and approval-relevant engineering deliverables in `state.json`**:
+- `state.project_id`
+- `state.milestone_id`
+- `state.current_stage`
+- `state.stage_status`
+- Deliverables array (IDs, statuses, validation statuses, artifact paths, exception refs)
+- Current supporting evidence metadata
+- Real-time SHA-256 hashes of referenced local evidence files on disk
+- Active exceptions metadata and expiration dates
+- Blocking RFCs metadata and statuses
+- Real-time SHA-256 hash of the compiled Stage Gate Exit Package markdown artifact
 
-$$\text{approval\_fingerprint} = \text{"sha256:"} + \text{SHA256}(\text{CanonicalFingerprintPayload})$$
+> [!IMPORTANT]
+> **Exclusion of Manifest Properties from Fingerprint**:
+> - **`manifest.active_lifecycle_stage` is strictly EXCLUDED from the fingerprint payload.** The manifest stage property is a downstream configuration mirror. Synchronizing this mirror does not alter engineering deliverables or evidence.
+> - **`manifest.active_milestone_id` is strictly EXCLUDED from the fingerprint payload.** Milestone consistency is verified as an independent prerequisite check (`state.milestone_id === manifest.active_milestone_id`).
 
-#### 2. Sidecar JSON Schema & Contract (`.playbook/approval-fingerprint.json`)
+$$\text{approval\_fingerprint} = \text{"sha256:"} + \text{SHA256}(\text{JCS}(\text{CanonicalPayload}))$$
+
+#### 2. RFC 8785 Canonical Fingerprint Payload Specification
+The canonical payload is constructed as follows:
+
+```json
+{
+  "project_id": "zentrix-lms",
+  "milestone_id": "M-1.0.0",
+  "current_stage": 2,
+  "stage_status": "approved",
+  "deliverables": [
+    {
+      "id": "DELIV-201",
+      "name": "System Architecture Specification",
+      "status": "verified",
+      "validation_status": "passed",
+      "artifact_path": "docs/adr/ADR-001.md",
+      "exception_ref": null,
+      "evidence": [
+        {
+          "requirement_id": "REQ-001",
+          "type": "architecture_review",
+          "procedure": "Manual architectural inspection against Constitution",
+          "result": "passed",
+          "summary": "Verified simplicity, modularity, and ADR conformance",
+          "exit_code": null,
+          "evidence_ref": "docs/adr/ADR-001.md",
+          "evidence_hash": null,
+          "file_sha256": "sha256:4a3b2c1d0e9f8a7b6c5d4e3f2a1b0c9d8e7f6a5b4c3d2e1f0a9b8c7d6e5f4a3b"
+        }
+      ]
+    }
+  ],
+  "exceptions": [
+    {
+      "exception_id": "EXC-20261031-001",
+      "status": "active",
+      "waived_requirement": "REQ-003 load benchmark",
+      "expiration_date": "2026-11-15"
+    }
+  ],
+  "rfcs": [
+    {
+      "rfc_id": "RFC-20261031-001",
+      "status": "resolved",
+      "is_blocking": false
+    }
+  ],
+  "exit_package": {
+    "path": "docs/gates/GATE-2-EXIT-PACKAGE.md",
+    "file_sha256": "sha256:8899aabbccddeeff00112233445566778899aabbccddeeff0011223344556677"
+  }
+}
+```
+
+##### Canonical Serialization Rules:
+1. **Excluded Properties**:
+   - `manifest.json` properties are excluded.
+   - Volatile audit metadata (`last_updated`, `started_at`, `submitted_at`) is excluded.
+   - `human_approval` is excluded to eliminate circular self-dependency.
+2. **Deterministic Array Sorting**:
+   - `deliverables`: Sorted lexicographically by `id`.
+   - `deliverables[].evidence`: Sorted lexicographically by `evidence_ref` then `requirement_id`.
+   - `exceptions`: Sorted lexicographically by `exception_id`.
+   - `rfcs`: Sorted lexicographically by `rfc_id`.
+3. **Null Value Representation**: Represented as literal JSON `null` (not omitted, not empty string).
+4. **Encoding & Format**: RFC 8785 JSON Canonicalization Scheme (JCS): UTF-8, keys sorted by UTF-16 code units, minified zero-whitespace formatting, POSIX `/` path separators, lowercase hex digests.
+
+#### 3. Sidecar JSON Schema & Contract (`.playbook/approval-fingerprint.json`)
 To preserve the semantic purity of `signature_reference` (which records PR numbers, chat quotes, or commit references without overloading machine verification digests), the approval fingerprint is persisted in a dedicated machine-readable sidecar file:
 ```json
 {
@@ -286,22 +375,16 @@ To preserve the semantic purity of `signature_reference` (which records PR numbe
 }
 ```
 
-#### 3. Canonical Serialization & Atomic Write Synchronization
-- **Canonical Serialization**: Strictly formatted per RFC 8785 (keys lexicographically sorted, minified compact UTF-8, UTC ISO 8601 timestamps).
-- **Atomic Write-Synchronization Protocol**:
-  During `playbook approve`:
-  1. The sidecar payload is written to `.playbook/approval-fingerprint.json.tmp` and flushed to disk (`fsync`).
-  2. The approved state payload is written to `.playbook/state.json.tmp` and flushed to disk (`fsync`).
-  3. Atomic rename of sidecar: `approval-fingerprint.json.tmp` $\rightarrow$ `approval-fingerprint.json`.
-  4. Atomic rename of state: `state.json.tmp` $\rightarrow$ `state.json`.
-  5. If step 4 fails, the engine restores previous state and unlinks the sidecar, guaranteeing state and sidecar remain 100% synchronized.
+#### 4. Unified Write-Ahead Journal Synchronization
+During `playbook approve`, the engine does NOT rely on isolated sequential file renames. Instead, both `.playbook/state.json` and `.playbook/approval-fingerprint.json` are committed under the unified Write-Ahead Transaction Journal (`.playbook/tx-journal.json`) and exclusive lock (`.playbook/transaction.lock`) described in Section 6. This guarantees that a crash midway through writing or renaming cannot leave an orphaned sidecar on disk while state remains in `pending_review`.
 
-#### 4. Missing, Corrupted, or Stale Sidecar Rules
+#### 5. Missing, Corrupted, Stale, or Orphaned Sidecar Rules
 - **Missing Sidecar**: Diagnostic `APPROVAL_FINGERPRINT_MISSING` (error). Blocks advancement; fresh human approval required.
 - **Corrupted / Unparseable**: Diagnostic `APPROVAL_FINGERPRINT_MALFORMED` (error). Blocks advancement; fresh human approval required.
 - **Gate or Milestone Mismatch**: Diagnostic `APPROVAL_FINGERPRINT_MISMATCH` (error). Blocks advancement.
 - **Fingerprint Mismatch on Recalculation**: Diagnostic `APPROVAL_STALE` (error). Blocks advancement; human engineer must review deltas and re-approve.
 - **Unavailable or Unreadable Inputs**: If any referenced evidence file or exit package is deleted, moved, or permissions revoked, recalculation fails immediately with `APPROVAL_INVALID_UNREADABLE_INPUT`, halting advancement.
+- **Orphaned Sidecar Defense (`APPROVAL_FINGERPRINT_ORPHANED`)**: If `.playbook/approval-fingerprint.json` exists on disk but `state.stage_status !== "approved"`, authoritative state governs. The gate is **not approved**. The orphaned sidecar is rejected, flagged `APPROVAL_FINGERPRINT_ORPHANED`, and safely purged upon subsequent review or advancement. The system **never interprets an orphaned sidecar as valid approval**.
 
 ### 3.7 Source-of-Truth & Manifest Drift Recovery (Deadlock Prevention)
 
@@ -326,9 +409,10 @@ To resolve this deadlock deterministically without bypassing quality gates:
 4. **Audit Trail**:
    - Manifest update synchronizes `active_lifecycle_stage` to match `state.current_stage`.
    - `state.last_updated` records `reason: "Repaired manifest stage pointer to match authoritative state.current_stage"` with `actor_type: "human"`.
-5. **Approval & Fingerprint Preservation**:
-   - Repairing the mirror pointer before approval clears `STAGE_MISMATCH`, allowing gate review to proceed.
-   - If repair occurs after approval, because the approval fingerprint binds to `state.current_stage` and `state.milestone_id`, synchronizing the manifest mirror to match the authoritative state does not alter state deliverables or hashes, preserving fingerprint validity.
+5. **Approval & Fingerprint Preservation (Authoritative Decisions)**:
+   - **Does manifest repair invalidate an existing approval?**: **NO.** Synchronizing `manifest.active_lifecycle_stage` does not alter any deliverable, evidence file, or gate exit package. Because manifest properties are excluded from the fingerprint, the fingerprint remains 100% valid.
+   - **Can repair occur after approval?**: **YES.** If manifest drift occurs or is detected after approval but before advancement, `playbook repair-manifest` can be executed to synchronize the mirror.
+   - **Does repair require new human approval?**: **NO.** Repair synchronizes the configuration mirror to reflect the stage that was already approved by the human engineer. (However, if milestone identifiers conflict, repair is refused; milestone divergence requires human scope re-planning, not mirror synchronization).
 6. **Zero Silent Overwrite Invariant**: No CLI operation may silently overwrite conflicting milestone or stage state without human authorization.
 
 ---
@@ -464,9 +548,11 @@ When the human reviewer rejects a submission:
 
 ### 5.4 Locking Guarantees, PID Reuse & Cross-Platform Realities
 
-#### 1. Process Lock Mechanics (`.playbook/advancement.lock`)
-Mutual exclusion is acquired exclusively via `fs.openSync('.playbook/advancement.lock', 'wx')` (`O_CREAT | O_EXCL`).
-The lock payload records:
+#### 1. Process Lock Mechanics (`.playbook/transaction.lock`)
+Mutual exclusion across both gate approval (`APPROVE_GATE`) and lifecycle advancement (`ADVANCE_STAGE`) is acquired exclusively via:
+`fs.openSync('.playbook/transaction.lock', 'wx')` (`O_CREAT | O_EXCL`).
+
+Immediately following file descriptor creation, the process writes the JSON payload and flushes to disk via `fs.fsyncSync(fd)`:
 ```json
 {
   "pid": 14208,
@@ -476,16 +562,33 @@ The lock payload records:
 }
 ```
 
-#### 2. PID Reuse & Stale Lock Defenses
-- **PID Reuse Defense**: Operating systems recycle PIDs over time. To ensure a dead process's PID is not confused with an unrelated running application, the engine verifies:
-  1. Lock age: Is `created_at` older than the lock TTL (5 minutes)?
-  2. Liveliness: If older than TTL, check if PID is alive via `process.kill(pid, 0)` (supported on both Windows and POSIX in Node.js).
-  3. Process start time: If PID exists, verify its start time against `created_at`. If process started *after* `created_at`, the PID was recycled; lock is declared stale.
-- **Concurrent Stale Lock Reclamation**: If two processes simultaneously discover a stale lock, reclamation uses an atomic rename of a temporary reclaim file (`advancement.lock.reclaim.<nonce>`). The winning process claims the lock; the losing process detects `EEXIST` and halts cleanly.
+#### 2. Truncated & 0-Byte Lock File Defenses
+If a process crashes between creating `.playbook/transaction.lock` and flushing its payload:
+- If `stat.size === 0` and lock age $< 10$ seconds: The inspecting process backs off with exponential jitter and retries (the creator process may still be flushing the JSON payload).
+- If `stat.size === 0` and lock age $\ge 10$ seconds: The creator process crashed during file creation. The lock is declared dead and reclaimed via the atomic reclamation protocol.
 
-#### 3. Lock Boundaries & Limitations
-- **CAN Guarantee**: Local mutual exclusion among cooperative Playbook CLI processes operating on the same filesystem.
-- **CANNOT Guarantee**: Protection against uncooperative direct file modifications (e.g. manual text edits), non-CLI scripts, or networked filesystems (NFS, SMB) where atomic file creation semantics may be non-standard.
+#### 3. PID Reuse & Stale Lock Defenses
+Operating systems recycle PIDs over time. To ensure a dead process's PID is not confused with an unrelated running application:
+1. **Lock TTL**: Verify lock age against TTL (5 minutes). Active operations complete in under 500ms; an age $> 5$ minutes strongly suggests a hung or terminated process.
+2. **Process Liveliness Check**: Call `process.kill(pid, 0)` (supported on both Windows and POSIX in Node.js). If `ESRCH`, the PID does not exist; lock is dead.
+3. **Cross-Platform Start-Time Verification**:
+   - **POSIX**: Query `/proc/<pid>/stat` (start time field) or run `ps -p <pid> -o lstart=`. If the process start time is *after* `lock.created_at`, the PID was recycled; the lock is declared stale.
+   - **Windows**: Query Win32 process creation time via `GetProcessTimes` or PowerShell `(Get-Process -Id <pid>).StartTime`. If the process creation time is *after* `lock.created_at`, the PID was recycled; the lock is declared stale.
+   - **Fallback**: If OS start-time cannot be queried due to permission constraints, the CLI requires lock age $> \text{TTL}$ AND verified dead PID before reclamation.
+
+#### 4. Concurrent Stale Lock Reclamation Guard (`.playbook/reclaim.lock`)
+If two processes simultaneously discover a stale lock, neither process may directly unlink `transaction.lock` to avoid race conditions:
+1. The process must first acquire an atomic reclamation guard: `fs.openSync('.playbook/reclaim.lock', 'wx')`.
+2. The winning process re-reads `transaction.lock`, verifies its `mtime` and `nonce` still match the stale lock, unlinks `transaction.lock`, acquires `transaction.lock` via `'wx'`, and unlinks `.playbook/reclaim.lock`.
+3. The losing process detects `EEXIST` on `reclaim.lock`, backs off, and re-evaluates the lock state.
+
+#### 5. Ownership Verification on Lock Release
+A process must verify `nonce === myNonce && pid === myPid` before deleting `transaction.lock`. If the nonce mismatches (e.g. because TTL expired and the lock was reclaimed by another process), the process must **not** delete the lock.
+
+#### 6. Supported Filesystems Boundary & Limitations
+- **Supported Filesystems**: Local filesystems with POSIX `O_EXCL` and atomic single-file rename semantics (NTFS, ext4, APFS, btrfs, ZFS).
+- **Unsupported / Documented Limitation**: Networked filesystems (NFSv3, SMB/CIFS, Docker bind mounts on Windows/macOS) lacking strict POSIX `O_EXCL` or atomic rename semantics are explicitly documented as unsupported for concurrent multi-process execution.
+- **Scope Limitation**: The lock coordinates cooperative Playbook CLI processes. It does not prevent external non-CLI processes (e.g. text editors, git commands) from modifying files.
 
 ### 5.5 Snapshot Preservation & Immutability Realities
 
@@ -506,40 +609,41 @@ If `.playbook/milestones/state-<milestone_id>.json` already exists:
 
 ---
 
-## 6. Multi-File Transaction Safety & Crash Recovery
+## 6. Unified Multi-File Transaction Safety & Crash Recovery
 
 ### 6.1 Transaction Safety Realities & Operating System Assumptions
-Advancement requires updating two separate files: `.playbook/state.json` and `.playbook/manifest.json` (plus `.playbook/milestones/state-<milestone_id>.json` on Stage 6 closure).
+Lifecycle operations require updating multiple files:
+- **Gate Approval (`APPROVE_GATE`)**: Updates `.playbook/state.json` and creates `.playbook/approval-fingerprint.json`.
+- **Lifecycle Advancement (`ADVANCE_STAGE`)**: Updates `.playbook/state.json` and `.playbook/manifest.json`.
+- **Lifecycle Closure (`CLOSE_LIFECYCLE`)**: Updates `.playbook/state.json`, `.playbook/manifest.json`, and creates `.playbook/milestones/state-<milestone_id>.json`.
+- **Manifest Repair (`REPAIR_MANIFEST`)**: Updates `.playbook/manifest.json` and updates `state.json` audit trail.
 
 > [!WARNING]
-> **No Kernel Multi-File Atomicity**: Standard operating systems (Windows NTFS, Linux ext4, macOS APFS) provide atomic renaming for a *single file*, but **no OS provides multi-file atomic rename syscalls**. A crash midway between two file renames will leave state and manifest desynchronized (`STAGE_MISMATCH`) unless governed by a write-ahead transaction journal.
+> **No Kernel Multi-File Atomicity**: Standard operating systems (Windows NTFS, Linux ext4, macOS APFS) provide atomic renaming for a *single file*, but **no OS provides multi-file atomic rename syscalls**. A crash midway between two file renames will leave state, manifest, or sidecars desynchronized unless governed by a unified write-ahead transaction journal.
 
 #### Filesystem & Operating System Assumptions
 1. **Single-File Rename Atomicity**: Assumes POSIX `rename(2)` and Windows NTFS `SetFileInformationByHandle` / `MoveFileExW` replace a directory entry atomically within the same filesystem volume.
 2. **Durability via fsync**:
    - Temporary file data must be flushed to disk via `fs.fsyncSync(fd)` before renaming.
    - On POSIX, the containing directory (`.playbook/`) must be flushed (`fs.fsyncSync(dirFd)`) after renaming to commit directory metadata to disk.
-3. **Windows Open-Handle Defenses**: On Windows, file renames fail with `EBUSY` or `EPERM` if another process (e.g. anti-virus, indexing service) holds an open handle. The advancement engine must incorporate exponential backoff retries (up to 5 retries over 500ms) for rename operations.
+3. **Windows Open-Handle Defenses**: On Windows, file renames fail with `EBUSY` or `EPERM` if another process (e.g. anti-virus, indexing service) holds an open handle. The transaction engine incorporates exponential backoff retries (up to 5 retries over 500ms) for rename operations.
 4. **Fail-Closed Safety Invariant**: If a journal is corrupt/unparseable, or if live files differ from both expected source and target hashes, the CLI **fails closed immediately** (`CRITICAL_RECOVERY_FAILURE`), leaving files untouched and prompting for human git restoration. The engine never guesses or synthesizes state.
 
 ### 6.2 Write-Ahead Transaction Journal Protocol
-To guarantee deterministic recovery across all failure modes, `playbook advance` executes under an exclusive lock and write-ahead transaction journal containing **full target payloads**:
+All multi-file operations (`APPROVE_GATE`, `ADVANCE_STAGE`, `CLOSE_LIFECYCLE`, `REPAIR_MANIFEST`) execute under the unified process lock (`.playbook/transaction.lock`) and Write-Ahead Transaction Journal (`.playbook/tx-journal.json`) containing **full serialized target payloads**:
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│ 1. Acquire exclusive lock (.playbook/advancement.lock)      │
-│ 2. Compute target state, manifest, and snapshot in-memory   │
-│ 3. Validate target objects against JSON Schemas             │
-│ 4. Write Transaction Journal (.playbook/tx-journal.json)    │
+│ 1. Acquire exclusive lock (.playbook/transaction.lock)      │
+│ 2. Compute target payloads in-memory & validate schemas     │
+│ 3. Write Transaction Journal (.playbook/tx-journal.json)    │
 │    phase: "PREPARED", target file contents & hashes         │
-│ 5. Write temporary files (.tmp) and backup copies (.bak)    │
-│ 6. Update Transaction Journal phase: "COMMITTING"           │
-│ 7. Rename state.json.tmp -> state.json                      │
-│ 8. Rename manifest.json.tmp -> manifest.json                │
-│ 9. (Stage 6) Rename snapshot.tmp -> snapshot.json           │
-│ 10. Update Transaction Journal phase: "COMMITTED"           │
-│ 11. Cleanup .bak, .tmp, delete tx-journal.json              │
-│ 12. Release exclusive lock                                  │
+│ 4. Write temporary files (.tmp) and backup copies (.bak)    │
+│ 5. Update Transaction Journal phase: "COMMITTING"           │
+│ 6. Sequentially rename .tmp files to live target paths      │
+│ 7. Update Transaction Journal phase: "COMMITTED"            │
+│ 8. Cleanup .bak, .tmp, delete tx-journal.json               │
+│ 9. Release exclusive lock (.playbook/transaction.lock)      │
 └─────────────────────────────────────────────────────────────┘
 ```
 
@@ -550,7 +654,7 @@ The journal stores full target content strings, ensuring roll-forward can succee
   "tx_id": "tx-1730375700000-a1b2",
   "phase": "PREPARED", // PREPARED -> COMMITTING -> COMMITTED
   "created_at": "2026-10-31T12:00:00.000Z",
-  "action": "ADVANCE_STAGE",
+  "action": "ADVANCE_STAGE", // APPROVE_GATE | ADVANCE_STAGE | CLOSE_LIFECYCLE | REPAIR_MANIFEST
   "from_stage": 2,
   "to_stage": 3,
   "files": [
@@ -574,12 +678,24 @@ The journal stores full target content strings, ensuring roll-forward can succee
 }
 ```
 
-#### Transaction Boundaries & Crash Recovery Durability Matrix
-Whenever any CLI command initializes, it checks for an existing `.playbook/tx-journal.json` and `.playbook/advancement.lock`:
+#### 1. Approval Crash Recovery Decision Matrix (`APPROVE_GATE`)
+During `playbook approve`, the journal records targets for `.playbook/state.json` and `.playbook/approval-fingerprint.json`:
+
+| Crash Point During Approval | State on Disk | Recovery Action Executed by CLI | Safety Invariant |
+| :--- | :--- | :--- | :--- |
+| **Crash in `PREPARED`** | Live files untouched; journal exists; `.tmp` may exist. | **Roll Backward**: Remove `.tmp` and `.bak` files, delete journal, release lock. State remains in `pending_review`. | Zero approval state committed. |
+| **Crash in `COMMITTING` before either rename** | Live files untouched; journal in `COMMITTING`. | **Roll Forward**: Read `target_content` from journal. Write and rename both `state.json` and `approval-fingerprint.json`. Transition to `COMMITTED`, cleanup. | Approval completes deterministically from WAL payload. |
+| **Crash in `COMMITTING` after state rename but before sidecar rename** | `state.json` has `approved`; sidecar missing or old. | **Roll Forward**: Verify `state.json` matches target hash. Write `approval-fingerprint.json` from journal `target_content` and rename into place. Complete commit. | State and sidecar are brought into perfect synchronization. |
+| **Crash in `COMMITTING` after sidecar rename but before state rename** | Sidecar has new fingerprint; `state.json` is `pending_review`. | **Roll Forward**: Write `state.json` from journal `target_content` and rename into place. Complete commit. | Prevents orphaned sidecars. |
+| **Crash in `COMMITTED`** | Both files replaced; cleanup pending. | **Finalize Cleanup**: Remove `.bak` and `.tmp`, delete journal, release lock. | Completely idempotent. |
+| **Missing / Corrupt Journal with Mismatched Sidecar** | No journal on disk; sidecar exists but `state.stage_status !== "approved"`. | **Fail-Safe Invalidation**: State is authoritative. If `state.stage_status !== "approved"`, the gate is **not approved**. The sidecar is flagged `APPROVAL_FINGERPRINT_ORPHANED` and ignored/purged on subsequent review. | The system **never interprets an orphaned sidecar as valid approval**. |
+
+#### 2. Advancement Crash Recovery Durability Matrix (`ADVANCE_STAGE` & `CLOSE_LIFECYCLE`)
+Whenever any CLI command initializes, it checks for an existing `.playbook/tx-journal.json` and `.playbook/transaction.lock`:
 
 | Transaction Boundary | Files Mutated / Created | Durable State After Crash | Recovery Decision | Action Executed by Recovery |
 | :--- | :--- | :--- | :--- | :--- |
-| **1. Lock Acquisition** | `.playbook/advancement.lock` | Lock file exists with PID, host, nonce. | Abort / Clean | If no journal exists, remove lock. State untouched. |
+| **1. Lock Acquisition** | `.playbook/transaction.lock` | Lock file exists with PID, host, nonce. | Abort / Clean | If no journal exists, remove lock. State untouched. |
 | **2. Journal Creation** | `tx-journal.json.tmp` $\rightarrow$ `tx-journal.json` | Journal exists in `PREPARED` containing target payloads. | **Roll Backward** | Discard journal, remove lock. State untouched. |
 | **3. Temporary File Writes** | `state.json.tmp`, `manifest.json.tmp` | Live files untouched; `.tmp` files exist on disk. | **Roll Backward** | Delete `.tmp` files, delete journal, remove lock. State untouched. |
 | **4. Backup File Writes** | `state.json.bak`, `manifest.json.bak` | Live files untouched; `.bak` files exist on disk. | **Roll Backward** | Delete `.bak` and `.tmp`, delete journal, remove lock. |
@@ -612,15 +728,6 @@ Whenever any CLI command initializes, it checks for an existing `.playbook/tx-jo
 
 ### 8.1 `playbook approve --gate <N>`
 ```bash
-# Interactive approval of Gate 2
-playbook approve --gate 2
-
-# Inspect gate approval eligibility without prompting (dry run)
-playbook approve --gate 2 --dry-run
-
-# Output machine-readable JSON status of approval check
-playbook approve --gate 2 --dry-run --json
-```
 # Interactive approval of Gate 2
 playbook approve --gate 2
 
@@ -845,7 +952,7 @@ When Task 004D is implemented, the test harness must execute:
 6. **Transaction Safety & Crash Recovery Tests**:
    - Crash simulation in `PREPARED` phase: recovery rolls backward, restores state, removes `.tmp` and `.bak`.
    - Crash simulation in `COMMITTING` phase with missing `.tmp`: recovery rolls forward using journal `target_content`, synchronizes manifest, completes advancement.
-   - Concurrent process execution blocked by exclusive lock (`advancement.lock`).
+   - Concurrent process execution blocked by exclusive lock (`transaction.lock`).
    - Stale lock detection and automatic liveliness reclamation.
    - Corrupted backup detection triggers fail-closed `CRITICAL_RECOVERY_FAILURE`.
 
@@ -853,7 +960,7 @@ When Task 004D is implemented, the test harness must execute:
 
 ## 11. Confirmed Architectural Decisions & Governance Alignment
 
-1. **Transaction Journal & Process Lock**: Multi-file state and manifest updates are governed by a write-ahead transaction journal (`.playbook/tx-journal.json`) and process lock (`.playbook/advancement.lock`), eliminating any reliance on non-existent filesystem multi-file atomicity. Full serialized payloads in the journal guarantee recoverability across missing/corrupted temporary files.
+1. **Transaction Journal & Process Lock**: Multi-file state and manifest updates are governed by a write-ahead transaction journal (`.playbook/tx-journal.json`) and process lock (`.playbook/transaction.lock`), eliminating any reliance on non-existent filesystem multi-file atomicity. Full serialized payloads in the journal guarantee recoverability across missing/corrupted temporary files.
 2. **Deterministic Stale Approval Invalidation**: Approvals are bound to an 8-part canonical fingerprint digest stored in `.playbook/approval-fingerprint.json` sidecar. Any modification to evidence files, deliverables, exceptions, RFCs, or exit package markdown invalidates approval and blocks advancement.
 3. **Evidence Eligibility Realities**: Existence and hash integrity do not prove engineering correctness; automated checks require `integrity_passed`, manual reviews permit `existence_verified`, and any `failed` result blocks approval.
 4. **Authoritative State Machine**: `state.json` (`current_stage`) is the sole execution authority; manifest drift blocks approval under strict/standard profiles and is repaired upon stage advancement.
