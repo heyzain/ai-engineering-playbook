@@ -25,7 +25,9 @@ export type DiagnosticCode =
   | "EXCEPTION_ACTIVE"
   | "STAGE_PENDING_REVIEW"
   | "STAGE_APPROVED"
+  | "GATE_CRITERIA_UNMET"
   | "LIFECYCLE_COMPLETED_TERMINAL"
+  | "LIFECYCLE_STATE_INCONSISTENT"
   | "LIFECYCLE_PAUSED";
 
 export interface DiagnosticIssue {

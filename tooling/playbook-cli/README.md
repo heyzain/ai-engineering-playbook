@@ -361,6 +361,18 @@ The CLI includes comprehensive tests running on Node's native test runner (`node
   - Tests fail-fast schema validation before filesystem mutations.
 - **Path Utilities Tests (`tests/paths.test.ts`)**:
   - Tests Windows backslash to POSIX slash conversion.
+- **Inspection & Diagnostics Tests (`tests/inspect.test.ts`)**:
+  - Tests read-only evaluation of uninitialized, partially initialized, and corrupted project structures.
+  - Tests non-destructive recovery remediation guidance (asserts no unsafe `--force` recommendations).
+  - Tests schema invalid manifest and state diagnostics.
+  - Tests deterministic UTC-inclusive exception expiration boundary handling.
+  - Tests remediated exception retirement (not flagged as expired).
+  - Tests gate criteria invariants (`pending_review` or `approved` with incomplete deliverables triggers `GATE_CRITERIA_UNMET`).
+  - Tests terminal lifecycle consistency (`completed_terminal` requires Stage 6 approval).
+  - Tests blocker precedence over positive readiness states.
+  - Tests Stage 6 approved readiness summary (`CLOSE_LIFECYCLE` rather than advancing).
+  - Tests source-of-truth consistency (`state.current_stage` is authoritative over manifest pointer).
+  - Tests read-only immutability (zero file modifications).
 - **CLI Executable Integration Tests (`tests/cli.test.ts`)**:
   - Tests command dispatch, exit codes, version flags, and end-to-end `init` and `validate` executions.
 

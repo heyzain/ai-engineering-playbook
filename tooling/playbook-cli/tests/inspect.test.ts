@@ -43,7 +43,7 @@ describe("Governance State Inspection & Diagnostics (playbook inspect)", () => {
     assert.match(res.output, /playbook init/);
   });
 
-  test("diagnoses missing manifest (.playbook/manifest.json missing)", () => {
+  test("diagnoses missing manifest (.playbook/manifest.json missing) with safe non-destructive remediation", () => {
     const state = createInitialState({ projectId: "test-app" });
     fs.mkdirSync(path.join(tempDir, ".playbook"), { recursive: true });
     fs.writeFileSync(path.join(tempDir, ".playbook", "state.json"), JSON.stringify(state, null, 2));
@@ -51,10 +51,13 @@ describe("Governance State Inspection & Diagnostics (playbook inspect)", () => {
     const res = runInspect({ cwd: tempDir, json: true, silent: true });
     assert.equal(res.success, false);
     assert.equal(res.report.readiness.status, "blocked");
-    assert.ok(res.report.diagnostics.some((d) => d.code === "MANIFEST_MISSING"));
+    const d = res.report.diagnostics.find((issue) => issue.code === "MANIFEST_MISSING");
+    assert.ok(d);
+    assert.doesNotMatch(d.remediation, /--force/);
+    assert.match(d.remediation, /version control/);
   });
 
-  test("diagnoses missing state (.playbook/state.json missing)", () => {
+  test("diagnoses missing state (.playbook/state.json missing) with safe non-destructive remediation", () => {
     const manifest = createInitialManifest({ projectId: "test-app", projectName: "Test App" });
     fs.mkdirSync(path.join(tempDir, ".playbook"), { recursive: true });
     fs.writeFileSync(path.join(tempDir, ".playbook", "manifest.json"), JSON.stringify(manifest, null, 2));
@@ -62,7 +65,10 @@ describe("Governance State Inspection & Diagnostics (playbook inspect)", () => {
     const res = runInspect({ cwd: tempDir, json: true, silent: true });
     assert.equal(res.success, false);
     assert.equal(res.report.readiness.status, "blocked");
-    assert.ok(res.report.diagnostics.some((d) => d.code === "STATE_MISSING"));
+    const d = res.report.diagnostics.find((issue) => issue.code === "STATE_MISSING");
+    assert.ok(d);
+    assert.doesNotMatch(d.remediation, /--force/);
+    assert.match(d.remediation, /version control/);
   });
 
   test("diagnoses malformed JSON syntax in governance files", () => {
@@ -217,6 +223,187 @@ describe("Governance State Inspection & Diagnostics (playbook inspect)", () => {
     assert.equal(res.success, true);
     assert.equal(res.report.readiness.status, "completed_terminal");
     assert.ok(res.report.diagnostics.some((d) => d.code === "LIFECYCLE_COMPLETED_TERMINAL"));
+  });
+
+  test("evaluates exception expiration boundary deterministically in UTC (inclusive calendar day)", () => {
+    const manifest = JSON.parse(fs.readFileSync(path.join(examplesDir, "valid-manifest.json"), "utf-8"));
+    const state = JSON.parse(fs.readFileSync(path.join(examplesDir, "valid-state-stage2-approved.json"), "utf-8"));
+    manifest.active_lifecycle_stage = 2;
+    state.current_stage_detail.exceptions = [
+      {
+        exception_id: "EXC-20261031-001",
+        title: "Temporary waiver for staging smoke test",
+        path: "governance/exceptions/EXC-20261031-001.md",
+        waived_requirement: "REQ-SMOKE-01",
+        authorized_by: "Lead Architect",
+        authorized_at: "2026-10-15T00:00:00Z",
+        expiration_date: "2026-10-31",
+        status: "active"
+      }
+    ];
+
+    fs.mkdirSync(path.join(tempDir, ".playbook"), { recursive: true });
+    fs.writeFileSync(path.join(tempDir, ".playbook", "manifest.json"), JSON.stringify(manifest, null, 2));
+    fs.writeFileSync(path.join(tempDir, ".playbook", "state.json"), JSON.stringify(state, null, 2));
+
+    // Instant 1: End of day on expiration date (23:59:59.000Z) -> Active (inclusive)
+    const resActive = runInspect({
+      cwd: tempDir,
+      json: true,
+      silent: true,
+      now: new Date("2026-10-31T23:59:59.000Z")
+    });
+    assert.equal(resActive.report.exceptions_summary.active, 1);
+    assert.equal(resActive.report.exceptions_summary.expired, 0);
+    assert.ok(resActive.report.diagnostics.some((d) => d.code === "EXCEPTION_ACTIVE"));
+    assert.ok(!resActive.report.diagnostics.some((d) => d.code === "EXCEPTION_EXPIRED"));
+
+    // Instant 2: Beginning of next day (00:00:01.000Z) -> Expired
+    const resExpired = runInspect({
+      cwd: tempDir,
+      json: true,
+      silent: true,
+      now: new Date("2026-11-01T00:00:01.000Z")
+    });
+    assert.equal(resExpired.report.exceptions_summary.expired, 1);
+    assert.ok(resExpired.report.diagnostics.some((d) => d.code === "EXCEPTION_EXPIRED"));
+    assert.equal(resExpired.report.readiness.status, "blocked");
+  });
+
+  test("does not treat remediated exception with past expiration date as expired", () => {
+    const manifest = JSON.parse(fs.readFileSync(path.join(examplesDir, "valid-manifest.json"), "utf-8"));
+    const state = JSON.parse(fs.readFileSync(path.join(examplesDir, "valid-state-stage2-approved.json"), "utf-8"));
+    manifest.active_lifecycle_stage = 2;
+    state.current_stage_detail.exceptions = [
+      {
+        exception_id: "EXC-20260101-001",
+        title: "Historical remediated waiver",
+        path: "governance/exceptions/EXC-20260101-001.md",
+        waived_requirement: "REQ-LEGACY-01",
+        authorized_by: "Security Lead",
+        authorized_at: "2026-01-01T00:00:00Z",
+        expiration_date: "2026-01-15",
+        status: "remediated"
+      }
+    ];
+
+    fs.mkdirSync(path.join(tempDir, ".playbook"), { recursive: true });
+    fs.writeFileSync(path.join(tempDir, ".playbook", "manifest.json"), JSON.stringify(manifest, null, 2));
+    fs.writeFileSync(path.join(tempDir, ".playbook", "state.json"), JSON.stringify(state, null, 2));
+
+    const res = runInspect({
+      cwd: tempDir,
+      json: true,
+      silent: true,
+      now: new Date("2026-10-31T12:00:00Z")
+    });
+    assert.equal(res.report.exceptions_summary.remediated, 1);
+    assert.equal(res.report.exceptions_summary.expired, 0);
+    assert.ok(!res.report.diagnostics.some((d) => d.code === "EXCEPTION_EXPIRED"));
+  });
+
+  test("enforces gate criteria invariant: pending_review with incomplete deliverables raises GATE_CRITERIA_UNMET and blocks readiness", () => {
+    const manifest = JSON.parse(fs.readFileSync(path.join(examplesDir, "valid-manifest.json"), "utf-8"));
+    const state = JSON.parse(fs.readFileSync(path.join(examplesDir, "valid-state-stage1-verified.json"), "utf-8"));
+    state.current_stage_detail.deliverables.push({
+      id: "DELIV-103",
+      name: "Unfinished Security Model",
+      description: "Incomplete security model spec.",
+      artifact_path: "docs/prd/security.md",
+      status: "in_progress",
+      validation_status: "unvalidated",
+      exception_ref: null,
+      evidence: []
+    });
+
+    fs.mkdirSync(path.join(tempDir, ".playbook"), { recursive: true });
+    fs.writeFileSync(path.join(tempDir, ".playbook", "manifest.json"), JSON.stringify(manifest, null, 2));
+    fs.writeFileSync(path.join(tempDir, ".playbook", "state.json"), JSON.stringify(state, null, 2));
+
+    const res = runInspect({ cwd: tempDir, json: true, silent: true });
+    assert.equal(res.success, false);
+    assert.equal(res.report.readiness.status, "blocked");
+    assert.ok(res.report.diagnostics.some((d) => d.code === "GATE_CRITERIA_UNMET"));
+  });
+
+  test("enforces terminal lifecycle consistency: completed_terminal requires Stage 6 approval", () => {
+    const manifest = JSON.parse(fs.readFileSync(path.join(examplesDir, "valid-manifest.json"), "utf-8"));
+    const state = JSON.parse(fs.readFileSync(path.join(examplesDir, "valid-state-stage2-approved.json"), "utf-8"));
+    state.lifecycle_status = "completed_terminal";
+
+    fs.mkdirSync(path.join(tempDir, ".playbook"), { recursive: true });
+    fs.writeFileSync(path.join(tempDir, ".playbook", "manifest.json"), JSON.stringify(manifest, null, 2));
+    fs.writeFileSync(path.join(tempDir, ".playbook", "state.json"), JSON.stringify(state, null, 2));
+
+    const res = runInspect({ cwd: tempDir, json: true, silent: true });
+    assert.equal(res.success, false);
+    assert.equal(res.report.readiness.status, "blocked");
+    assert.ok(res.report.diagnostics.some((d) => d.code === "LIFECYCLE_STATE_INCONSISTENT"));
+  });
+
+  test("readiness assessment: blockers strictly take precedence over approved stage status", () => {
+    const manifest = JSON.parse(fs.readFileSync(path.join(examplesDir, "valid-manifest.json"), "utf-8"));
+    const state = JSON.parse(fs.readFileSync(path.join(examplesDir, "valid-state-stage2-approved.json"), "utf-8"));
+    manifest.active_lifecycle_stage = 2;
+    state.current_stage_detail.exceptions.push({
+      exception_id: "EXC-20260901-099",
+      title: "Expired temporary waiver",
+      path: "governance/exceptions/EXC-20260901-099.md",
+      waived_requirement: "REQ-STAGING-01",
+      authorized_by: "Architect",
+      authorized_at: "2026-09-01T00:00:00Z",
+      expiration_date: "2026-09-30",
+      status: "expired"
+    });
+
+    fs.mkdirSync(path.join(tempDir, ".playbook"), { recursive: true });
+    fs.writeFileSync(path.join(tempDir, ".playbook", "manifest.json"), JSON.stringify(manifest, null, 2));
+    fs.writeFileSync(path.join(tempDir, ".playbook", "state.json"), JSON.stringify(state, null, 2));
+
+    const res = runInspect({ cwd: tempDir, json: true, silent: true });
+    assert.equal(res.success, false);
+    assert.equal(res.report.readiness.status, "blocked");
+    assert.notEqual(res.report.readiness.status, "approved");
+    assert.ok(res.report.diagnostics.some((d) => d.code === "EXCEPTION_EXPIRED"));
+  });
+
+  test("readiness assessment: Stage 6 approved specifies CLOSE_LIFECYCLE rather than advance", () => {
+    const manifest = JSON.parse(fs.readFileSync(path.join(examplesDir, "valid-manifest.json"), "utf-8"));
+    const state = JSON.parse(fs.readFileSync(path.join(examplesDir, "valid-state-stage2-approved.json"), "utf-8"));
+    manifest.active_lifecycle_stage = 6;
+    state.current_stage = 6;
+    state.current_stage_detail.stage = 6;
+    state.current_stage_detail.stage_name = "Deployment & Operational Monitoring";
+    state.stage_status = "approved";
+    state.lifecycle_status = "active";
+
+    fs.mkdirSync(path.join(tempDir, ".playbook"), { recursive: true });
+    fs.writeFileSync(path.join(tempDir, ".playbook", "manifest.json"), JSON.stringify(manifest, null, 2));
+    fs.writeFileSync(path.join(tempDir, ".playbook", "state.json"), JSON.stringify(state, null, 2));
+
+    const res = runInspect({ cwd: tempDir, json: true, silent: true });
+    assert.equal(res.success, true);
+    assert.equal(res.report.readiness.status, "approved");
+    assert.match(res.report.readiness.summary, /CLOSE_LIFECYCLE/);
+    assert.doesNotMatch(res.report.readiness.summary, /ADVANCE_STAGE/);
+  });
+
+  test("source-of-truth consistency: state.current_stage is authoritative when manifest drifts", () => {
+    const manifest = JSON.parse(fs.readFileSync(path.join(examplesDir, "valid-manifest.json"), "utf-8"));
+    const state = JSON.parse(fs.readFileSync(path.join(examplesDir, "valid-state-stage2-approved.json"), "utf-8"));
+    manifest.active_lifecycle_stage = 1;
+    state.current_stage = 2;
+
+    fs.mkdirSync(path.join(tempDir, ".playbook"), { recursive: true });
+    fs.writeFileSync(path.join(tempDir, ".playbook", "manifest.json"), JSON.stringify(manifest, null, 2));
+    fs.writeFileSync(path.join(tempDir, ".playbook", "state.json"), JSON.stringify(state, null, 2));
+
+    const res = runInspect({ cwd: tempDir, json: true, silent: true });
+    assert.equal(res.report.stage?.number, 2);
+    assert.ok(res.report.diagnostics.some((d) => d.code === "STAGE_MISMATCH"));
+    const mismatch = res.report.diagnostics.find((d) => d.code === "STAGE_MISMATCH");
+    assert.equal(mismatch?.severity, "warning");
+    assert.match(mismatch?.message || "", /authoritative source of truth/);
   });
 
   test("CLI executable: formats human-readable and machine-readable JSON output correctly", async () => {

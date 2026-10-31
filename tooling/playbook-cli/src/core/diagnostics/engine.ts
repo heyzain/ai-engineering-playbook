@@ -56,7 +56,7 @@ export class DiagnosticsEngine {
         severity: "error",
         message: "Project is not initialized under the AI Engineering Playbook. No .playbook/manifest.json or .playbook/state.json found.",
         path: null,
-        remediation: "Run 'playbook init' in this directory to initialize project governance.",
+        remediation: "Run 'playbook init' in this directory to initialize project governance for a new repository, or restore .playbook/ from version control if previously initialized.",
       });
 
       return this.buildReport({
@@ -80,7 +80,7 @@ export class DiagnosticsEngine {
         severity: "error",
         message: "Governance manifest (.playbook/manifest.json) is missing.",
         path: ".playbook/manifest.json",
-        remediation: "Restore .playbook/manifest.json or re-run 'playbook init --force' to recreate configuration.",
+        remediation: "Restore .playbook/manifest.json from version control (e.g. 'git checkout .playbook/manifest.json') or from backup. Re-initialize only if configuring a fresh project.",
       });
     }
 
@@ -90,7 +90,7 @@ export class DiagnosticsEngine {
         severity: "error",
         message: "Machine-readable state file (.playbook/state.json) is missing.",
         path: ".playbook/state.json",
-        remediation: "Restore .playbook/state.json from version control or re-run 'playbook init --force'.",
+        remediation: "Restore .playbook/state.json from version control (e.g. 'git checkout .playbook/state.json') or from backup. Do not execute destructive re-initialization which would overwrite project history.",
       });
     }
 
@@ -165,7 +165,7 @@ export class DiagnosticsEngine {
         diagnostics.push({
           code: "STAGE_MISMATCH",
           severity: "warning",
-          message: `Stage pointer mismatch: manifest active_lifecycle_stage is ${manifest.active_lifecycle_stage} but state current_stage is ${state.current_stage}.`,
+          message: `Stage pointer mismatch: manifest active_lifecycle_stage is ${manifest.active_lifecycle_stage} but state current_stage is ${state.current_stage}. state.json is the authoritative source of truth for lifecycle execution.`,
           path: ".playbook/manifest.json",
           remediation: "Update manifest.active_lifecycle_stage to match active stage in state.json.",
         });
@@ -176,13 +176,23 @@ export class DiagnosticsEngine {
     if (state) {
       // 5.1 Lifecycle status
       if (state.lifecycle_status === "completed_terminal") {
-        diagnostics.push({
-          code: "LIFECYCLE_COMPLETED_TERMINAL",
-          severity: "info",
-          message: `Project milestone '${state.milestone_id}' has completed Stage 6 and is sealed in production.`,
-          path: "/lifecycle_status",
-          remediation: "Lifecycle is terminal. Reopening for new features requires formal REOPEN_LIFECYCLE.",
-        });
+        if (state.current_stage !== 6 || state.stage_status !== "approved") {
+          diagnostics.push({
+            code: "LIFECYCLE_STATE_INCONSISTENT",
+            severity: "error",
+            message: `Lifecycle status is 'completed_terminal' but current stage is Stage ${state.current_stage} ('${state.stage_status}'). Stage 6 approval is required to seal the milestone.`,
+            path: "/lifecycle_status",
+            remediation: "Correct lifecycle_status or complete Stage 6 gate approval before marking lifecycle terminal.",
+          });
+        } else {
+          diagnostics.push({
+            code: "LIFECYCLE_COMPLETED_TERMINAL",
+            severity: "info",
+            message: `Project milestone '${state.milestone_id}' has completed Stage 6 and is sealed in production.`,
+            path: "/lifecycle_status",
+            remediation: "Lifecycle is terminal. Reopening for new features requires formal REOPEN_LIFECYCLE.",
+          });
+        }
       } else if (state.lifecycle_status === "paused") {
         diagnostics.push({
           code: "LIFECYCLE_PAUSED",
@@ -196,14 +206,17 @@ export class DiagnosticsEngine {
       // 5.2 Deliverables analysis
       const deliverables = state.current_stage_detail?.deliverables || [];
       deliverablesSummary.total = deliverables.length;
+      const isGateReviewOrApproved = state.stage_status === "pending_review" || state.stage_status === "approved";
 
       if (deliverables.length === 0) {
         diagnostics.push({
           code: "DELIVERABLES_EMPTY",
-          severity: "warning",
-          message: `Current stage (${state.current_stage}) has zero deliverables defined.`,
+          severity: isGateReviewOrApproved ? "error" : "warning",
+          message: `Current stage (${state.current_stage}) has zero deliverables defined${isGateReviewOrApproved ? ` while in '${state.stage_status}' status` : ""}.`,
           path: "/current_stage_detail/deliverables",
-          remediation: "Define required deliverables for this stage in state.json.",
+          remediation: isGateReviewOrApproved
+            ? "Define and verify required stage deliverables before submitting for review or advancing."
+            : "Define required deliverables for this stage in state.json.",
         });
       }
 
@@ -265,6 +278,18 @@ export class DiagnosticsEngine {
         }
       }
 
+      // Gate Criteria Invariant: A stage in pending_review or approved MUST have all deliverables verified or waived
+      const unfinishedCount = deliverablesSummary.not_started + deliverablesSummary.in_progress + deliverablesSummary.completed;
+      if (isGateReviewOrApproved && unfinishedCount > 0) {
+        diagnostics.push({
+          code: "GATE_CRITERIA_UNMET",
+          severity: "error",
+          message: `Stage ${state.current_stage} is in '${state.stage_status}' status but has ${unfinishedCount} unfinished or unverified deliverable(s). All deliverables must be verified or waived prior to review or approval.`,
+          path: "/current_stage_detail/deliverables",
+          remediation: "Complete and verify all stage deliverables or obtain authorized waivers before submitting for review or advancing.",
+        });
+      }
+
       // 5.3 RFCs analysis
       const rfcs = state.current_stage_detail?.rfcs || [];
       rfcsSummary.total = rfcs.length;
@@ -302,16 +327,13 @@ export class DiagnosticsEngine {
       exceptionsSummary.total = exceptions.length;
 
       for (const exc of exceptions) {
-        const isPastDate = exc.expiration_date < today;
-        if (exc.status === "expired" || isPastDate) {
-          exceptionsSummary.expired++;
-          diagnostics.push({
-            code: "EXCEPTION_EXPIRED",
-            severity: "error",
-            message: `Exception '${exc.title}' (${exc.exception_id}) expired on ${exc.expiration_date}.`,
-            path: exc.path,
-            remediation: `Remediate the waived requirement (${exc.waived_requirement}) or obtain human renewal of exception.`,
-          });
+        // Exception date evaluation is UTC-deterministic and inclusive of the entire expiration day
+        const expirationEndOfDayUtc = Date.parse(`${exc.expiration_date}T23:59:59.999Z`);
+        const isPastDate = !Number.isNaN(expirationEndOfDayUtc) && now.getTime() > expirationEndOfDayUtc;
+
+        if (exc.status === "remediated") {
+          // Remediated exceptions are retired and no longer block progression even if past expiration date
+          exceptionsSummary.remediated++;
         } else if (exc.status === "revoked") {
           exceptionsSummary.revoked++;
           diagnostics.push({
@@ -320,6 +342,15 @@ export class DiagnosticsEngine {
             message: `Exception '${exc.title}' (${exc.exception_id}) was revoked.`,
             path: exc.path,
             remediation: `Remediate waived requirement or obtain new authorized exception.`,
+          });
+        } else if (exc.status === "expired" || (exc.status === "active" && isPastDate)) {
+          exceptionsSummary.expired++;
+          diagnostics.push({
+            code: "EXCEPTION_EXPIRED",
+            severity: "error",
+            message: `Exception '${exc.title}' (${exc.exception_id}) expired on ${exc.expiration_date}.`,
+            path: exc.path,
+            remediation: `Remediate the waived requirement (${exc.waived_requirement}) or obtain human renewal of exception.`,
           });
         } else if (exc.status === "active") {
           exceptionsSummary.active++;
@@ -330,19 +361,20 @@ export class DiagnosticsEngine {
             path: exc.path,
             remediation: "Ensure waived deliverable is remediated before expiration date.",
           });
-        } else if (exc.status === "remediated") {
-          exceptionsSummary.remediated++;
         }
       }
 
       // 5.5 Stage Review & Approval Status
       if (state.stage_status === "approved") {
+        const isStage6 = state.current_stage === 6;
         diagnostics.push({
           code: "STAGE_APPROVED",
           severity: "info",
           message: `Stage ${state.current_stage} (${state.current_stage_detail?.stage_name}) is approved by human sign-off (${state.current_stage_detail?.human_approval?.approved_by || 'Human'}).`,
           path: "/stage_status",
-          remediation: "Human engineer can proceed to advance the lifecycle stage.",
+          remediation: isStage6
+            ? "Human engineer can proceed to seal milestone in production (CLOSE_LIFECYCLE)."
+            : `Human engineer can proceed to advance the lifecycle stage (ADVANCE_STAGE to Stage ${state.current_stage + 1}).`,
         });
       } else if (state.stage_status === "pending_review") {
         diagnostics.push({
@@ -405,9 +437,12 @@ export class DiagnosticsEngine {
 
     // 3. Approved stage
     if (state.stage_status === "approved") {
+      const isStage6 = state.current_stage === 6;
       return {
         status: "approved",
-        summary: `Stage ${state.current_stage} (${state.current_stage_detail?.stage_name}) has received formal human approval. Ready to advance.`,
+        summary: isStage6
+          ? `Stage 6 (${state.current_stage_detail?.stage_name}) has received formal human approval. Ready to seal milestone in production (CLOSE_LIFECYCLE).`
+          : `Stage ${state.current_stage} (${state.current_stage_detail?.stage_name}) has received formal human approval. Ready to advance to Stage ${state.current_stage + 1} (ADVANCE_STAGE).`,
       };
     }
 
