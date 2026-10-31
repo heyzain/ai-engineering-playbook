@@ -17,6 +17,7 @@ export const DEFAULT_PATHS = {
   stateFile: ".playbook/state.json",
   transactionLockFile: ".playbook/transaction.lock",
   reclaimLockFile: ".playbook/reclaim.lock",
+  transactionJournalFile: ".playbook/tx-journal.json",
 } as const;
 
 export const STAGE_NAMES = [

@@ -44,7 +44,10 @@ export type DiagnosticCode =
   | "LOCK_LOST_DURING_TRANSACTION"
   | "CROSS_HOST_LOCK_UNVERIFIABLE"
   | "UNSUPPORTED_FILESYSTEM"
-  | "LOCK_TIMEOUT";
+  | "LOCK_TIMEOUT"
+  | "TRANSACTION_JOURNAL_CORRUPT"
+  | "CRITICAL_RECOVERY_FAILURE"
+  | "TRANSACTION_FAILED";
 
 export interface DiagnosticIssue {
   code: DiagnosticCode;
