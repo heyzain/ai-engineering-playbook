@@ -712,7 +712,42 @@ export class TransactionLockManager {
       }
 
       // 4. Create replacement transaction.lock
-      const newFd = fs.openSync(this.transactionLockPath, "wx");
+      let newFd: number | null = null;
+      try {
+        if (this.faultInjection.failReplacementLockWithEexist) {
+          // Simulate that a competing live contender created transaction.lock before we could
+          fs.writeFileSync(
+            this.transactionLockPath,
+            serializeLockMetadata({
+              pid: this.pid + 9999,
+              hostname: this.hostname,
+              created_at: new Date().toISOString(),
+              nonce: "competing-winner-nonce",
+            })
+          );
+          const fakeErr = new Error("EEXIST: file already exists") as NodeJS.ErrnoException;
+          fakeErr.code = "EEXIST";
+          throw fakeErr;
+        }
+        newFd = fs.openSync(this.transactionLockPath, "wx");
+      } catch (err: unknown) {
+        const openErr = err as NodeJS.ErrnoException;
+        if (openErr && openErr.code === "EEXIST") {
+          // Collision: Another contender acquired transaction.lock immediately after target was unlinked.
+          // Clean up our reclamation marker and yield to the winner.
+          this.safeUnlinkReclaim(reclaimNonce);
+          return null;
+        }
+
+        // Other filesystem failure creating replacement lock
+        this.safeUnlinkReclaim(reclaimNonce);
+        throw new LockError(
+          "LOCK_ACQUISITION_FAILED",
+          `Filesystem error creating replacement transaction lock: ${openErr?.message || String(err)}`,
+          { originalError: err }
+        );
+      }
+
       const newNonce = crypto.randomUUID();
       const newMeta: LockMetadata = {
         pid: this.pid,
@@ -721,9 +756,25 @@ export class TransactionLockManager {
         nonce: newNonce,
       };
 
-      fs.writeSync(newFd, serializeLockMetadata(newMeta), 0, "utf-8");
-      fs.fsyncSync(newFd);
-      fs.closeSync(newFd);
+      try {
+        fs.writeSync(newFd, serializeLockMetadata(newMeta), 0, "utf-8");
+        fs.fsyncSync(newFd);
+        fs.closeSync(newFd);
+        newFd = null;
+      } catch (writeErr) {
+        try {
+          if (newFd !== null) fs.closeSync(newFd);
+        } catch {
+          // ignore
+        }
+        try {
+          fs.unlinkSync(this.transactionLockPath);
+        } catch {
+          // ignore
+        }
+        this.safeUnlinkReclaim(reclaimNonce);
+        throw writeErr;
+      }
 
       if (this.faultInjection.failAfterNewLockBeforeUnlinkReclaim) {
         throw new LockError("LOCK_ACQUISITION_FAILED", "Fault injection: crash after new lock before unlink reclaim.");
@@ -757,24 +808,69 @@ export class TransactionLockManager {
       } catch {
         // ignore
       }
+      // If error was not a crash point simulation, ensure reclamation marker is cleaned up if owned
+      const isCrashSimulation =
+        this.faultInjection.failAfterReclaimCreatedBeforePayload ||
+        this.faultInjection.failAfterReclaimBeforeUnlinkTarget ||
+        this.faultInjection.failAfterUnlinkTargetBeforeNewLock ||
+        this.faultInjection.failAfterNewLockBeforeUnlinkReclaim;
+
+      if (!isCrashSimulation) {
+        try {
+          this.safeUnlinkReclaim(reclaimNonce);
+        } catch {
+          // ignore cleanup error if re-throwing original error
+        }
+      }
       throw err;
     }
   }
 
   /**
    * Safely unlinks reclaim.lock asserting ownership nonce.
+   * Returns true if marker was cleanly unlinked or did not exist.
+   * Returns false if marker was owned by another process or unreadable.
+   * Throws LockError if cleanup failed due to a filesystem error (e.g. EPERM).
    */
-  private safeUnlinkReclaim(expectedNonce: string): void {
+  safeUnlinkReclaim(expectedNonce: string): boolean {
+    if (!fs.existsSync(this.reclaimLockPath)) {
+      return true;
+    }
+
+    if (this.faultInjection.failReclaimCleanup) {
+      const err = new Error("EPERM: operation not permitted, unlink") as NodeJS.ErrnoException;
+      err.code = "EPERM";
+      throw new LockError(
+        "LOCK_ACQUISITION_FAILED",
+        `Failed to clean up reclamation marker after operation: ${err.message}`,
+        { originalError: err, reclaimNonce: expectedNonce }
+      );
+    }
+
+    let meta: ReclaimMetadata | null = null;
     try {
-      if (fs.existsSync(this.reclaimLockPath)) {
-        const content = fs.readFileSync(this.reclaimLockPath, "utf-8");
-        const meta = parseReclaimMetadata(content);
-        if (meta && meta.nonce === expectedNonce && meta.reclaiming_pid === this.pid) {
-          fs.unlinkSync(this.reclaimLockPath);
-        }
-      }
+      const content = fs.readFileSync(this.reclaimLockPath, "utf-8");
+      meta = parseReclaimMetadata(content);
     } catch {
-      // Ignore cleanup error
+      // Unreadable marker; do not delete (fail closed)
+      return false;
+    }
+
+    if (!meta || meta.nonce !== expectedNonce || meta.reclaiming_pid !== this.pid) {
+      // Not owned by this process; do NOT delete
+      return false;
+    }
+
+    try {
+      fs.unlinkSync(this.reclaimLockPath);
+      return true;
+    } catch (unlinkErr: unknown) {
+      const err = unlinkErr as NodeJS.ErrnoException;
+      throw new LockError(
+        "LOCK_ACQUISITION_FAILED",
+        `Failed to clean up reclamation marker after operation: ${err?.message || String(unlinkErr)}`,
+        { originalError: unlinkErr, reclaimNonce: expectedNonce }
+      );
     }
   }
 

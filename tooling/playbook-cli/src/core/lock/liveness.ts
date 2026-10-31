@@ -24,6 +24,8 @@ export function defaultProcessLivenessChecker(
     return {
       isAlive: true,
       isVerifiedDead: false,
+      isRecycled: false,
+      isIndeterminate: true,
       reason: `Process is on remote host "${recordedHostname}" (current host: "${currentHostname}"). Cross-host process checking is not supported.`,
       pid,
     };
@@ -34,6 +36,8 @@ export function defaultProcessLivenessChecker(
     return {
       isAlive: false,
       isVerifiedDead: false,
+      isRecycled: false,
+      isIndeterminate: true,
       reason: `Invalid PID: ${pid}. Process ownership cannot be established.`,
       pid,
     };
@@ -51,6 +55,8 @@ export function defaultProcessLivenessChecker(
       return {
         isAlive: false,
         isVerifiedDead: true,
+        isRecycled: false,
+        isIndeterminate: false,
         reason: `Process ${pid} does not exist in operating system process table (ESRCH).`,
         pid,
       };
@@ -61,6 +67,8 @@ export function defaultProcessLivenessChecker(
       return {
         isAlive: true,
         isVerifiedDead: false,
+        isRecycled: false,
+        isIndeterminate: false,
         reason: `Process ${pid} exists but access was denied (EPERM). Process is alive.`,
         pid,
       };
@@ -70,12 +78,14 @@ export function defaultProcessLivenessChecker(
     return {
       isAlive: true,
       isVerifiedDead: false,
+      isRecycled: false,
+      isIndeterminate: true,
       reason: `Process ${pid} liveness check returned unexpected error: ${error?.message || String(err)}.`,
       pid,
     };
   }
 
-  // 4. PID exists in OS table. Now verify if PID was recycled after lock creation.
+  // 4. PID exists in OS table. Check if PID reuse can be reliably verified.
   if (pidExists && recordedCreatedAt) {
     const lockCreatedDate = new Date(recordedCreatedAt);
     if (!isNaN(lockCreatedDate.getTime())) {
@@ -89,6 +99,7 @@ export function defaultProcessLivenessChecker(
             isAlive: false,
             isVerifiedDead: true,
             isRecycled: true,
+            isIndeterminate: false,
             reason: `Process ${pid} start time (${startTime.toISOString()}) is after lock creation (${lockCreatedDate.toISOString()}); PID was recycled.`,
             pid,
             startTime,
@@ -99,6 +110,7 @@ export function defaultProcessLivenessChecker(
           isAlive: true,
           isVerifiedDead: false,
           isRecycled: false,
+          isIndeterminate: false,
           reason: `Process ${pid} is active and process start time (${startTime.toISOString()}) precedes or matches lock creation.`,
           pid,
           startTime,
@@ -107,11 +119,14 @@ export function defaultProcessLivenessChecker(
     }
   }
 
-  // Fallback: PID exists and cannot be proven recycled -> must be treated as ALIVE
+  // Fallback: PID exists in OS process table but PID reuse cannot be reliably determined.
+  // Invariant 4: If process ownership cannot be established, fail closed (treat as alive).
   return {
     isAlive: true,
     isVerifiedDead: false,
-    reason: `Process ${pid} exists in operating system process table.`,
+    isRecycled: false,
+    isIndeterminate: true,
+    reason: `Process ${pid} exists in operating system process table. Start time cannot be reliably verified on platform "${process.platform}"; failing closed and treating process as alive.`,
     pid,
   };
 };
@@ -138,23 +153,21 @@ export function getProcessStartTime(pid: number): Date | null {
   return null;
 }
 
-function getLinuxProcessStartTime(pid: number): Date | null {
-  try {
-    const statPath = `/proc/${pid}`;
-    if (fs.existsSync(statPath)) {
-      const stat = fs.statSync(statPath);
-      // /proc/<pid> mtime reflects process creation time on Linux
-      if (stat.mtime && !isNaN(stat.mtime.getTime())) {
-        return stat.mtime;
-      }
-    }
-  } catch {
-    // Ignore read errors
-  }
+/**
+ * Linux process start time checker.
+ *
+ * NOTE: /proc/<pid> directory mtime is strictly NOT used because it reflects
+ * ephemeral inode access/instantiation time rather than process start time.
+ * Similarly, `ps -p <pid> -o lstart=` lacks timezone and sub-second precision.
+ * Without native kernel bindings for /proc/<pid>/stat field 22 (clock ticks),
+ * process start time cannot be demonstrably and reliably compared to ISO UTC dates.
+ * Per Safety Invariant 4, this function returns null (indeterminate) to fail closed.
+ */
+export function getLinuxProcessStartTime(_pid: number): Date | null {
   return null;
 }
 
-function getWindowsProcessStartTime(pid: number): Date | null {
+export function getWindowsProcessStartTime(pid: number): Date | null {
   try {
     const psScript = `(Get-Process -Id ${pid} -ErrorAction Stop).StartTime.ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ss.fffZ')`;
     const output = execFileSync(
@@ -178,7 +191,7 @@ function getWindowsProcessStartTime(pid: number): Date | null {
   return null;
 }
 
-function getMacProcessStartTime(pid: number): Date | null {
+export function getMacProcessStartTime(pid: number): Date | null {
   try {
     const output = execFileSync("ps", ["-p", String(pid), "-o", "lstart="], {
       encoding: "utf-8",

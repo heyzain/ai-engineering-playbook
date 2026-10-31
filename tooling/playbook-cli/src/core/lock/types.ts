@@ -70,6 +70,7 @@ export interface ProcessLivenessResult {
   isAlive: boolean;
   isVerifiedDead: boolean;
   isRecycled?: boolean;
+  isIndeterminate?: boolean;
   reason: string;
   pid: number;
   startTime?: Date;
@@ -118,6 +119,8 @@ export interface FaultInjectionHooks {
   failDuringPostAcquisitionCheck?: boolean;
   delayBeforePostCheckMs?: number;
   simulateConcurrentReclaimBeforePostCheck?: boolean;
+  failReplacementLockWithEexist?: boolean;
+  failReclaimCleanup?: boolean;
 }
 
 /**

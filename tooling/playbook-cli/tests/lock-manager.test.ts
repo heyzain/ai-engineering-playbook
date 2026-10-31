@@ -14,6 +14,9 @@ import {
   LockError,
   defaultProcessLivenessChecker,
   createLockDiagnostic,
+  getLinuxProcessStartTime,
+  getWindowsProcessStartTime,
+  getMacProcessStartTime,
   type ProcessLivenessResult,
 } from "../src/core/lock/index.js";
 
@@ -660,5 +663,382 @@ describe("TransactionLockManager & Atomic Concurrency", () => {
     assert.equal(insp3.lockStatus, "unreadable");
     assert.ok(insp3.diagnostic);
     assert.equal(insp3.diagnostic.code, "LOCK_METADATA_UNREADABLE");
+  });
+
+  // ---------------------------------------------------------------------------
+  // F-01: Linux Process Start-Time Detection & Indeterminate Identity
+  // ---------------------------------------------------------------------------
+
+  test("F-01.1: getLinuxProcessStartTime strictly returns null and never uses /proc mtime", () => {
+    const result = getLinuxProcessStartTime(process.pid);
+    assert.equal(result, null, "getLinuxProcessStartTime must return null to fail closed on indeterminate identity");
+  });
+
+  test("F-01.2: A live process with indeterminate start-time is never classified as recycled or dead", () => {
+    // Calling getLinuxProcessStartTime directly proves Linux fails closed without /proc mtime:
+    assert.equal(getLinuxProcessStartTime(process.pid), null);
+
+    // When start-time is indeterminate (null), defaultProcessLivenessChecker treats process as alive
+    const res = defaultProcessLivenessChecker(process.pid);
+    assert.equal(res.isAlive, true);
+    assert.equal(res.isVerifiedDead, false);
+    assert.equal(res.isRecycled, false);
+  });
+
+  test("F-01.3: Indeterminate process identity strictly prevents lock reclamation", async () => {
+    // Hold lock with an active process whose start-time is indeterminate
+    const holderPid = 717171;
+    const lockPayload = serializeLockMetadata({
+      pid: holderPid,
+      hostname: os.hostname(),
+      created_at: "2020-01-01T00:00:00.000Z",
+      nonce: "indeterminate-holder-nonce",
+    });
+    fs.writeFileSync(txLockPath, lockPayload, "utf-8");
+
+    // Liveness checker returns indeterminate (process is alive in OS table, start time unknown)
+    const livenessChecker = (pid: number): ProcessLivenessResult => {
+      if (pid === holderPid) {
+        return {
+          isAlive: true,
+          isVerifiedDead: false,
+          isIndeterminate: true,
+          reason: "PID exists in OS table; start-time cannot be determined. Treated as alive.",
+          pid,
+        };
+      }
+      return defaultProcessLivenessChecker(pid);
+    };
+
+    const contender = new TransactionLockManager({
+      targetDir: tempDir,
+      livenessChecker,
+      timeoutMs: 300,
+      retryDelayMs: 25,
+      maxRetryDelayMs: 50,
+    });
+
+    // Contender must NOT reclaim or steal the lock; it must time out
+    await assert.rejects(
+      async () => {
+        await contender.acquire();
+      },
+      (err: unknown) => {
+        assert.ok(err instanceof LockError);
+        assert.equal(err.code, "LOCK_TIMEOUT");
+        return true;
+      }
+    );
+
+    // Verify lock remains untouched
+    assert.ok(fs.existsSync(txLockPath));
+    const content = JSON.parse(fs.readFileSync(txLockPath, "utf-8"));
+    assert.equal(content.nonce, "indeterminate-holder-nonce");
+  });
+
+  test("F-01.4: Dead processes remain detectable through reliable OS evidence (ESRCH)", async () => {
+    // Non-existent PID
+    const nonExistentPid = 999999999;
+    const result = defaultProcessLivenessChecker(nonExistentPid);
+    assert.equal(result.isAlive, false);
+    assert.equal(result.isVerifiedDead, true);
+    assert.equal(result.isIndeterminate, false);
+    assert.match(result.reason, /ESRCH/);
+  });
+
+  // ---------------------------------------------------------------------------
+  // F-02: Reclamation Marker Cleanup on Replacement Collision & Failures
+  // ---------------------------------------------------------------------------
+
+  test("F-02.1: Replacement lock creation returning EEXIST cleanly cleans up reclaim.lock without leaving orphaned marker", async () => {
+    const deadPid = 818181;
+    const stalePayload = serializeLockMetadata({
+      pid: deadPid,
+      hostname: os.hostname(),
+      created_at: new Date(Date.now() - 60000).toISOString(),
+      nonce: "stale-dead-target",
+    });
+    fs.writeFileSync(txLockPath, stalePayload, "utf-8");
+
+    const livenessChecker = (pid: number): ProcessLivenessResult => {
+      if (pid === deadPid) {
+        return { isAlive: false, isVerifiedDead: true, reason: "Dead target (ESRCH)", pid };
+      }
+      return defaultProcessLivenessChecker(pid);
+    };
+
+    // Reclaimer configured with fault injection: replacement lock open throws EEXIST
+    const reclaimer = new TransactionLockManager({
+      targetDir: tempDir,
+      livenessChecker,
+      faultInjection: {
+        failReplacementLockWithEexist: true,
+      },
+      timeoutMs: 300,
+      retryDelayMs: 25,
+      maxRetryDelayMs: 50,
+    });
+
+    // Reclaimer will encounter EEXIST, clean up its reclaim marker, and retry until timeout
+    await assert.rejects(
+      async () => {
+        await reclaimer.acquire();
+      },
+      (err: unknown) => {
+        assert.ok(err instanceof LockError);
+        assert.equal(err.code, "LOCK_TIMEOUT");
+        return true;
+      }
+    );
+
+    // Critical assertion: reclaim.lock MUST NOT be left orphaned on disk!
+    assert.ok(
+      !fs.existsSync(reclaimLockPath),
+      "reclaim.lock must be cleanly removed after EEXIST replacement collision"
+    );
+
+    // Critical assertion: replacement lock owned by competitor MUST NOT be deleted
+    assert.ok(fs.existsSync(txLockPath), "transaction.lock owned by competitor must remain intact");
+    const content = JSON.parse(fs.readFileSync(txLockPath, "utf-8"));
+    assert.equal(content.nonce, "competing-winner-nonce");
+  });
+
+  test("F-02.2: safeUnlinkReclaim strictly preserves markers owned by other processes", () => {
+    const manager = new TransactionLockManager({
+      targetDir: tempDir,
+      pid: 11111,
+    });
+
+    // Write a marker owned by process 22222 with foreign nonce
+    const foreignMarker = serializeReclaimMetadata({
+      reclaiming_pid: 22222,
+      hostname: os.hostname(),
+      target_nonce: "some-target",
+      created_at: new Date().toISOString(),
+      nonce: "foreign-nonce-abc",
+    });
+    fs.writeFileSync(reclaimLockPath, foreignMarker, "utf-8");
+
+    // Manager 11111 attempts to unlink with its own nonce
+    const unlinked = manager.safeUnlinkReclaim("my-own-nonce");
+    assert.equal(unlinked, false, "Must return false when marker is owned by another process");
+
+    // Marker MUST remain intact on disk
+    assert.ok(fs.existsSync(reclaimLockPath));
+    const content = JSON.parse(fs.readFileSync(reclaimLockPath, "utf-8"));
+    assert.equal(content.nonce, "foreign-nonce-abc");
+    assert.equal(content.reclaiming_pid, 22222);
+  });
+
+  test("F-02.3: safeUnlinkReclaim throws structured LockError when cleanup itself fails", () => {
+    const manager = new TransactionLockManager({
+      targetDir: tempDir,
+      faultInjection: {
+        failReclaimCleanup: true,
+      },
+    });
+
+    const myNonce = "my-nonce-xyz";
+    const myMarker = serializeReclaimMetadata({
+      reclaiming_pid: manager.pid,
+      hostname: os.hostname(),
+      target_nonce: "target-123",
+      created_at: new Date().toISOString(),
+      nonce: myNonce,
+    });
+    fs.writeFileSync(reclaimLockPath, myMarker, "utf-8");
+
+    assert.throws(
+      () => {
+        manager.safeUnlinkReclaim(myNonce);
+      },
+      (err: unknown) => {
+        assert.ok(err instanceof LockError);
+        assert.equal(err.code, "LOCK_ACQUISITION_FAILED");
+        assert.match(err.message, /Failed to clean up reclamation marker/);
+        assert.ok(err.details?.originalError);
+        return true;
+      }
+    );
+  });
+
+  test("F-02.4: Fault-injection: crash after reclaim.lock created before payload fails closed", async () => {
+    const deadPid = 333333;
+    fs.writeFileSync(
+      txLockPath,
+      serializeLockMetadata({
+        pid: deadPid,
+        hostname: os.hostname(),
+        created_at: new Date(Date.now() - 30000).toISOString(),
+        nonce: "dead-target-payload-crash",
+      }),
+      "utf-8"
+    );
+
+    const livenessChecker = (pid: number): ProcessLivenessResult => {
+      if (pid === deadPid) {
+        return { isAlive: false, isVerifiedDead: true, reason: "Dead", pid };
+      }
+      return defaultProcessLivenessChecker(pid);
+    };
+
+    const crashingReclaimer = new TransactionLockManager({
+      targetDir: tempDir,
+      livenessChecker,
+      faultInjection: {
+        failAfterReclaimCreatedBeforePayload: true,
+      },
+    });
+
+    await assert.rejects(
+      async () => {
+        await crashingReclaimer.acquire();
+      },
+      (err: unknown) => {
+        assert.ok(err instanceof LockError);
+        assert.match(err.message, /Fault injection: crash after reclaim created before payload/);
+        return true;
+      }
+    );
+
+    // 0-byte reclaim.lock is on disk
+    assert.ok(fs.existsSync(reclaimLockPath));
+    assert.equal(fs.statSync(reclaimLockPath).size, 0);
+
+    // Subsequent contender must fail closed with RECLAIM_MARKER_UNVERIFIABLE
+    const nextContender = new TransactionLockManager({
+      targetDir: tempDir,
+      transientGracePeriodMs: 50,
+      timeoutMs: 300,
+    });
+
+    await assert.rejects(
+      async () => {
+        await nextContender.acquire();
+      },
+      (err: unknown) => {
+        assert.ok(err instanceof LockError);
+        assert.equal(err.code, "RECLAIM_MARKER_UNVERIFIABLE");
+        return true;
+      }
+    );
+  });
+
+  test("F-02.5: Fault-injection: crash after target unlinked before new lock allows subsequent reclaimer to acquire", async () => {
+    const deadPid = 444444;
+    fs.writeFileSync(
+      txLockPath,
+      serializeLockMetadata({
+        pid: deadPid,
+        hostname: os.hostname(),
+        created_at: new Date(Date.now() - 30000).toISOString(),
+        nonce: "dead-target-unlink-crash",
+      }),
+      "utf-8"
+    );
+
+    const deadReclaimerPid = 555555;
+    const livenessChecker = (pid: number): ProcessLivenessResult => {
+      if (pid === deadPid || pid === deadReclaimerPid) {
+        return { isAlive: false, isVerifiedDead: true, reason: "Dead process", pid };
+      }
+      return defaultProcessLivenessChecker(pid);
+    };
+
+    const crashingReclaimer = new TransactionLockManager({
+      targetDir: tempDir,
+      pid: deadReclaimerPid,
+      livenessChecker,
+      faultInjection: {
+        failAfterUnlinkTargetBeforeNewLock: true,
+      },
+    });
+
+    await assert.rejects(
+      async () => {
+        await crashingReclaimer.acquire();
+      },
+      (err: unknown) => {
+        assert.ok(err instanceof LockError);
+        assert.match(err.message, /Fault injection: crash after target unlinked/);
+        return true;
+      }
+    );
+
+    // At this point: transaction.lock was unlinked, and dead reclaim.lock is on disk
+    assert.ok(!fs.existsSync(txLockPath));
+    assert.ok(fs.existsSync(reclaimLockPath));
+
+    // Next contender should detect dead reclaimer, clean up reclaim.lock, and acquire transaction.lock cleanly
+    const subsequentContender = new TransactionLockManager({
+      targetDir: tempDir,
+      livenessChecker,
+      timeoutMs: 2000,
+    });
+
+    const lock = await subsequentContender.acquire();
+    assert.ok(lock.nonce);
+    assert.ok(fs.existsSync(txLockPath));
+    assert.ok(!fs.existsSync(reclaimLockPath));
+    await lock.release();
+  });
+
+  test("F-02.6: Fault-injection: crash after new lock before unlink reclaim allows subsequent recovery", async () => {
+    const deadPid = 666666;
+    fs.writeFileSync(
+      txLockPath,
+      serializeLockMetadata({
+        pid: deadPid,
+        hostname: os.hostname(),
+        created_at: new Date(Date.now() - 30000).toISOString(),
+        nonce: "dead-target-before-new-lock-crash",
+      }),
+      "utf-8"
+    );
+
+    const deadReclaimerPid = 777777;
+    const livenessChecker = (pid: number): ProcessLivenessResult => {
+      if (pid === deadPid || pid === deadReclaimerPid) {
+        return { isAlive: false, isVerifiedDead: true, reason: "Dead process", pid };
+      }
+      return defaultProcessLivenessChecker(pid);
+    };
+
+    const crashingReclaimer = new TransactionLockManager({
+      targetDir: tempDir,
+      pid: deadReclaimerPid,
+      livenessChecker,
+      faultInjection: {
+        failAfterNewLockBeforeUnlinkReclaim: true,
+      },
+    });
+
+    await assert.rejects(
+      async () => {
+        await crashingReclaimer.acquire();
+      },
+      (err: unknown) => {
+        assert.ok(err instanceof LockError);
+        assert.match(err.message, /Fault injection: crash after new lock before unlink reclaim/);
+        return true;
+      }
+    );
+
+    // Both transaction.lock (owned by dead reclaimer) and reclaim.lock (owned by dead reclaimer) are on disk
+    assert.ok(fs.existsSync(txLockPath));
+    assert.ok(fs.existsSync(reclaimLockPath));
+
+    // Next contender should unwind dead reclaim.lock, detect dead owner in transaction.lock, and reclaim it
+    const subsequentContender = new TransactionLockManager({
+      targetDir: tempDir,
+      livenessChecker,
+      timeoutMs: 3000,
+    });
+
+    const lock = await subsequentContender.acquire();
+    assert.ok(lock.nonce);
+    assert.ok(fs.existsSync(txLockPath));
+    assert.ok(!fs.existsSync(reclaimLockPath));
+    await lock.release();
   });
 });
