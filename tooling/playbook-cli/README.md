@@ -10,6 +10,7 @@
 
 ### Core Capabilities
 - **Project Inspection & Governance Diagnostics (`playbook inspect`)**: Read-only evaluation of downstream project manifest and state against JSON schemas and governance invariants, computing an actionable readiness assessment (`blocked`, `needs_attention`, `ready_for_human_review`, `approved`, `completed_terminal`).
+- **Evidence Verification Engine (`playbook verify-evidence`)**: Read-only verification of evidence files against `.playbook/state.json`, checking file existence, path safety, and SHA-256 cryptographic integrity without modifying disk or state.
 - **Project Bootstrapping (`playbook init`)**: Scaffolds standard downstream repository directories (`.playbook/`, `docs/prd/`, `docs/adr/`, `docs/rfcs/`, `docs/gates/`, `docs/exceptions/`, `.playbook/logs/`) and generates schema-conforming `manifest.json` and Stage 0 `state.json`.
 - **Accidental State Overwrite Protection**: Refuses to overwrite existing governance manifests or lifecycle state files without explicit human confirmation or the `--force` flag.
 - **Real JSON Schema Validation**: Compiles and verifies JSON Schema Draft 2020-12 specifications (`schemas/project-manifest.schema.json` and `schemas/project-state.schema.json`) with detailed JSON-pointer diagnostics.
@@ -213,6 +214,46 @@ playbook inspect --json
 
 ---
 
+### `playbook verify-evidence`
+Read-only cryptographic integrity and existence verification of evidence files recorded in `.playbook/state.json`.
+
+```bash
+# Verify all evidence files in current project
+playbook verify-evidence
+
+# Verify evidence for a specific project directory
+playbook verify-evidence --cwd /path/to/project
+
+# Output machine-readable JSON report
+playbook verify-evidence --json
+```
+
+#### What the Verifier Checks
+1. **Path Resolution & Security**: Safely resolves relative evidence paths (e.g. `.playbook/logs/...`, `docs/exceptions/...`) against project root, rejecting path traversal attempts (`../`) and symlink boundary escapes.
+2. **File Existence**: Verifies that referenced log files, benchmark outputs, or markdown checklists physically exist on disk.
+3. **Cryptographic Integrity**: Reads existing files and computes their actual SHA-256 digest, comparing it case-insensitively with the recorded `evidence_hash` (`sha256:<hex>`).
+4. **Hermetic Non-Network Execution**: Detects remote URLs (e.g. `http://`, `https://`) and safely classifies them as `unsupported` without accessing the network.
+
+#### Verification Outcomes & Semantics
+- **`integrity_passed`**: Referenced file exists on disk and its calculated SHA-256 matches the recorded `evidence_hash`.
+- **`existence_verified`**: Referenced file exists on disk, but no `evidence_hash` was recorded in state (existence confirmed, integrity unverified).
+- **`integrity_failed`**: Referenced file exists, but its calculated SHA-256 does NOT match the recorded hash, or the file is unreadable (directory target or permission error).
+- **`missing`**: Referenced file does not exist on disk at the resolved path.
+- **`invalid_reference`**: Reference is malformed, contains null bytes, or attempts path traversal outside the project directory.
+- **`unsupported`**: Reference uses a remote URL or unsupported URI scheme.
+
+#### Non-Negotiable Boundaries & Scientific Limitations
+- **Hash Integrity != Authenticity**: A matching SHA-256 hash confirms the file has not been modified since the hash was recorded in `state.json`. It does **not** prove that the test runner was authentic or untampered with.
+- **Integrity != Correctness**: A matching hash does **not** prove that the content satisfies business requirements or that tests were comprehensive.
+- **Existence != Validity**: Confirming a file exists on disk does **not** validate its internal claims.
+- **Strictly Read-Only**: The verification engine never mutates project state or modifies evidence files on disk.
+
+#### Exit Codes
+- `0`: All evidence files exist and any recorded hashes match (`all_passed: true`).
+- `1`: One or more evidence records are `missing`, `invalid_reference`, or have `integrity_failed`.
+
+---
+
 ### `playbook init`
 Bootstraps a repository into an AI Engineering Playbook governed project.
 
@@ -373,6 +414,18 @@ The CLI includes comprehensive tests running on Node's native test runner (`node
   - Tests Stage 6 approved readiness summary (`CLOSE_LIFECYCLE` rather than advancing).
   - Tests source-of-truth consistency (`state.current_stage` is authoritative over manifest pointer).
   - Tests read-only immutability (zero file modifications).
+- **Evidence Verification Tests (`tests/verify-evidence.test.ts`)**:
+  - Tests existing evidence files without hash (`existence_verified`).
+  - Tests matching SHA-256 integrity check (`integrity_passed`).
+  - Tests mismatched SHA-256 hash detection (`integrity_failed`).
+  - Tests missing evidence file detection (`missing`).
+  - Tests malformed reference paths and null byte injection (`invalid_reference`).
+  - Tests path traversal and symlink boundary escape rejection (`invalid_reference`).
+  - Tests unreadable files and directory targets.
+  - Tests multiple evidence records with mixed verification outcomes.
+  - Tests unsupported remote URI schemes (`unsupported`).
+  - Tests read-only immutability (zero file modifications).
+  - Tests CLI executable output formatting and machine-readable JSON.
 - **CLI Executable Integration Tests (`tests/cli.test.ts`)**:
   - Tests command dispatch, exit codes, version flags, and end-to-end `init` and `validate` executions.
 

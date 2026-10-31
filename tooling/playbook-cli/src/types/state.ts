@@ -8,20 +8,18 @@ export type ValidationStatus = "unvalidated" | "passed" | "failed" | "waived";
 export interface EvidenceRecord {
   requirement_id: string | null;
   type:
-    | "unit_test"
-    | "integration_test"
-    | "contract_test"
-    | "e2e_test"
-    | "static_type_check"
-    | "lint_check"
-    | "security_scan"
-    | "schema_validation"
+    | "automated_test"
+    | "build_typecheck"
     | "static_analysis"
-    | "manual_inspection"
+    | "schema_validation"
+    | "security_audit"
     | "manual_functional"
-    | "performance_benchmark";
+    | "visual_review"
+    | "accessibility_audit"
+    | "architecture_review"
+    | string;
   procedure: string;
-  result: "passed" | "failed";
+  result: "passed" | "failed" | "inconclusive";
   summary: string;
   exit_code: number | null;
   commit_sha?: string | null;

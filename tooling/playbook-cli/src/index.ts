@@ -15,3 +15,7 @@ export * from "./utils/paths.js";
 export * from "./commands/init.js";
 export * from "./commands/validate.js";
 export * from "./commands/inspect.js";
+export * from "./core/evidence/types.js";
+export * from "./core/evidence/verifier.js";
+export * from "./formatters/evidence-terminal.js";
+export * from "./commands/verify-evidence.js";

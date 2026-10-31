@@ -5,6 +5,7 @@ import { PLAYBOOK_VERSION } from "../constants.js";
 import { runInit } from "../commands/init.js";
 import { runValidate } from "../commands/validate.js";
 import { runInspect } from "../commands/inspect.js";
+import { runVerifyEvidence } from "../commands/verify-evidence.js";
 import type { GovernanceProfile, ApprovalMode } from "../constants.js";
 
 const CLI_VERSION = "1.0.0";
@@ -17,15 +18,16 @@ Usage:
   playbook <command> [options]
 
 Commands:
-  inspect       Inspect project governance state, deliverables, and readiness (read-only)
-  init          Initialize a downstream project with standard manifest and state
-  validate      Validate project manifest and state against JSON Schemas
-  help          Show this help message
+  inspect           Inspect project governance state, deliverables, and readiness (read-only)
+  verify-evidence   Verify evidence files and SHA-256 integrity hashes (read-only)
+  init              Initialize a downstream project with standard manifest and state
+  validate          Validate project manifest and state against JSON Schemas
+  help              Show this help message
 
 Options:
   -h, --help              Show help message
   -v, --version           Show CLI and Playbook standard versions
-  --json                  Output machine-readable JSON (inspect command)
+  --json                  Output machine-readable JSON (inspect, verify-evidence)
   -f, --force             Overwrite existing governance files (init command)
   --non-interactive       Execute without interactive terminal prompts
   --project-id <id>       Kebab-case project identifier (e.g. 'my-app')
@@ -92,6 +94,15 @@ async function main(): Promise<void> {
 
   if (command === "inspect") {
     const res = runInspect({
+      cwd: values.cwd as string | undefined,
+      json: Boolean(values.json),
+    });
+
+    process.exit(res.exitCode);
+  }
+
+  if (command === "verify-evidence") {
+    const res = runVerifyEvidence({
       cwd: values.cwd as string | undefined,
       json: Boolean(values.json),
     });
