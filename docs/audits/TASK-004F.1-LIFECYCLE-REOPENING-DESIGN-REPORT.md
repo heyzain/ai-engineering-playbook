@@ -1,20 +1,20 @@
-# Task 004F.1 — Controlled Lifecycle Reopening: Architecture & Design Report
+# Task 004F.1.1 — Lifecycle Reopening Architecture Review Corrections Report
 
 > **Component**: Controlled Lifecycle Reopening Governance Architecture  
 > **Package**: `@ai-engineering-playbook/cli`  
 > **Author**: AI Engineering Controller  
 > **Date**: 2026-11-01  
-> **Task Ref**: Task 004F.1  
-> **Deliverable Document**: [`governance/lifecycle-reopening-design.md`](file:///f:/workspace/ai-engineering-playbook/governance/lifecycle-reopening-design.md)  
-> **Status**: Completed Architectural Specification & Review Report  
+> **Task Ref**: Task 004F.1.1 (Revising Task 004F.1)  
+> **Revised Specification**: [`governance/lifecycle-reopening-design.md`](file:///f:/workspace/ai-engineering-playbook/governance/lifecycle-reopening-design.md) (v1.1.0)  
+> **Status**: Completed Architectural Specification Review & Corrections Report  
 
 ---
 
 ## 1. Executive Summary & Verdict
 
-Task 004F.1 establishes the architectural contract, state transitions, transaction integration, milestone preservation model, and CLI interface for **Controlled Lifecycle Reopening (`REOPEN_LIFECYCLE`)**.
+Following architecture review feedback on Task 004F.1, this task revised [`governance/lifecycle-reopening-design.md`](file:///f:/workspace/ai-engineering-playbook/governance/lifecycle-reopening-design.md) to eliminate all architectural discrepancies, align locking and transaction descriptions with real implemented code, formalize inherited Stage 0 prerequisite rules, verify multi-milestone closure compatibility against existing runtime code, and refine terminology.
 
-In accordance with task constraints, **no runtime code was implemented and no existing behavior was modified**. This task produces a rigorous, production-grade architectural specification that bridges the gap between documented state machine concepts and future CLI implementation.
+In accordance with task constraints, **no runtime code was changed, no schemas were altered, and no new CLI commands were implemented**.
 
 ### Final Verdict
 
@@ -23,134 +23,119 @@ DESIGN_READY_FOR_REVIEW
 ```
 
 > [!NOTE]
-> The architectural design satisfies all core engineering constitution principles, preserves the immutability of completed milestone snapshots, prevents AI agent self-reopening, leverages the shared Write-Ahead Logging (WAL) and flock concurrency engines, and provides full backward and forward compatibility with existing Draft 2020-12 JSON schemas.
+> All seven required correction areas have been fully addressed in the design document. The revised architecture adheres strictly to the existing codebase ground truths, preserves the immutability guarantees of completed milestone snapshots, and prevents AI agent self-reopening.
 
 ---
 
-## 2. Phase 1 — Existing Architecture Audit Findings
+## 2. Source Files Inspected
 
-A comprehensive audit of the current governance layer, schemas, and CLI implementation revealed the following ground truths:
+To ensure absolute fidelity to the actual implementation, the following codebase components were audited:
 
-1. **State Machine Invariant**:
-   - Advancing Stage 6 executes `CLOSE_LIFECYCLE`, permanently locking `current_stage` at `6` and setting `lifecycle_status: "completed_terminal"`.
-   - Repeated calls to `playbook advance` throw `ADVANCEMENT_BLOCKED`. Stage 7 is strictly prohibited and never created.
-2. **Snapshot Creation & Immutability**:
-   - The sealed state is atomically snapshotted to `.playbook/milestones/state-<milestone_id>.json` and set to read-only permissions (`0o444`).
-   - Snapshot collision defense (`SNAPSHOT_CONFLICT`) prevents overwriting existing snapshot files.
-3. **Approval Sidecar Severance**:
-   - The approval sidecar `.playbook/approval-fingerprint.json` is unlinked upon Stage 6 closure, preventing stale reuse.
-4. **Schema Alignment**:
-   - `schemas/project-state.schema.json` already defines `lifecycle_status: "reopened_maintenance"` and specifies the complete data structure for `archived_milestones[]`.
-   - `schemas/project-manifest.schema.json` defines `active_milestone_id` and `active_lifecycle_stage`.
-5. **Runtime Tooling Gap**:
-   - The CLI currently lacks any command (`playbook reopen`) to trigger `REOPEN_LIFECYCLE`.
-   - While `CLOSE_LIFECYCLE` populates `stage_history`, `archived_milestones[]` remains empty `[]` in `state.json` until a formal reopening operation archives the completed milestone.
-   - Reopening currently requires error-prone direct JSON file editing.
+| Source File | Subsystem / Area | Key Ground Truth Verified |
+| :--- | :--- | :--- |
+| [`tooling/playbook-cli/src/core/lock/lock-manager.ts`](file:///f:/workspace/ai-engineering-playbook/tooling/playbook-cli/src/core/lock/lock-manager.ts) | Transaction Lock Manager | Lock file is `.playbook/transaction.lock` (not `.playbook/playbook.lock`). Uses `O_CREAT \| O_EXCL` (`wx` flag) with JSON `LockMetadata`. Uses `.playbook/reclaim.lock` for safe stale lock reclamation. No OS `flock` syscall. |
+| [`tooling/playbook-cli/src/core/lock/types.ts`](file:///f:/workspace/ai-engineering-playbook/tooling/playbook-cli/src/core/lock/types.ts) | Lock Data Models & Errors | Error codes: `LOCK_HELD_BY_ACTIVE_PROCESS`, `CROSS_HOST_LOCK_UNVERIFIABLE`, `LOCK_TIMEOUT`. |
+| [`tooling/playbook-cli/src/core/lock/liveness.ts`](file:///f:/workspace/ai-engineering-playbook/tooling/playbook-cli/src/core/lock/liveness.ts) | Process Liveness Detection | `process.kill(pid, 0)` on POSIX / `tasklist` on Windows, start-time verification to detect recycled PIDs. |
+| [`tooling/playbook-cli/src/core/transaction/transaction-manager.ts`](file:///f:/workspace/ai-engineering-playbook/tooling/playbook-cli/src/core/transaction/transaction-manager.ts) | WAL Transaction Engine | WAL engine only supports `FileWriteSpec` (`targetPath`, `content`). Does not support atomic file deletion entries in journal. |
+| [`tooling/playbook-cli/src/core/advancement.ts`](file:///f:/workspace/ai-engineering-playbook/tooling/playbook-cli/src/core/advancement.ts) | Advancement & Closure Engine | `advancement.ts` line 101 only blocks `completed_terminal`. Permits `reopened_maintenance` through Stages 1–6 without code changes. Stage 6 `CLOSE_LIFECYCLE` creates snapshot `state-${state.milestone_id}.json` and returns to `completed_terminal`. |
+| [`tooling/playbook-cli/src/commands/approve.ts`](file:///f:/workspace/ai-engineering-playbook/tooling/playbook-cli/src/commands/approve.ts) | Interactive CLI Approval | Enforces `TTY_REQUIRED` on non-TTY calls. Rejects AI names (`AGENT_APPROVAL_PROHIBITED`). Prompts for confirmation phrase and real engineering roles without inventing defaults. |
+| [`schemas/project-state.schema.json`](file:///f:/workspace/ai-engineering-playbook/schemas/project-state.schema.json) | State Contract | `lifecycle_status: "reopened_maintenance"`. `archived_milestones[]` schema fields. |
 
 ---
 
-## 3. Phase 2 — Reopening Semantics & Core Decisions
+## 3. Correction-by-Correction Explanation
 
-### 3.1 Lifecycle Transition Matrix
-- **Permitted**: `completed_terminal` $\rightarrow$ `reopened_maintenance`.
-- **Prohibited**:
-  - `completed_terminal` $\rightarrow$ `active` (rejected: project has prior production releases; must indicate maintenance).
-  - `active` $\rightarrow$ `reopened_maintenance` (rejected with `LIFECYCLE_NOT_TERMINAL`: project is already active).
-  - `paused` $\rightarrow$ `reopened_maintenance` (rejected with `LIFECYCLE_NOT_TERMINAL`: project must resume active development).
-  - `reopened_maintenance` $\rightarrow$ `reopened_maintenance` (rejected with `LIFECYCLE_ALREADY_REOPENED`: milestone already in progress).
+### Correction 1: Existing Lock Manager Integration
+- **Previous Discrepancy**: The initial design incorrectly referenced `flock` and `.playbook/playbook.lock`.
+- **Revision Applied**:
+  - Corrected lock file to canonical `.playbook/transaction.lock` (defined in `DEFAULT_PATHS.lockFile`).
+  - Documented actual mechanism: atomic file creation using `fs.openSync` with `O_CREAT | O_EXCL` flags, writing structured `LockMetadata` (`pid`, `hostname`, `created_at`, `nonce`).
+  - Documented contention behavior: exponential backoff with jitter up to `lockTimeoutMs` (default 10,000 ms), failing with `LOCK_HELD_BY_ACTIVE_PROCESS`.
+  - Documented stale lock reclamation: serialized through `.playbook/reclaim.lock`, verifying process liveness and start-time to detect PID recycling.
+  - Documented genuine limitations: cross-host locks fail closed with `CROSS_HOST_LOCK_UNVERIFIABLE`; non-POSIX network filesystems (NFS/CIFS) with non-atomic exclusive creation require caution.
 
-### 3.2 Stage Continuation Strategy
-- **Default Entry Stage**: **Stage 1 (Requirements & Specification)**.
-  - *Rationale*: Routine maintenance (feature enhancements, bug fixes, refactoring, performance tuning) does not invalidate the foundational Problem Statement (`PRD-CORE`). Forcing agents and engineers through Stage 0 Problem Discovery creates bureaucratic friction and low-value paperwork. Engineering begins with new requirements (`REQ-SPEC`).
-- **Alternative Entry Stage**: **Stage 0 (Discovery & Problem Formulation)**.
-  - *Rationale*: Reserved for major strategic pivots, fundamental architecture overhauls, or brand new business models requiring a new PRD Core. Enabled via explicit `--stage 0`.
-- **Prohibited Stages**: Resuming at Stage 6 (deployment) or jumping directly to Stages 2–5 (architecture, code, testing) without specifications is strictly barred.
+### Correction 2: Stage 1 Inherited Prerequisite
+- **Previous Discrepancy**: The role of Stage 0 `PRD-CORE` in a Stage 1 maintenance milestone was vaguely stated as "linked".
+- **Revision Applied**:
+  - **Artifact Reference**: The baseline `PRD-CORE.md` remains under `docs/prd/PRD-CORE.md`. Stage 1 active baseline deliverables are `REQ-SPEC` and `TEST-STRATEGY`.
+  - **Applicability Assessment**: In Stage 1, the author of `REQ-SPEC` and the human reviewer at Gate 1 must explicitly assess whether the problem formulation in `PRD-CORE` remains valid for the maintenance milestone.
+  - **Blocking Outdated Prerequisites**: If `PRD-CORE` is outdated or a fundamental problem pivot has occurred, Stage 1 progression is **BLOCKED**. The milestone must be reopened at **Stage 0** (`playbook reopen --stage 0`) with formal problem discovery and human sign-off.
+  - **Recording Modifications**: Minor scope refinements are captured as an amendment section in `PRD-CORE.md` or via a Clarification RFC.
+  - **Separation of Deliverables**: Inherited material is **never automatically marked verified**. Stage 1 deliverables are freshly initialized with `status: "not_started"`, `validation_status: "unvalidated"`, and empty `evidence: []`.
 
-### 3.3 Milestone Preservation Strategy
-- **Mandatory Milestone Increment**: Reopening **must never** continue under the existing milestone ID. A new milestone identifier (e.g. `M-1.1.0` or `M-2.0.0`) matching `^M-[a-zA-Z0-9.-]+$` is mandatory.
-- **Milestone Archival Procedure**:
-  - The completed milestone currently in `state.json` is appended to `state.archived_milestones[]` along with its full 7-stage history, exit package path, and snapshot reference.
-  - The previous milestone's disk snapshot (`state-M-1.0.0.json`) remains permanently preserved on disk.
-  - Active `state.stage_history` is re-initialized to `[]` for the new milestone.
-  - Manifest `active_milestone_id` and `active_lifecycle_stage` are updated synchronously.
+### Correction 3: Reopened Lifecycle Closure
+- **Previous Discrepancy**: Did not fully articulate how multiple iterative reopening cycles transition to completion.
+- **Revision Applied**:
+  - Mapped the complete multi-milestone progression: $\text{M-1.0.0} \rightarrow \text{M-1.1.0} \rightarrow \text{M-2.0.0}$.
+  - Verified that [`core/advancement.ts`](file:///f:/workspace/ai-engineering-playbook/tooling/playbook-cli/src/core/advancement.ts) allows `reopened_maintenance` to advance through Stages 1–5 without blocking.
+  - Verified that advancing Stage 6 under `reopened_maintenance` cleanly executes `CLOSE_LIFECYCLE`, returning `lifecycle_status` to `completed_terminal`, preserving prior `archived_milestones`, and creating a new snapshot at `.playbook/milestones/state-M-1.1.0.json`.
+  - Documented that subsequent reopening appends `M-1.1.0` to `archived_milestones[]` (which now holds both `M-1.0.0` and `M-1.1.0`), re-initializing `stage_history = []`.
 
-### 3.4 Approval and Evidence Invalidation Boundary
-- **Sidecar Cleanup**: `.playbook/approval-fingerprint.json` is verified destroyed/unlinked.
-- **Stage Approval Reset**: `current_stage_detail.human_approval` is reset to `status: "not_requested"` and `stage_status: "not_started"`.
-- **Evidence Freshness**: Deliverables start with `status: "not_started"` and empty `evidence: []`. Prior evidence logs in `.playbook/logs/` are historical and cannot satisfy new deliverable requirements.
-- **Exceptions & RFCs**: Active RFCs and exceptions are initialized to `[]`. No prior waivers carry over automatically.
+### Correction 4: Approval Sidecar and WAL Recovery
+- **Previous Discrepancy**: Implied sidecar deletion could be recorded as a journaled WAL entry.
+- **Revision Applied**:
+  - Inspected WAL engine: `WriteAheadTransactionManager` only supports file write specifications (`FileWriteSpec`). It does not have a native atomic file deletion journal entry type.
+  - Defined idempotent post-commit cleanup: `safeUnlink` is executed during transaction finalization.
+  - Formulated **fail-closed defense**:
+    - If a crash occurs after `state.json` and `manifest.json` are committed but before sidecar deletion:
+      1. `state.stage_status` is `"not_started"`, so `playbook advance` rejects with `ADVANCEMENT_BLOCKED`.
+      2. The lingering sidecar has `gate: 6`, which mismatches active stage `1` (or `0`), rejecting with `APPROVAL_FINGERPRINT_MALFORMED`.
+      3. The sidecar fingerprint does not match the new milestone ID, new stage deliverables, or empty evidence, rejecting with `APPROVAL_STALE`.
+    - When `playbook approve` is eventually called for the new stage gate, it atomically overwrites the sidecar.
+  - Concluded that no secondary transaction mechanism is required.
 
-### 3.5 Human Authorization & Anti-Agent Safeguards
-- **Mandatory Interactive TTY**: `playbook reopen` requires `process.stdin.isTTY === true`. Automated background scripts and headless agents are rejected with `TTY_REQUIRED`.
-- **Agent Name Filtering**: Reopening authorizations claiming AI agent identities (`AI`, `Bot`, `Agent`, `Claude`, `GPT`, etc.) are rejected with `AGENT_REOPEN_PROHIBITED`.
-- **Explicit Typed Confirmation Phrase**: Requires typing `CONFIRM REOPEN MILESTONE <NEW_MILESTONE_ID>`.
-- **Mandatory Business Justification**: Requires non-empty `--reason` string.
-- **Intellectual Honesty on Identity**: The report reiterates that TTY checks and confirmation phrases are operational execution guardrails against accidental agent self-triggering, not cryptographic proofs of human identity. Cryptographic non-repudiation is established at the Git forge layer (signed commits, branch protection, PR approvals).
+### Correction 5: Historical Record Accessibility
+- **Previous Discrepancy**: Did not clearly delineate where RFCs, exceptions, and non-terminal exit packages from prior milestones reside.
+- **Revision Applied**:
+  - Defined the three complementary historical layers:
+    1. `archived_milestones[]` in `state.json`: Summary metadata, completed timestamp, final stage (6), exit package reference, and the full 7-stage history array.
+    2. **Governance-Frozen Snapshot (`.playbook/milestones/state-<milestone_id>.json`)**: The authoritative, complete machine-readable source of truth for all granular records (deliverables, evidence hashes, test summaries, approval conditions, RFC decisions, exception records).
+    3. **Filesystem & Git History**: Markdown artifacts in `docs/` and logs in `.playbook/logs/` physically remain in place; Git commits provide permanent cryptographic audit logs.
 
----
+### Correction 6: Snapshot Preservation Terminology
+- **Previous Discrepancy**: Used phrases like "permanent immutability" and "hardware-immutable".
+- **Revision Applied**:
+  - Standardized terminology across the entire document:
+    - **Governance-frozen snapshot** (conventionally sealed by Playbook tooling).
+    - **Historical preservation**.
+    - **Integrity verification** (SHA-256 collision detection).
+    - **Git-backed history where available**.
+  - Explicitly acknowledged that filesystem read-only permissions (`0o444`) provide local advisory write protection against accidental overwrites, but do not provide technical non-repudiation or physical immutability against intentional out-of-band manipulation. Permanent tamper-resistance relies on Git-backed history, signed commits, and protected repository branches.
 
-## 4. Phase 3 — Transaction & Recovery Design
-
-Controlled reopening integrates directly into the existing Write-Ahead Transaction Journal (`WriteAheadTransactionManager`) and lock manager (`TransactionLockManager`):
-
-- **Action Identifier**: `"REOPEN_LIFECYCLE"`
-- **Concurrency Protection**: Exclusive advisory flock on `.playbook/playbook.lock`.
-- **Atomic WAL Payload**:
-  1. `.playbook/state.json`: State mutation with new milestone ID, archived milestone appended, stage reset, deliverables initialized.
-  2. `.playbook/manifest.json`: Manifest synchronized to new milestone ID and target stage.
-- **Post-Commit Hook**: Unlinks `.playbook/approval-fingerprint.json` if present.
-- **Crash Recovery**:
-  - Interruption in `PREPARED`: Journal rolls back cleanly to `completed_terminal`.
-  - Interruption in `COMMITTING`: Journal rolls forward to complete `reopened_maintenance`.
-
----
-
-## 5. Phase 4 — CLI Interface & Contract Proposal
-
-The design proposes a new CLI command:
-
-```bash
-playbook reopen \
-  --milestone M-1.1.0 \
-  --name "Q1 Maintenance and Enhancements" \
-  --stage 1 \
-  --authorized-by "Alice Human" \
-  --role "Principal Architect" \
-  --reason "Implement distributed caching and resolve performance bottleneck"
-```
-
-### Proposed Diagnostics & Failure Codes
-- `LIFECYCLE_NOT_TERMINAL`: Attempting to reopen an unsealed or active project.
-- `MILESTONE_ID_COLLISION`: Reusing an existing milestone ID found in `archived_milestones` or disk snapshots.
-- `INVALID_REOPEN_STAGE`: Specifying an entry stage other than `0` or `1`.
-- `TTY_REQUIRED`: Non-interactive headless invocation.
-- `AGENT_REOPEN_PROHIBITED`: AI agent name supplied as authorizer.
-- `CONFIRMATION_PHRASE_MISMATCH`: Incorrect typed confirmation phrase.
-- `SNAPSHOT_MISSING`: Prior milestone snapshot file missing from `.playbook/milestones/`.
+### Correction 7: CLI Contract Consistency
+- **Previous Discrepancy**: Proposed CLI flags that could bypass interactive human confirmation or invent default roles.
+- **Revision Applied**:
+  - Aligned strictly with `playbook approve`:
+    - Mandatory interactive terminal session (`process.stdin.isTTY === true`); headless invocations reject with `TTY_REQUIRED`.
+    - Reviewer name, role, reason, and milestone ID are prompted interactively in TTY if omitted.
+    - No invented default organizational roles (e.g. `"Lead Architect"` removed as an automatic default; real title must be entered).
+    - Confirmation phrase (`CONFIRM REOPEN MILESTONE <NEW_ID>`) must be interactively typed. Flags do not provide a non-TTY bypass.
+    - `--json` formats terminal output into machine-readable JSON at conclusion, but still requires interactive human confirmation.
 
 ---
 
-## 6. Phase 5 — Test Strategy Matrix
+## 4. Test Matrix Recheck
 
-A 17-scenario test matrix is defined in [`governance/lifecycle-reopening-design.md`](file:///f:/workspace/ai-engineering-playbook/governance/lifecycle-reopening-design.md) Section 10, categorizing test obligations into automated CLI integration tests, fault-injection tests, and manual terminal UX reviews:
-
-- **Automated Tests (16 scenarios)**: Happy path Stage 1 reopen, Stage 0 pivot reopen, snapshot preservation, TTY rejection, agent name rejection, confirmation phrase validation, milestone collision rejection, active/paused lifecycle rejection, sidecar destruction, stale approval immunity, manifest synchronization, multi-milestone iteration, WAL prepared rollback, WAL committing roll-forward, and lock contention.
-- **Manual Verification (1 scenario)**: Interactive terminal prompt UX, formatting readability, and confirmation phrase typing ergonomics.
-
----
-
-## 7. Unresolved Decisions & Architectural Trade-offs
-
-1. **Stage 1 vs. Stage 0 Defaulting**: Defaulting to Stage 1 for maintenance was selected over forcing Stage 0 to prevent artificial paperwork overhead and agent hallucinations, while explicitly keeping Stage 0 available for major pivots via `--stage 0`.
-2. **Exit Package Versioning**: Retaining standard paths (`GATE-1-EXIT-PACKAGE.md`) in `state.json` while allowing teams to customize the path per milestone was selected to preserve consistency with existing schema and validation rules.
-3. **Dedicated CLI Command vs. Manual State Editing**: Implementing `playbook reopen` as an atomic CLI command is strongly recommended for Task 004F.2 to eliminate the human error associated with manual JSON editing of `archived_milestones`.
+The test matrix in Section 10 was expanded to 18 scenarios, explicitly covering:
+- Lock contention and stale reclamation on `.playbook/transaction.lock` (**TEST-REOPEN-16**).
+- WAL write-only capabilities and crash recovery (**TEST-REOPEN-14**, **TEST-REOPEN-15**).
+- Approval sidecar fail-closed defense on lingering sidecars (**TEST-REOPEN-10**).
+- Inherited prerequisite applicability verification (**TEST-REOPEN-17**).
+- Multi-cycle sequential reopening and closure (**TEST-REOPEN-13**).
 
 ---
 
-## 8. Conclusion
+## 5. Remaining Limitations
 
-The architecture design document [`governance/lifecycle-reopening-design.md`](file:///f:/workspace/ai-engineering-playbook/governance/lifecycle-reopening-design.md) provides a comprehensive, constitutionally compliant blueprint for lifecycle reopening.
+1. **Local Mutability Boundary**: The milestone snapshot `.playbook/milestones/state-<milestone_id>.json` is conventionally protected by the CLI and local `0o444` permissions, but is stored within the mutable repository filesystem. Absolute non-repudiation requires pushing Git commits with GPG-signed tags to protected remote repositories.
+2. **Reviewer Identity**: TTY checks and confirmation phrases prevent automated AI agent self-triggering, but rely on claimed human names. Cryptographic identity proof is enforced at the version control and git forge boundaries.
+3. **Inherited Deliverables Traceability**: In Stage 1 maintenance, the link between new requirements (`REQ-SPEC`) and the inherited `PRD-CORE` is established through documentation references and human gate review, rather than an automated AST cross-compiler.
 
-All requirements of Task 004F.1 have been satisfied without runtime code changes or schema mutations.
+---
 
-**Final Recommendation**: Approve design document and proceed to implementation under Task 004F.2.
+## 6. Conclusion & Recommendation
+
+The revised architectural specification [`governance/lifecycle-reopening-design.md`](file:///f:/workspace/ai-engineering-playbook/governance/lifecycle-reopening-design.md) (v1.1.0) is complete, truthful, and fully aligned with the codebase implementation.
+
+**Final Verdict**: `DESIGN_READY_FOR_REVIEW`  
+The design is ready for review and subsequent implementation under Task 004F.2.
