@@ -738,8 +738,9 @@ describe("Task 004F.2.4-B: Stage 1 to Stage 0 Pivot Governance Test Suite (40 Sc
     const txManager = new WriteAheadTransactionManager({ targetDir: tempDir });
     await txManager.lockManager.withLock((lock) => txManager.recover(lock));
 
-    // Recovery runs without error
+    // Recovery runs without error and preserves unjournaled temporary file (Phase A.2 retention invariant)
     assert.strictEqual(fs.existsSync(path.join(tempDir, DEFAULT_PATHS.stateFile)), true);
+    assert.strictEqual(fs.existsSync(orphanedTmp), true, "Unjournaled staging files must be safely retained and never swept by wildcards");
   });
 
   // T21: PRD-CORE Archival & Byte-Match Guardrail
