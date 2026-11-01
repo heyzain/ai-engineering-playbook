@@ -322,8 +322,9 @@ Represents the micro lifecycle of an individual deliverable artifact:
   6. Operator enters exact confirmation phrase: `CONFIRM PIVOT TO STAGE 0 <MILESTONE_ID>`.
   7. Non-empty justification reason recorded.
 - **Historical Preservation Procedure**:
-  - Pre-pivot Stage 1 state serialized to immutable snapshot: `.playbook/pivots/state-<milestone_id>-stage-1-<timestamp>.json` (mode `0o444`).
-  - Governance audit document generated: `docs/pivots/PIVOT-<milestone_id>-STAGE-0.md`.
+  - Pre-pivot Stage 1 state serialized to snapshot: `.playbook/pivots/state-PVT-<milestone_id>-<seq>.json` (mode `0o444`).
+  - Governance audit document generated: `docs/pivots/PVT-<milestone_id>-<seq>.md`.
+  - Outdated PRD archived to `docs/prd/archive/PRD-CORE.PVT-<milestone_id>-<seq>.outdated.md` with warning banner; active `docs/prd/PRD-CORE.md` unlinked.
   - Authored files in working tree (`REQUIREMENTS-SPEC.md`, test logs) remain intact and tracked by Git.
   - Pivoted Stage 1 records are **never** appended to `stage_history[]` to preserve schema validity (`status: ["approved", "waived"]`) and monotonic stage sequencing.
 - **State Mutation**:

@@ -1,7 +1,7 @@
 # Active Maintenance Milestone Stage Pivot Governance Design
 
-> **Specification Version**: 1.2.0  
-> **Status**: Accepted Architectural Specification (Design Only)  
+> **Specification Version**: 1.3.0  
+> **Status**: Revised Design — Ready for Review (Not Yet Accepted)  
 > **Target Package**: `@ai-engineering-playbook/cli`  
 > **Preceding Specifications**:
 > - [`governance/state-machine.md`](state-machine.md) v1.3.0
@@ -433,11 +433,11 @@ Following the successful authorization, archival, and lock validation, the runti
 
 ## 6. Unified Transaction Architecture & Complete Crash Recovery
 
-### 6.1 WAL Engine Capabilities & Multi-Operation Extension
+### 6.1 Unified Multi-Operation Transaction Contract
 
-Inspection of [`src/core/transaction/transaction-manager.ts`](file:///f:/workspace/ai-engineering-playbook/tooling/playbook-cli/src/core/transaction/transaction-manager.ts) confirms that the baseline WAL engine currently supports `FileWriteSpec` (target creation and overwriting with `.tmp` staging and `.bak` backups).
+The pivot is one transaction. No pivot-owned live artifact, state file, manifest, or active PRD may be modified before a durable `PREPARING` journal exists.
 
-To execute the Stage Pivot safely, the transaction manager is extended to support a **Unified Multi-Operation Transaction Spec (`FileOperationSpec`)**:
+The transaction manager must support the following operation model:
 
 ```typescript
 export type FileOperationSpec =
@@ -445,74 +445,100 @@ export type FileOperationSpec =
       operation: "write";
       targetPath: string;
       content: string;
-      readOnlyOnCommit?: boolean; // Applies 0o444 upon final commit
+      createOnly: boolean;
+      expectedPreviousSha256?: string;
+      readOnlyOnCommit?: boolean;
     }
   | {
       operation: "unlink";
       targetPath: string;
+      mustExist: boolean;
+      expectedSha256?: string;
     };
 ```
 
-This ensures that **every filesystem mutation** (writing snapshot, writing audit doc, writing archived PRD, unlinking active PRD, updating state, updating manifest, unlinking sidecar) is managed under a single, durable transaction journal.
+Contract:
+- `createOnly: true` is mandatory for new pivot snapshot, audit, and archived-PRD paths. Existing finalized pivot artifacts must never be overwritten.
+- `createOnly: false` is used only for canonical mutable files such as `.playbook/state.json` and `.playbook/manifest.json`; each such write must carry the SHA-256 hash expected from the pre-prompt baseline.
+- `unlink` operations carry an expected hash when the target exists. A missing optional sidecar may be treated as an explicit no-op only when `mustExist: false`.
+- All paths are repository-relative, normalized, contained within the project root, and checked against symlink/path-traversal escape.
+- The transaction journal contains the complete operation list, transaction ID, target hashes, and enough durable content (or a verified durable recovery payload) to reconstruct every write if a staged temporary file is missing during roll-forward.
+- Temporary and backup paths are derived from the transaction ID and recorded in the journal. They may never be guessed from broad filename globs during recovery.
+- Required parent directories (`.playbook/pivots/`, `docs/pivots/`, and `docs/prd/archive/`) must exist before the pivot transaction starts. `playbook init` must provision them; an existing project missing any directory fails preflight with `PIVOT_STORAGE_LAYOUT_MISSING`. Directory creation is not an unjournaled side effect of pivot execution.
 
 ### 6.2 Canonical Transaction Execution Sequence
 
-```
-┌────────────────────────────────────────────────────────────────────────┐
-│ Canonical Pivot Execution Sequence                                     │
-├────────────────────────────────────────────────────────────────────────┤
-│ 1. ADVISORY PRE-CHECK: Fast-fail if not TTY or project uninitialized.  │
-│ 2. CAPTURE PRE-PROMPT FINGERPRINT: Compute composite SHA-256 baseline. │
-│ 3. OPERATOR PROMPT: Collect name, role, reason, confirmation phrase.   │
-│ 4. ACQUIRE EXCLUSIVE LOCK: Acquire .playbook/transaction.lock.         │
-│ 5. AUTHORITATIVE RE-READ & DRIFT CHECK: Re-read state, manifest, PRD,  │
-│    assessment. Assert C1–C6. If baseline drifted, abort with           │
-│    STATE_CONCURRENTLY_MODIFIED.                                        │
-│ 6. DISCOVER UNIQUE PIVOT ID: Scan 3 directories for PVT-<M>-<SEQ>.     │
-│ 7. CONSTRUCT UNIFIED TRANSACTION SPEC: Assemble 7 file operations:     │
-│    - write:  .playbook/pivots/state-<PVT_ID>.json (readOnly: true)     │
-│    - write:  docs/pivots/<PVT_ID>.md                                   │
-│    - write:  docs/prd/archive/PRD-CORE.<PVT_ID>.outdated.md            │
-│    - unlink: docs/prd/PRD-CORE.md                                      │
-│    - write:  .playbook/state.json                                      │
-│    - write:  .playbook/manifest.json                                   │
-│    - unlink: .playbook/approval-fingerprint.json                       │
-│ 8. WAL PREPARE (Phase 1):                                              │
-│    - Pre-stage writes to <target>.tmp.<tx_id>                          │
-│    - Pre-stage backups of existing targets to <target>.bak.<tx_id>     │
-│    - Write and fsync .playbook/tx-journal.json (phase: PREPARED)       │
-│ 9. WAL COMMIT (Phase 2):                                               │
-│    - Update journal phase to COMMITTING and fsync                      │
-│    - Rename .tmp files to live targets (apply 0o444 to snapshot)       │
-│    - Safe unlink active PRD and approval sidecar                       │
-│    - Update journal phase to COMMITTED and fsync                       │
-│ 10. WAL FINALIZE & CLEANUP:                                            │
-│    - Unlink all .bak.<tx_id> files                                     │
-│    - Unlink .playbook/tx-journal.json                                  │
-│    - Release .playbook/transaction.lock                                │
-└────────────────────────────────────────────────────────────────────────┘
-```
+The lock path is `.playbook/transaction.lock`; the canonical manifest path is `.playbook/manifest.json`.
 
-### 6.3 Complete Boundary-by-Boundary Crash Recovery Matrix
+1. **Advisory pre-check**: Verify TTY, project initialization, canonical paths, and required storage directories. This check is not authoritative.
+2. **Capture pre-prompt baseline**: Hash state, manifest, active PRD, and the milestone-bound applicability assessment; capture the relevant state tuple and sidecar presence/hash.
+3. **Operator prompt**: Collect authorizer, role, reason, and exact confirmation phrase. No project files are changed.
+4. **Acquire exclusive lock**: Acquire `.playbook/transaction.lock`.
+5. **Authoritative re-read and drift check**: Re-read all baseline inputs and re-evaluate C1–C6. Any difference from the pre-prompt baseline aborts with `STATE_CONCURRENTLY_MODIFIED`; release the lock without project mutations.
+6. **Discover unique pivot ID**: Scan all three canonical artifact directories and verify all three candidate target paths are unoccupied.
+7. **Construct the complete operation set**:
+   - `write` snapshot `.playbook/pivots/state-<PVT_ID>.json` (`createOnly: true`, read-only on commit).
+   - `write` audit `docs/pivots/<PVT_ID>.md` (`createOnly: true`).
+   - `write` banner-prefixed archive `docs/prd/archive/PRD-CORE.<PVT_ID>.outdated.md` (`createOnly: true`).
+   - `unlink` active `docs/prd/PRD-CORE.md` (expected original source hash).
+   - `write` `.playbook/state.json` (expected pre-prompt state hash).
+   - `write` `.playbook/manifest.json` (expected pre-prompt manifest hash).
+   - `unlink` `.playbook/approval-fingerprint.json` (expected hash if present; otherwise explicit optional no-op).
+8. **Durable WAL prepare**:
+   - First write and fsync `.playbook/tx-journal.json` with phase `PREPARING`, the full operation plan, transaction ID, expected hashes, and recovery content.
+   - Only after the `PREPARING` journal is durable, create adjacent `<target>.tmp.<tx_id>` files for write operations; fsync each file and its parent directory.
+   - Verify staged file hashes against the journal.
+   - Atomically update and fsync the journal to phase `PREPARED`.
+   - No live target has been renamed, overwritten, or unlinked in `PREPARING` or `PREPARED`.
+9. **Commit intent and roll-forward**:
+   - Revalidate the protected baseline immediately before recording commit intent.
+   - Atomically update and fsync the journal to `COMMITTING`. This is the irreversible commit point.
+   - Apply operations idempotently. For a write replacing an existing mutable target, move the expected old target to `<target>.bak.<tx_id>` if not already backed up, then place the staged content at the target. For a create-only write, refuse to overwrite an unexpected existing target; if an unexpected collision occurs after commit intent, stop in a recoverable `TRANSACTION_RECOVERY_REQUIRED` state rather than destroying that artifact.
+   - For an unlink, move the expected existing target to its transaction backup; if it is already absent and the matching backup exists, treat the unlink as complete. If it was absent initially and `mustExist: false`, treat it as a no-op.
+   - If a staged file is missing during `COMMITTING`, reconstruct it from the journal's durable recovery content, verify its hash, then continue.
+   - Fsync affected files and parent directories after each completed operation.
+10. **Verify and mark committed**:
+    - Verify every write target has the exact expected content hash and every unlink target is absent.
+    - Verify state and manifest both describe Stage 0, and verify the approval sidecar is absent.
+    - Atomically update and fsync the journal to `COMMITTED`.
+11. **Finalize**:
+    - Remove transaction-owned backups and remaining temporary files.
+    - Fsync affected parent directories.
+    - Remove the `COMMITTED` journal only after cleanup is complete and verified.
+    - Release `.playbook/transaction.lock`.
 
-| Transaction Boundary | State on Disk at Crash | Recovery Action on Subsequent CLI Execution | Resulting State & Safety Guarantee |
+**Commit/recovery rule:** `PREPARING` and `PREPARED` are rollback-safe because no live target has been modified. Once `COMMITTING` is durably recorded, recovery is roll-forward only. The engine must never attempt a partial rollback after commit intent.
+
+### 6.3 Crash Recovery Matrix
+
+| Transaction Boundary | Durable State at Crash | Recovery Action | Safety Result |
 | :--- | :--- | :--- | :--- |
-| **Boundary 1: Crash before Step 8** (During memory assembly or before journal write) | No journal exists. `.playbook/transaction.lock` remains on disk. Staging `.tmp` files may exist. | Stale lock reclaimed. Recovery unlinks any orphaned `.tmp.<txId>` files. | **Fail-Closed**: State and all live files 100% untouched at Stage 1. Zero partial mutation. |
-| **Boundary 2: Crash during Step 8** (Journal writing or fsyncing `PREPARED`) | Incomplete/corrupted journal or valid `PREPARED` journal on disk. Live files untouched; backups exist. | Transaction manager detects `PREPARED` journal. Executes **Rollback**: unlinks all `.tmp.<txId>` files, restores any modified files from `.bak.<txId>`, deletes journal, reclaims lock. | **Fail-Closed**: Project remains safely at Stage 1. `docs/prd/PRD-CORE.md` is guaranteed intact. |
-| **Boundary 3: Crash during Step 9 (Phase transition to `COMMITTING`)** | Journal marked `COMMITTING`. Live files may be partially renamed/unlinked. | Transaction manager detects `COMMITTING` journal. Executes **Roll-Forward**: ensures all 5 write targets exist with exact `target_content`, ensures active PRD and sidecar are unlinked, transitions journal to `COMMITTED`. | **Consistency Guaranteed**: Atomic forward completion. Project reliably transitions to Stage 0. |
-| **Boundary 4: Crash after state write but before manifest write** | `state.json` is Stage 0; `manifest.json` is Stage 1; journal is `COMMITTING`. | Transaction manager detects `COMMITTING` journal. Executes **Roll-Forward**: writes `manifest.json` from journal target content, ensuring both files are synchronized to Stage 0. | **Consistency Guaranteed**: Eliminates state-manifest drift. Both synchronized to Stage 0. |
-| **Boundary 5: Crash after writes, before unlinking active PRD** | State and manifest committed; active PRD not yet unlinked; journal is `COMMITTING`. | Transaction manager detects `COMMITTING` journal. Executes **Roll-Forward**: unlinks `docs/prd/PRD-CORE.md`, marks `COMMITTED`, unlinks backups and journal. | **Consistency Guaranteed**: Prevents obsolete PRD from lingering in active path. |
-| **Boundary 6: Crash during Step 10 (Sidecar Unlink or Finalize)** | All writes and unlinks finished; journal marked `COMMITTED` or backup unlinking in progress. | Transaction manager unlinks remaining `.bak.<txId>` files and unlinks `tx-journal.json`. If sidecar unlinking was interrupted, `checkGateEligibility` detects gate mismatch ($1 \neq 0$), rejecting the sidecar with `APPROVAL_FINGERPRINT_MALFORMED`. | **Zero Security Drift**: Stale sidecar cannot authorize Stage 0. |
+| **B1: Before durable journal creation** | No journal; no pivot staging files are permitted to exist. A journal-temp file may exist if journal creation was interrupted. | Reclaim the stale lock. Remove only the journal-temp file whose transaction ID is recorded in the reclaimed lock metadata. Do not scan/delete arbitrary `.tmp` or `.bak` files. | No live project files changed. |
+| **B2: During `PREPARING`** | Durable `PREPARING` journal; zero or more staged write temps; live targets untouched; no transaction backups should exist. | Validate journal and transaction ownership. Remove only listed transaction-owned temps; remove journal; release/reclaim lock. If journal is corrupt, fail closed with `TRANSACTION_JOURNAL_CORRUPT` and require manual recovery. | Original Stage 1 state and active PRD remain intact. |
+| **B3: `PREPARED`** | Valid `PREPARED` journal; all staged writes verified; live targets untouched. | Roll back by deleting only listed transaction-owned temps and journal. No target restoration is required because no live target was changed. | Original Stage 1 state and active PRD remain intact. |
+| **B4: During transition to `COMMITTING`** | Journal is either valid `PREPARED` or valid `COMMITTING`; atomic journal replacement determines which. | If `PREPARED`, rollback. If `COMMITTING`, roll forward. Never infer phase from partially applied files alone. | Deterministic recovery based on durable commit intent. |
+| **B5: During write/unlink application** | `COMMITTING`; some operations may be complete, others pending; backups and temps may exist. | Replay every operation idempotently from the journal. Verify expected prior hashes before moving old targets; recreate missing staged writes from durable journal content. | Complete the same pivot; do not return to Stage 1 after commit intent. |
+| **B6: State written, manifest not yet written (or vice versa)** | `COMMITTING`; state and manifest may temporarily disagree. | Roll forward both canonical files from journal content, then verify they both describe Stage 0. | No completed transaction may leave state/manifest inconsistent. |
+| **B7: Archive written, active PRD unlink pending** | `COMMITTING`; archive may exist; active PRD may still exist or may be in its transaction backup. | Verify archive hash, then complete active PRD unlink using the journaled expected source hash. | Active path is absent only after the archive is durably verified. |
+| **B8: Sidecar unlink or final cleanup interrupted** | `COMMITTING` or `COMMITTED`; sidecar or transaction backups may remain. | If `COMMITTING`, finish all operations including sidecar unlink. If `COMMITTED`, finish cleanup only. A stale sidecar must independently fail gate eligibility if its milestone/stage/state fingerprint does not match. | No stale Stage 1 approval can authorize Stage 0. |
+| **B9: Unexpected create-only target collision** | `COMMITTING`; a target reserved for a new pivot artifact exists with content not matching the journal. | Do not overwrite or delete it. Preserve journal, backups, and lock/recovery marker; report `TRANSACTION_RECOVERY_REQUIRED` for explicit human resolution. | Historical artifacts are never silently overwritten. |
+| **B10: Corrupt or unreadable journal** | Journal cannot be parsed or its checksum/operation list is invalid. | Fail closed. Do not guess transaction ownership, delete files by glob, or mutate state. Require explicit recovery procedure and human review. | No speculative cleanup or destructive recovery. |
 
 ---
 
 ## 7. Artifact Recovery, Cleanup & Lifecycle Conventions
 
 ### 7.1 Collision-Safe Temporary Artifact Handling
-- All WAL temporary files follow the standard pattern:
-  `<target_path>.tmp.<tx_id>` and `<target_path>.bak.<tx_id>`
-  Where `<tx_id>` incorporates high-resolution millisecond timestamps and UUID8 entropy (`tx-1793520000000-abcd1234`).
-- Temporary files are private to the active transaction. If an operation crashes, orphaned `.tmp` and `.bak` files are cleaned up **only** when the transaction lock is verified dead and the journal recovery cycle executes.
+- Transaction IDs must include a high-resolution timestamp and UUID entropy, for example `tx-1793520000000-abcd1234`.
+- Every temporary and backup path is explicitly recorded in the durable transaction journal:
+  - `<target_path>.tmp.<tx_id>`
+  - `<target_path>.bak.<tx_id>`
+- The `PREPARING` journal is durably written before any target-adjacent staging file is created.
+- Staging files are created exclusively (`wx` semantics), fsynced, and hash-verified before the journal enters `PREPARED`.
+- Backups are created only after the journal has entered `COMMITTING`, when an operation is being applied. They are retained until `COMMITTED` is durable.
+- Recovery may delete or restore only paths explicitly listed in a valid journal and proven to belong to that transaction. Broad glob cleanup is prohibited.
+- If no valid journal exists, lock reclamation may remove only the journal-temp path whose transaction ID is present in the reclaimed lock metadata. It must not sweep arbitrary `.tmp.*` or `.bak.*` files.
+- A corrupt journal causes fail-closed manual recovery; the engine must not guess which temporary or backup files are safe to remove.
 
 ### 7.2 Non-Destructive Handling of Finalized Artifacts
 - Finalized artifacts (`state-PVT-*.json`, `PVT-*.md`, `PRD-CORE.PVT-*.outdated.md`) are **NEVER deleted or overwritten**.
@@ -520,10 +546,10 @@ This ensures that **every filesystem mutation** (writing snapshot, writing audit
 
 ---
 
-## 8. Comprehensive Design Test Matrix (33 Scenarios)
+## 8. Comprehensive Design Test Matrix (40 Scenarios)
 
 > [!IMPORTANT]
-> **Status of Test Scenarios**: The following 33 test scenarios represent **formal design specifications** to be implemented in the subsequent implementation task (Task 004F.2.4). They define the exact verification criteria required before any code may be merged.
+> **Status of Test Scenarios**: The following 40 test scenarios represent **formal design specifications** to be implemented in the subsequent implementation task (Task 004F.2.4). They define the exact verification criteria required before any code may be merged.
 
 | Test # | Scenario Name | Test Setup & Invariants | Expected Result |
 | :---: | :--- | :--- | :--- |
@@ -547,19 +573,26 @@ This ensures that **every filesystem mutation** (writing snapshot, writing audit
 | **T18** | Audit Document Write Failure | Simulated disk error during audit markdown write. | Snapshot staging rolled back; transaction aborted; state remains at Stage 1. |
 | **T19** | WAL Preparation Failure | Simulated error creating `tx-journal.json`. | Transaction aborted; lock released; state remains at Stage 1. |
 | **T20** | Crash Recovery with Incomplete Artifacts | Stale `*.tmp.*` files left in `.playbook/pivots/` after simulated crash. | Subsequent CLI operation cleans up orphaned `.tmp` files during lock recovery. |
-| **T21** | PRD-CORE Archival & Freshness Enforcement | Old PRD archived to `docs/prd/archive/`; active PRD unlinked; attempted Gate 0 with old PRD hash. | Gate 0 rejects identical PRD content; accepts only genuinely fresh problem formulation. |
+| **T21** | PRD-CORE Archival & Byte-Match Guardrail | Original PRD hash captured before the warning banner is prepended; active PRD unlinked; attempted Gate 0 with identical original bytes. | Gate 0 rejects a new PRD whose raw-byte hash matches the recorded source hash. A different hash is not treated as proof of semantic freshness. |
 | **T22** | Historical RFC, ADR, Exception Dispositions | Pivot executed with active RFC, ADR, and Exception in Stage 1. | Audit document records dispositions; Stage 1 exceptions marked `invalidated_by_pivot`; Stage 0 arrays initialized empty. |
-| **T23** | Crash After Staging, Before WAL Prepare | Files staged in `.tmp`; crash injected immediately before writing `tx-journal.json`. | Zero live files modified; staging files cleaned up; project remains at Stage 1. |
+| **T23** | Crash Before Durable Journal | Crash injected before the `PREPARING` journal is durable. No target staging is allowed before that journal exists. | No pivot staging files or live-file changes exist; only a transaction-owned journal-temp may be cleaned using lock metadata. |
 | **T24** | Crash During PRD Archive and Unlink | Crash injected while unlinking `PRD-CORE.md` during commit phase. | Recovery detects `COMMITTING` phase, completes unlink, verifies archive write, finalizes Stage 0. |
-| **T25** | Rollback Restoring Original Active PRD | Crash during `PREPARED` phase; live `PRD-CORE.md` verified unchanged. | Recovery restores from backup if touched; active PRD is preserved at Stage 1. |
+| **T25** | PREPARED Rollback Preserves Active PRD | Crash during `PREPARING` or `PREPARED`; no live target has been modified and no transaction backup should exist. | Recovery removes only journal-listed staging temps and journal; active `PRD-CORE.md` remains untouched. No restore operation is expected. |
 | **T26** | Snapshot/Audit Cleanup Without Historical Loss | Cleanup run with pre-existing finalized `state-PVT-001.json` and orphaned `.tmp`. | Orphaned `.tmp` deleted; historical snapshot preserved untouched. |
 | **T27** | Repeated Pivot Sequence Discovery Across 3 Dirs | Artifacts scattered across `pivots/`, `docs/pivots/`, `prd/archive/` with gaps (e.g. 001, 003). | Scanner identifies highest sequence (3) and selects `004` safely. |
 | **T28** | Filename-Pattern Regex Correctness | Invalid naming patterns (e.g. `state-M-1.1.0.json`) ignored by scanner. | Only canonical `PVT-<M>-<SEQ>` patterns matched. |
 | **T29** | Lock Path Consistency Verification | Verify lock acquired strictly at `.playbook/transaction.lock`. | No `.playbook/trans.lock` or alternative lock file created. |
 | **T30** | Manifest Path Consistency Verification | Verify manifest read and written strictly at `.playbook/manifest.json`. | No root `project.manifest.json` created or expected. |
 | **T31** | State Drift Involving Assessment Artifact | Assessment artifact modified from `OUTDATED` to `APPLICABLE` during prompt wait. | Re-read under lock detects hash change; rejects with `STATE_CONCURRENTLY_MODIFIED`. |
-| **T32** | Hash-Different but Semantically Stale PRD | PRD edited with trivial whitespace/typo change (different hash); submitted to Gate 0. | Automated hash check passes, but human reviewer rejects at Gate 0 for semantic staleness. |
+| **T32** | Hash-Different but Semantically Stale PRD | PRD edited with trivial whitespace/typo change (different hash); submitted to Gate 0. | Byte-match guardrail does not reject it; structural checks do not certify meaning; human Gate 0 reviewer may reject it for semantic staleness. |
 | **T33** | Sidecar Cleanup Failure Defense-in-Depth | Sidecar unlink fails during crash; stale sidecar left at Stage 0. | `checkGateEligibility` detects gate mismatch ($1 \neq 0$); rejects with `APPROVAL_FINGERPRINT_MALFORMED`. |
+| **T34** | Journal-First Staging Invariant | Inject crash before durable `PREPARING` journal creation. | No target-adjacent staging or backup files exist; live files remain unchanged. |
+| **T35** | Crash During PREPARING | Inject crash after journal durability but during temp staging. | Recovery validates journal ownership and removes only listed temps; live targets remain unchanged. |
+| **T36** | Missing Temp During COMMITTING | Delete one staged temp after commit intent while retaining valid journal. | Recovery reconstructs the write from durable journal content, verifies its hash, and rolls forward. |
+| **T37** | Create-Only Collision During Recovery | Place unexpected content at a new snapshot/audit/archive target after commit intent. | Engine does not overwrite it; retains recovery evidence and reports `TRANSACTION_RECOVERY_REQUIRED`. |
+| **T38** | Original PRD Hash Survives Archive Banner | Archive old PRD with a prepended warning banner. | Audit/journal retain the pre-banner `source_prd_sha256`; Gate 0 compares against that original hash, not the banner-modified archive hash. |
+| **T39** | Corrupt Journal Fails Closed | Corrupt the transaction journal before recovery. | No glob cleanup or speculative restoration occurs; recovery reports `TRANSACTION_JOURNAL_CORRUPT`. |
+| **T40** | COMMITTED Cleanup Is Idempotent | Crash while deleting transaction-owned backups after `COMMITTED`. | Next recovery removes remaining listed backups and journal without reapplying or reversing the pivot. |
 
 ---
 
@@ -577,5 +610,5 @@ This ensures that **every filesystem mutation** (writing snapshot, writing audit
 ## 10. Next Steps & Governance Handshake
 
 Upon review and acceptance of this design specification:
-1. Ensure [`governance/state-machine.md`](state-machine.md) and [`governance/lifecycle-reopening-design.md`](lifecycle-reopening-design.md) align with v1.2.0 terminology and paths.
-2. Schedule implementation task (Task 004F.2.4) to implement `src/core/pivot.ts`, `src/commands/pivot.ts`, WAL `FileOperationSpec` extension, schema extensions, and the 33 automated tests.
+1. Ensure [`governance/state-machine.md`](state-machine.md) and [`governance/lifecycle-reopening-design.md`](lifecycle-reopening-design.md) align with v1.3.0 terminology and paths.
+2. Only after this revised design is reviewed and accepted, schedule Task 004F.2.4 to implement `src/core/pivot.ts`, `src/commands/pivot.ts`, the journal-first WAL `FileOperationSpec` extension, any explicitly approved schema changes, and all 40 automated tests. Implementation must first verify that the existing transaction manager can support the specified phases, idempotent roll-forward, durable recovery payload, path containment, and fail-closed journal handling; existing tests alone do not prove pivot behavior.
