@@ -265,24 +265,38 @@ export function checkGateEligibility(
     }
 
     // Explicit Applicability Assessment Check
-    const assessment = evaluatePrdApplicability(targetDir, state.current_stage_detail);
+    const assessment = evaluatePrdApplicability(targetDir, state.milestone_id, state.current_stage_detail);
     if (assessment.status === "missing") {
       diagnostics.push({
         code: "GATE_CRITERIA_UNMET",
         severity: "error",
-        message:
-          "Inherited PRD applicability assessment is missing. In reopened maintenance mode, Gate 1 requires an explicit assessment confirming whether 'docs/prd/PRD-CORE.md' remains applicable.",
+        message: `Inherited PRD applicability assessment is missing for milestone '${state.milestone_id}'. In reopened maintenance mode, Gate 1 requires an explicit assessment confirming whether 'docs/prd/PRD-CORE.md' remains applicable.`,
         path: "docs/prd/REQUIREMENTS-SPEC.md",
-        remediation:
-          "Record an applicability assessment in docs/prd/REQUIREMENTS-SPEC.md or docs/prd/PRD-CORE-ASSESSMENT.md declaring 'Applicability: APPLICABLE' with supporting justification.",
+        remediation: `Record an applicability assessment in docs/prd/REQUIREMENTS-SPEC.md or docs/prd/PRD-CORE-ASSESSMENT.md bound to milestone '${state.milestone_id}' declaring 'Applicability: APPLICABLE' with supporting justification.`,
+      });
+    } else if (assessment.status === "milestone_missing") {
+      diagnostics.push({
+        code: "GATE_CRITERIA_UNMET",
+        severity: "error",
+        message: `Inherited PRD applicability assessment at '${assessment.path}' is missing active milestone binding (must declare 'Milestone: ${state.milestone_id}').`,
+        path: assessment.path || "docs/prd/REQUIREMENTS-SPEC.md",
+        remediation: `Update assessment in '${assessment.path}' with 'Milestone: ${state.milestone_id}'.`,
+      });
+    } else if (assessment.status === "milestone_mismatch") {
+      diagnostics.push({
+        code: "GATE_CRITERIA_UNMET",
+        severity: "error",
+        message: `Inherited PRD applicability assessment at '${assessment.path}' is bound to milestone '${assessment.milestoneId}', which does not match active milestone '${state.milestone_id}'. Historical assessments cannot authorize a new maintenance milestone.`,
+        path: assessment.path || "docs/prd/REQUIREMENTS-SPEC.md",
+        remediation: `Author a fresh assessment bound to active milestone '${state.milestone_id}'.`,
       });
     } else if (assessment.status === "outdated") {
       diagnostics.push({
         code: "GATE_CRITERIA_UNMET",
         severity: "error",
-        message: `Inherited foundational Problem Statement in 'docs/prd/PRD-CORE.md' is marked OUTDATED${assessment.reason ? `: ${assessment.reason}` : ""}. Stage 1 progression is BLOCKED. A fundamental domain pivot requires re-opening at Stage 0.`,
+        message: `Inherited foundational Problem Statement in 'docs/prd/PRD-CORE.md' is marked OUTDATED for milestone '${state.milestone_id}'${assessment.reason ? `: ${assessment.reason}` : ""}. Stage 1 progression is BLOCKED. A fundamental domain pivot requires problem reformulation.`,
         path: assessment.path || "docs/prd/PRD-CORE.md",
-        remediation: "Reopen lifecycle at Stage 0 ('playbook reopen --stage 0') to reformulate the core problem statement.",
+        remediation: "Reopen lifecycle at Stage 0 to reformulate the core problem statement.",
       });
     } else if (assessment.status === "ambiguous") {
       diagnostics.push({

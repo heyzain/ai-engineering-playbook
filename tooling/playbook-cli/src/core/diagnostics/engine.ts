@@ -227,7 +227,7 @@ export class DiagnosticsEngine {
             });
           }
 
-          const assessment = evaluatePrdApplicability(raw.targetDir, state.current_stage_detail);
+          const assessment = evaluatePrdApplicability(raw.targetDir, state.milestone_id, state.current_stage_detail);
           if (assessment.status === "outdated") {
             diagnostics.push({
               code: "PRD_ASSESSMENT_OUTDATED",

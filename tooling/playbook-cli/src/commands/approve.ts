@@ -165,14 +165,24 @@ export async function runApprove(options: ApproveCommandOptions = {}): Promise<A
       if (state.lifecycle_status === "reopened_maintenance" && gate === 1) {
         const prdCorePath = path.resolve(targetDir, "docs/prd/PRD-CORE.md");
         const prdCoreExists = fs.existsSync(prdCorePath);
-        const assessment = evaluatePrdApplicability(targetDir, stageDetail);
+        const assessment = evaluatePrdApplicability(targetDir, state.milestone_id, stageDetail);
 
         console.log(" INHERITED PREREQUISITE ASSESSMENT (Stage 0 Problem Formulation):");
         console.log(`  Foundational Artifact: docs/prd/PRD-CORE.md (exists: ${prdCoreExists ? "YES" : "NO"})`);
         console.log(`  Assessment Artifact:   ${assessment.path || "NOT RECORDED (BLOCKING)"}`);
+        console.log(`  Bound Milestone:       ${assessment.milestoneId || "MISSING"} (active: ${state.milestone_id})`);
         console.log(`  Author Determination:  ${(assessment.determination || assessment.status).toUpperCase()}`);
+        if (assessment.author) {
+          console.log(`  Assessed By:           ${assessment.author}`);
+        }
+        if (assessment.recordedAt) {
+          console.log(`  Recorded At:           ${assessment.recordedAt}`);
+        }
+        if (assessment.scope) {
+          console.log(`  Maintenance Scope:     ${assessment.scope}`);
+        }
         if (assessment.summary) {
-          console.log(`  Assessment Summary:    ${assessment.summary}`);
+          console.log(`  Assessment Rationale:  ${assessment.summary}`);
         }
         if (assessment.reason) {
           console.log(`  Invalidation Reason:   ${assessment.reason}`);
@@ -180,8 +190,7 @@ export async function runApprove(options: ApproveCommandOptions = {}): Promise<A
         console.log("  Reviewer Instruction:  The human reviewer must evaluate whether PRD-CORE");
         console.log(`                         remains applicable to maintenance milestone ${state.milestone_id}.`);
         console.log("                         If obsolete or invalidated by domain pivot,");
-        console.log("                         Gate 1 approval MUST BE REJECTED and project");
-        console.log("                         reopened at Stage 0 (playbook reopen --stage 0).");
+        console.log("                         Gate 1 approval MUST BE REJECTED.");
         console.log("-".repeat(68));
       }
       console.log(" STAGE GATE EXIT PACKAGE CONTENT:");

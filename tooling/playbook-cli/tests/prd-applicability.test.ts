@@ -4,7 +4,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { setupStageProject } from "./fixtures/governance-helper.js";
-import { approveGate, checkGateEligibility } from "../src/core/approval.js";
+import { approveGate, rejectGate, checkGateEligibility } from "../src/core/approval.js";
 import { runApprove } from "../src/commands/approve.js";
 import { reopenLifecycle } from "../src/core/reopen.js";
 import { DiagnosticsEngine } from "../src/core/diagnostics/engine.js";
@@ -16,11 +16,16 @@ import type { ProjectState } from "../src/types/state.js";
 function setupMaintenanceStage1Project(
   tempDir: string,
   options: {
+    milestoneId?: string;
+    assessmentMilestoneId?: string | null;
     prdCoreExists?: boolean;
     assessmentType?: "applicable" | "outdated" | "missing" | "ambiguous";
     artifactLocation?: "req-spec" | "dedicated";
   } = {}
 ): { statePath: string; prdCorePath: string; reqSpecPath: string } {
+  const milestoneId = options.milestoneId ?? "M-1.1.0";
+  const assessmentMilestoneId =
+    options.assessmentMilestoneId !== undefined ? options.assessmentMilestoneId : milestoneId;
   const prdCoreExists = options.prdCoreExists ?? true;
   const assessmentType = options.assessmentType ?? "applicable";
   const artifactLocation = options.artifactLocation ?? "req-spec";
@@ -28,7 +33,7 @@ function setupMaintenanceStage1Project(
   const { state, statePath } = setupStageProject(tempDir, {
     stage: 1,
     status: "pending_review",
-    milestoneId: "M-1.1.0",
+    milestoneId,
   });
 
   // Switch lifecycle status to reopened_maintenance
@@ -61,23 +66,26 @@ function setupMaintenanceStage1Project(
   const reqSpecPath = path.join(prdDir, "REQUIREMENTS-SPEC.md");
   const dedicatedPath = path.join(prdDir, "PRD-CORE-ASSESSMENT.md");
 
+  const milestoneHeader = assessmentMilestoneId !== null ? `Milestone: ${assessmentMilestoneId}\n` : "";
+  const metadataBlock = `${milestoneHeader}Author: Alice Human\nScope: Caching and performance enhancements\nDate: 2026-11-01\n`;
+
   if (assessmentType === "applicable") {
     const text =
       artifactLocation === "dedicated"
-        ? `# PRD Core Applicability Assessment\nApplicability: APPLICABLE\nSummary: Problem formulation in docs/prd/PRD-CORE.md remains fully valid for performance optimizations.\n`
-        : `# System Requirements Specification\n\n## Inherited Problem Statement Applicability\nApplicability: APPLICABLE\nSummary: Problem formulation remains fully valid for caching and reliability enhancements.\n\n## Functional Requirements\n- Fast caching\n`;
+        ? `# PRD Core Applicability Assessment\n${metadataBlock}Applicability: APPLICABLE\nSummary: Problem formulation in docs/prd/PRD-CORE.md remains fully valid for performance optimizations.\n`
+        : `# System Requirements Specification\n\n## Inherited Problem Statement Applicability\n${metadataBlock}Applicability: APPLICABLE\nSummary: Problem formulation remains fully valid for caching and reliability enhancements.\n\n## Functional Requirements\n- Fast caching\n`;
     fs.writeFileSync(artifactLocation === "dedicated" ? dedicatedPath : reqSpecPath, text, "utf-8");
   } else if (assessmentType === "outdated") {
     const text =
       artifactLocation === "dedicated"
-        ? `# PRD Core Applicability Assessment\nApplicability: OUTDATED\nReason: Fundamental pivot from single-tenant LMS to decentralized peer learning.\n`
-        : `# System Requirements Specification\n\n## Inherited Problem Statement Applicability\nApplicability: OUTDATED\nReason: Market demands decentralized network rather than centralized LMS.\n`;
+        ? `# PRD Core Applicability Assessment\n${metadataBlock}Applicability: OUTDATED\nReason: Fundamental pivot from single-tenant LMS to decentralized peer learning.\n`
+        : `# System Requirements Specification\n\n## Inherited Problem Statement Applicability\n${metadataBlock}Applicability: OUTDATED\nReason: Market demands decentralized network rather than centralized LMS.\n`;
     fs.writeFileSync(artifactLocation === "dedicated" ? dedicatedPath : reqSpecPath, text, "utf-8");
   } else if (assessmentType === "ambiguous") {
     const text =
       artifactLocation === "dedicated"
-        ? `# PRD Core Applicability Assessment\nAssessment discussion without an explicit determination keyword.\n`
-        : `# System Requirements Specification\n\n## Inherited Problem Statement Applicability\nNotes on problem statement but no explicit Applicability keyword.\n`;
+        ? `# PRD Core Applicability Assessment\n${metadataBlock}Discussion on problem statement without explicit determination keyword.\n`
+        : `# System Requirements Specification\n\n## Inherited Problem Statement Applicability\n${metadataBlock}Discussion on problem statement without explicit determination keyword.\n`;
     fs.writeFileSync(artifactLocation === "dedicated" ? dedicatedPath : reqSpecPath, text, "utf-8");
   }
 
@@ -101,8 +109,9 @@ describe("Stage 1 Inherited Prerequisite Applicability & Reopening Audit", () =>
     }
   });
 
-  test("1. Applicable PRD: Valid applicability assessment permits Gate 1 eligibility and approval", async () => {
+  test("1. Applicable PRD: Valid current-milestone assessment permits Gate 1 eligibility and approval", async () => {
     setupMaintenanceStage1Project(tempDir, {
+      milestoneId: "M-1.1.0",
       prdCoreExists: true,
       assessmentType: "applicable",
       artifactLocation: "req-spec",
@@ -132,13 +141,15 @@ describe("Stage 1 Inherited Prerequisite Applicability & Reopening Audit", () =>
 
   test("1b. Applicable PRD: Dedicated PRD-CORE-ASSESSMENT.md artifact is also accepted", async () => {
     setupMaintenanceStage1Project(tempDir, {
+      milestoneId: "M-1.1.0",
       prdCoreExists: true,
       assessmentType: "applicable",
       artifactLocation: "dedicated",
     });
 
-    const assessment = evaluatePrdApplicability(tempDir);
+    const assessment = evaluatePrdApplicability(tempDir, "M-1.1.0");
     assert.equal(assessment.status, "applicable");
+    assert.equal(assessment.milestoneId, "M-1.1.0");
     assert.match(assessment.path || "", /PRD-CORE-ASSESSMENT\.md/);
 
     const eligibility = checkGateEligibility(tempDir, 1);
@@ -147,6 +158,7 @@ describe("Stage 1 Inherited Prerequisite Applicability & Reopening Audit", () =>
 
   test("2. Outdated PRD: Assessment marked OUTDATED blocks Gate 1 progression and triggers diagnostics", async () => {
     setupMaintenanceStage1Project(tempDir, {
+      milestoneId: "M-1.1.0",
       prdCoreExists: true,
       assessmentType: "outdated",
       artifactLocation: "req-spec",
@@ -172,6 +184,7 @@ describe("Stage 1 Inherited Prerequisite Applicability & Reopening Audit", () =>
 
   test("3. Missing assessment: PRD exists but assessment is missing blocks Gate 1 progression", async () => {
     setupMaintenanceStage1Project(tempDir, {
+      milestoneId: "M-1.1.0",
       prdCoreExists: true,
       assessmentType: "missing",
     });
@@ -187,81 +200,115 @@ describe("Stage 1 Inherited Prerequisite Applicability & Reopening Audit", () =>
     );
   });
 
-  test("4. Human reviewer visibility: Gate 1 approval review panel displays assessment details", async () => {
+  test("4. Missing milestone ID in assessment is rejected with milestone_missing", async () => {
     setupMaintenanceStage1Project(tempDir, {
+      milestoneId: "M-1.1.0",
+      assessmentMilestoneId: null, // lacks Milestone: line
+      prdCoreExists: true,
+      assessmentType: "applicable",
+    });
+
+    const assessment = evaluatePrdApplicability(tempDir, "M-1.1.0");
+    assert.equal(assessment.status, "milestone_missing");
+
+    const eligibility = checkGateEligibility(tempDir, 1);
+    assert.equal(eligibility.eligible, false);
+    assert.ok(
+      eligibility.diagnostics.some(
+        (d) => d.code === "GATE_CRITERIA_UNMET" && d.message.includes("missing active milestone binding")
+      )
+    );
+  });
+
+  test("5. Mismatched milestone ID (assessment from prior milestone) is rejected", async () => {
+    setupMaintenanceStage1Project(tempDir, {
+      milestoneId: "M-1.1.0", // Active milestone
+      assessmentMilestoneId: "M-1.0.0", // Historical assessment from earlier milestone
+      prdCoreExists: true,
+      assessmentType: "applicable",
+    });
+
+    const assessment = evaluatePrdApplicability(tempDir, "M-1.1.0");
+    assert.equal(assessment.status, "milestone_mismatch");
+    assert.equal(assessment.milestoneId, "M-1.0.0");
+
+    const eligibility = checkGateEligibility(tempDir, 1);
+    assert.equal(eligibility.eligible, false);
+    assert.ok(
+      eligibility.diagnostics.some(
+        (d) => d.code === "GATE_CRITERIA_UNMET" && d.message.includes("bound to milestone 'M-1.0.0'")
+      )
+    );
+  });
+
+  test("6. Human reviewer visibility: Gate 1 approval review panel displays milestone-bound assessment", async () => {
+    setupMaintenanceStage1Project(tempDir, {
+      milestoneId: "M-1.1.0",
       prdCoreExists: true,
       assessmentType: "applicable",
       artifactLocation: "req-spec",
     });
 
-    // Capture console output during approval review
-    const originalLog = console.log;
-    const logs: string[] = [];
-    console.log = (msg?: unknown, ...optionalParams: unknown[]) => {
-      logs.push(String(msg) + (optionalParams.length > 0 ? " " + optionalParams.join(" ") : ""));
-    };
-
-    try {
-      await runApprove({
-        cwd: tempDir,
-        gate: 1,
-        reviewer: "Alice Human",
-        role: "Lead Engineer",
-        isTTY: false, // will fail at TTY check, but run after or we mock prompter
-      });
-    } finally {
-      console.log = originalLog;
-    }
-
-    // Verify evaluatePrdApplicability yields human-visible details
-    const assessment = evaluatePrdApplicability(tempDir);
+    const assessment = evaluatePrdApplicability(tempDir, "M-1.1.0");
     assert.equal(assessment.status, "applicable");
+    assert.equal(assessment.milestoneId, "M-1.1.0");
+    assert.equal(assessment.author, "Alice Human");
+    assert.equal(assessment.scope, "Caching and performance enhancements");
     assert.equal(assessment.determination, "APPLICABLE");
     assert.ok(assessment.summary?.includes("caching and reliability"));
   });
 
-  test("5. Stage 0 pivot path: Outdated problem statement allows human to reopen at Stage 0", async () => {
-    // Bootstrap terminal project
-    const playbookDir = path.join(tempDir, ".playbook");
-    const milestonesDir = path.join(playbookDir, "milestones");
-    fs.mkdirSync(milestonesDir, { recursive: true });
-
-    const { state, manifest, statePath, manifestPath } = setupStageProject(tempDir, {
-      stage: 6,
-      status: "approved",
-      milestoneId: "M-1.0.0",
+  test("7. Human rejection remains possible even with an APPLICABLE determination", async () => {
+    setupMaintenanceStage1Project(tempDir, {
+      milestoneId: "M-1.1.0",
+      prdCoreExists: true,
+      assessmentType: "applicable",
     });
-    state.lifecycle_status = "completed_terminal";
-    fs.writeFileSync(statePath, JSON.stringify(state, null, 2) + "\n", "utf-8");
-    fs.writeFileSync(
-      path.join(milestonesDir, "state-M-1.0.0.json"),
-      JSON.stringify(state, null, 2) + "\n",
-      "utf-8"
+
+    const res = await rejectGate(tempDir, {
+      gate: 1,
+      reviewerName: "Alice Human",
+      role: "Lead Engineer",
+      conditions: "Performance targets insufficient; need further optimization specs",
+      isTTY: true,
+    });
+
+    assert.equal(res.success, true);
+
+    const state: ProjectState = JSON.parse(
+      fs.readFileSync(path.join(tempDir, DEFAULT_PATHS.stateFile), "utf-8")
     );
-
-    // Reopen with explicit targetStage: 0 (Domain Pivot)
-    const reopenRes = await reopenLifecycle(tempDir, {
-      milestoneId: "M-2.0.0",
-      milestoneName: "Major Domain Pivot 2.0",
-      targetStage: 0,
-      reason: "Complete business model pivot from LMS to peer learning network",
-      authorizedBy: "Alice Human",
-      role: "Lead Architect",
-    });
-
-    assert.equal(reopenRes.success, true);
-    assert.equal(reopenRes.newStage, 0);
-
-    const updatedState: ProjectState = JSON.parse(fs.readFileSync(statePath, "utf-8"));
-    assert.equal(updatedState.current_stage, 0);
-    assert.equal(updatedState.lifecycle_status, "reopened_maintenance");
-    assert.equal(updatedState.current_stage_detail.deliverables.length, 1);
-    assert.equal(updatedState.current_stage_detail.deliverables[0].id, "PRD-CORE");
-    assert.equal(updatedState.current_stage_detail.deliverables[0].status, "not_started");
+    assert.equal(state.stage_status, "in_progress");
+    assert.equal(state.current_stage_detail.human_approval.decision, "REJECTED");
   });
 
-  test("6. Attempted Gate 1 approval without a valid assessment rejects with zero mutations", async () => {
+  test("8. Second playbook reopen is strictly prohibited while milestone is active", async () => {
     setupMaintenanceStage1Project(tempDir, {
+      milestoneId: "M-1.1.0",
+      prdCoreExists: true,
+      assessmentType: "outdated",
+    });
+
+    // Attempting to reopen while already reopened_maintenance rejects
+    await assert.rejects(
+      async () => {
+        await reopenLifecycle(tempDir, {
+          milestoneId: "M-1.2.0",
+          reason: "Attempt second reopen",
+          authorizedBy: "Alice Human",
+          role: "Architect",
+        });
+      },
+      (err: { code?: string }) => {
+        assert.equal(err.code, "LIFECYCLE_ALREADY_REOPENED");
+        return true;
+      }
+    );
+  });
+
+  test("9. Attempted Gate 1 approval without a valid assessment rejects with zero mutations", async () => {
+    setupMaintenanceStage1Project(tempDir, {
+      milestoneId: "M-1.1.0",
       prdCoreExists: true,
       assessmentType: "outdated",
     });
@@ -289,8 +336,9 @@ describe("Stage 1 Inherited Prerequisite Applicability & Reopening Audit", () =>
     assert.equal(state.current_stage_detail.human_approval.decision, null);
   });
 
-  test("7. Subsequent valid approval replaces lingering or stale sidecar", async () => {
+  test("10. Subsequent valid approval replaces lingering or stale sidecar", async () => {
     const { statePath } = setupMaintenanceStage1Project(tempDir, {
+      milestoneId: "M-1.1.0",
       prdCoreExists: true,
       assessmentType: "applicable",
     });
