@@ -17,13 +17,24 @@ import type { ProjectState, Deliverable } from "../types/state.js";
 import type { ProjectManifest } from "../types/manifest.js";
 import type { DiagnosticIssue } from "./diagnostics/types.js";
 
-const FORBIDDEN_SUBSTRINGS = ["agent", "bot", "controller", "playbook", "orchestrator"];
+const FORBIDDEN_SUBSTRINGS = [
+  "agent",
+  "bot",
+  "controller",
+  "playbook",
+  "orchestrator",
+  "copilot",
+  "chatgpt",
+  "gemini",
+  "antigravity",
+  "cursor",
+];
 
 /**
  * Checks whether an actor name contains forbidden agent keywords or patterns.
  */
 export function isForbiddenAgentName(name: string): boolean {
-  if (!name || typeof name !== "string") return true;
+  if (!name || typeof name !== "string" || name.trim().length === 0) return true;
   const lower = name.toLowerCase();
   for (const sub of FORBIDDEN_SUBSTRINGS) {
     if (lower.includes(sub)) return true;

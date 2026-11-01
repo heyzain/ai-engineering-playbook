@@ -36,6 +36,8 @@ export interface JournalFileEntry {
   create_only?: boolean;
   /** For write: apply read-only permissions (0o444) on commit */
   read_only_on_commit?: boolean;
+  /** For write: whether parent directory must already exist on disk (prohibits auto-mkdir) */
+  require_parent_directory_exists?: boolean;
   /** For unlink: whether target must exist at prepare/commit */
   must_exist?: boolean;
 }

@@ -406,6 +406,14 @@ export async function executeStagePivot(
   targetDir: string,
   options: PivotExecutionOptions
 ): Promise<PivotResult> {
+  // Target stage boundary check
+  if (options.targetStage !== 0) {
+    throw new TransactionError(
+      "PIVOT_TARGET_UNSUPPORTED",
+      `Unsupported pivot target stage: ${options.targetStage}. Only pivot to Stage 0 is supported.`
+    );
+  }
+
   const validator = options.validator || new SchemaValidator();
   const now = options.now || new Date();
   const nowIso = now.toISOString();
@@ -433,6 +441,12 @@ export async function executeStagePivot(
     throw new TransactionError(
       "PIVOT_ABORTED",
       "Authorizer professional role is required."
+    );
+  }
+  if (isForbiddenAgentName(role)) {
+    throw new TransactionError(
+      "AGENT_APPROVAL_PROHIBITED",
+      `Authorizer role "${role}" appears to be an automated agent role. Stage pivots require sovereign human authorization.`
     );
   }
 

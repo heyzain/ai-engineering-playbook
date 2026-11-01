@@ -295,6 +295,7 @@ export class WriteAheadTransactionManager {
           original_content: originalContent,
           create_only: writeSpec.createOnly,
           read_only_on_commit: writeSpec.readOnlyOnCommit,
+          require_parent_directory_exists: requireParentForSpec,
         });
       }
     }
@@ -328,8 +329,12 @@ export class WriteAheadTransactionManager {
       if (file.operation !== "unlink") {
         const { absolutePath: absTmp } = validateCanonicalPath(this.targetDir, file.tmp_path);
         const tmpDir = path.dirname(absTmp);
+        const requireParentForTmp =
+          file.require_parent_directory_exists ??
+          options?.requireParentDirectoriesExist ??
+          this.requireParentDirectoriesExist;
         if (!fs.existsSync(tmpDir)) {
-          if (requireParent) {
+          if (requireParentForTmp) {
             const relTmp = path.relative(this.targetDir, tmpDir);
             throw new TransactionError(
               "PIVOT_STORAGE_LAYOUT_MISSING",

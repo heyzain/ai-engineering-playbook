@@ -4,6 +4,7 @@ import { checkPivotEligibility, executeStagePivot } from "../core/pivot.js";
 import { TransactionError } from "../core/transaction/index.js";
 import { LockError } from "../core/lock/types.js";
 import { STAGE_NAMES } from "../constants.js";
+import { isForbiddenAgentName } from "../core/approval.js";
 
 export interface PivotCommandOptions {
   cwd?: string;
@@ -99,6 +100,13 @@ export async function runPivot(options: PivotCommandOptions = {}): Promise<Pivot
       );
     }
 
+    if (isForbiddenAgentName(authorizedBy)) {
+      throw new TransactionError(
+        "AGENT_APPROVAL_PROHIBITED",
+        `Authorizing reviewer "${authorizedBy}" appears to be an automated agent. Stage pivots require sovereign human authorization.`
+      );
+    }
+
     // 4. Authorizer professional role
     let role = options.role?.trim();
     if (!role) {
@@ -111,6 +119,13 @@ export async function runPivot(options: PivotCommandOptions = {}): Promise<Pivot
       throw new TransactionError(
         "PIVOT_ABORTED",
         "Authorizer professional role is required."
+      );
+    }
+
+    if (isForbiddenAgentName(role)) {
+      throw new TransactionError(
+        "AGENT_APPROVAL_PROHIBITED",
+        `Authorizer role "${role}" appears to be an automated agent role. Stage pivots require sovereign human authorization.`
       );
     }
 
@@ -154,7 +169,7 @@ export async function runPivot(options: PivotCommandOptions = {}): Promise<Pivot
 
     // 7. Execute Pivot under WAL transaction
     const res = await executeStagePivot(targetDir, {
-      targetStage: 0,
+      targetStage,
       authorizedBy,
       role,
       reason,
