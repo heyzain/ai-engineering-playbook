@@ -768,6 +768,85 @@
           "description": "Brief explanation of state update (e.g. 'Recorded unit test verification evidence for Stage 3')."
         }
       }
+    },
+    "pivots": {
+      "type": "array",
+      "description": "Audit ledger of human-authorized stage recovery pivots within the active milestone.",
+      "items": {
+        "type": "object",
+        "required": [
+          "pivot_id",
+          "milestone_id",
+          "from_stage",
+          "to_stage",
+          "pivoted_at",
+          "authorized_by",
+          "role",
+          "reason",
+          "snapshot_ref",
+          "audit_ref",
+          "archived_prd_ref"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "pivot_id": {
+            "type": "string",
+            "pattern": "^PVT-M-[a-zA-Z0-9.-]+-[0-9]{3,}$",
+            "description": "Canonical Pivot identifier (PVT-<milestone_id>-<seq>)."
+          },
+          "milestone_id": {
+            "type": "string",
+            "description": "Milestone identifier during which the pivot occurred."
+          },
+          "from_stage": {
+            "type": "integer",
+            "enum": [
+              1
+            ],
+            "description": "Source stage prior to pivot (must be 1)."
+          },
+          "to_stage": {
+            "type": "integer",
+            "enum": [
+              0
+            ],
+            "description": "Target stage after pivot (must be 0)."
+          },
+          "pivoted_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "ISO 8601 timestamp when pivot was executed."
+          },
+          "authorized_by": {
+            "type": "string",
+            "description": "Asserted identity of human authorizer."
+          },
+          "role": {
+            "type": "string",
+            "description": "Professional title or role of human authorizer."
+          },
+          "reason": {
+            "type": "string",
+            "description": "Human authorizer's justification for pivoting to Stage 0."
+          },
+          "snapshot_ref": {
+            "type": "string",
+            "description": "Relative path to pre-pivot frozen state snapshot."
+          },
+          "audit_ref": {
+            "type": "string",
+            "description": "Relative path to markdown audit record."
+          },
+          "archived_prd_ref": {
+            "type": "string",
+            "description": "Relative path to archived outdated PRD."
+          },
+          "source_prd_sha256": {
+            "type": "string",
+            "description": "Original raw SHA-256 hash of outdated PRD prior to archival banner injection."
+          }
+        }
+      }
     }
   },
   "allOf": [

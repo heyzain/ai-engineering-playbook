@@ -125,6 +125,21 @@ export interface ArchivedMilestone {
   state_snapshot_ref?: string;
 }
 
+export interface PivotRecord {
+  pivot_id: string;
+  milestone_id: string;
+  from_stage: 1;
+  to_stage: 0;
+  pivoted_at: string;
+  authorized_by: string;
+  role: string;
+  reason: string;
+  snapshot_ref: string;
+  audit_ref: string;
+  archived_prd_ref: string;
+  source_prd_sha256?: string;
+}
+
 export interface StateLastUpdated {
   timestamp: string;
   updated_by: string;
@@ -146,4 +161,5 @@ export interface ProjectState {
   stage_history: StageHistoryEntry[];
   archived_milestones: ArchivedMilestone[];
   last_updated: StateLastUpdated;
+  pivots?: PivotRecord[];
 }

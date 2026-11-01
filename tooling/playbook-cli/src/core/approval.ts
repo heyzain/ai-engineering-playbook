@@ -309,6 +309,56 @@ export function checkGateEligibility(
     }
   }
 
+  // Gate 0 Negative Byte-Match Guardrail: In Stage 0, docs/prd/PRD-CORE.md must not match any archived outdated PRD hash for this milestone
+  if (requestedGate === 0) {
+    const prdCorePath = path.resolve(targetDir, "docs/prd/PRD-CORE.md");
+    if (fs.existsSync(prdCorePath)) {
+      const activePrdHash = computeFileSha256(prdCorePath);
+      if (activePrdHash) {
+        const outdatedHashes = new Set<string>();
+        for (const p of state.pivots || []) {
+          if (p.milestone_id === state.milestone_id && p.source_prd_sha256) {
+            outdatedHashes.add(p.source_prd_sha256.toLowerCase());
+          }
+        }
+
+        const docsPivotsDir = path.resolve(targetDir, DEFAULT_PATHS.docsPivotsDir);
+        if (fs.existsSync(docsPivotsDir)) {
+          try {
+            const files = fs.readdirSync(docsPivotsDir);
+            const escapedMilestone = state.milestone_id.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+            const pvtRegex = new RegExp(`^PVT-${escapedMilestone}-[0-9]{3,}\\.md$`);
+            for (const f of files) {
+              if (pvtRegex.test(f)) {
+                try {
+                  const pvtContent = fs.readFileSync(path.join(docsPivotsDir, f), "utf-8");
+                  const m = pvtContent.match(/\*\*Source PRD Hash\*\*:\s*`?(sha256:[a-f0-9]{64})`?/i);
+                  if (m) {
+                    outdatedHashes.add(m[1].toLowerCase());
+                  }
+                } catch {
+                  // Ignore read errors
+                }
+              }
+            }
+          } catch {
+            // Ignore dir read errors
+          }
+        }
+
+        if (outdatedHashes.has(activePrdHash.toLowerCase())) {
+          diagnostics.push({
+            code: "PRD_CONTENT_UNALTERED",
+            severity: "error",
+            message: `Active 'docs/prd/PRD-CORE.md' has identical raw-byte SHA-256 hash (${activePrdHash}) to an outdated Problem Statement archived during a prior stage pivot for milestone '${state.milestone_id}'. Stage 0 requires authoring a fresh problem statement; reusing the outdated document is prohibited.`,
+            path: "docs/prd/PRD-CORE.md",
+            remediation: "Draft a fresh problem statement addressing the new problem domain.",
+          });
+        }
+      }
+    }
+  }
+
   // 1. Mandatory Baseline Deliverables Enforcement
   if (requestedGate >= 0 && requestedGate <= 6) {
     const baselineDeliverables = getStageBaselineDeliverables(requestedGate as StageNumber);

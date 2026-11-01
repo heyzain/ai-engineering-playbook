@@ -9,6 +9,7 @@ import { runVerifyEvidence } from "../commands/verify-evidence.js";
 import { runApprove } from "../commands/approve.js";
 import { runAdvance } from "../commands/advance.js";
 import { runReopen } from "../commands/reopen.js";
+import { runPivot } from "../commands/pivot.js";
 import type { GovernanceProfile, ApprovalMode } from "../constants.js";
 
 const CLI_VERSION = "1.0.0";
@@ -28,22 +29,23 @@ Commands:
   approve           Interactively review and approve/reject active stage gate (human only)
   advance           Advance to the next lifecycle stage following formal human approval
   reopen            Reopen a completed project lifecycle for maintenance (human only)
+  pivot             Pivot active maintenance milestone from Stage 1 to Stage 0 (human only)
   help              Show this help message
 
 Options:
   -h, --help              Show help message
   -v, --version           Show CLI and Playbook standard versions
   --gate <N>              Gate number to review/approve (0 to 6)
-  --stage <0|1>           Entry stage for maintenance reopening (0 or 1)
+  --stage <0|1>           Entry stage for maintenance reopening (0 or 1) or pivot (0)
   --reviewer <name>       Claimed human reviewer full name
-  --authorized-by <name>  Claimed human authorizer full name (reopen command)
+  --authorized-by <name>  Claimed human authorizer full name (reopen and pivot commands)
   --role <role>           Engineering role or title
-  --reason <text>         Reopening rationale or justification
+  --reason <text>         Reopening or pivot rationale or justification
   --mode <mode>           Approval mode (solo, team)
   --signature <ref>       Signature or review reference (e.g. PR #42)
   --conditions <conds>    Approval conditions or mandatory rework reasons
   --reject                Record formal gate rejection rather than approval
-  --json                  Output machine-readable JSON (inspect, verify-evidence, advance, reopen)
+  --json                  Output machine-readable JSON (inspect, verify-evidence, advance, reopen, pivot)
   -f, --force             Overwrite existing governance files (init command)
   --non-interactive       Execute without interactive terminal prompts
   --project-id <id>       Kebab-case project identifier (e.g. 'my-app')
@@ -67,6 +69,9 @@ Examples:
 
   # Validate existing project governance files against schemas
   playbook validate
+
+  # Pivot active maintenance milestone to Stage 0
+  playbook pivot --stage 0
 `;
 
 async function main(): Promise<void> {
@@ -207,6 +212,23 @@ async function main(): Promise<void> {
       reason: values.reason as string | undefined,
       authorizedBy: values["authorized-by"] as string | undefined,
       role: values.role as string | undefined,
+      confirmationPhrase: values["confirmation-phrase"] as string | undefined,
+      nonInteractive: Boolean(values["non-interactive"]),
+      json: Boolean(values.json),
+    });
+
+    process.exit(res.exitCode);
+  }
+
+  if (command === "pivot") {
+    const stageStr = values.stage as string | undefined;
+    const stage = stageStr !== undefined ? parseInt(stageStr, 10) : undefined;
+    const res = await runPivot({
+      cwd: values.cwd as string | undefined,
+      stage,
+      authorizedBy: values["authorized-by"] as string | undefined,
+      role: values.role as string | undefined,
+      reason: values.reason as string | undefined,
       confirmationPhrase: values["confirmation-phrase"] as string | undefined,
       nonInteractive: Boolean(values["non-interactive"]),
       json: Boolean(values.json),
