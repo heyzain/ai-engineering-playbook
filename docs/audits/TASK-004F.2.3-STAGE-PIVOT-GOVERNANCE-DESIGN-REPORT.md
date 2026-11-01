@@ -5,7 +5,7 @@
 > **Task**: Task 004F.2.3 — Active Maintenance Milestone Stage Pivot Governance Design  
 > **Date**: 2026-11-01  
 > **Author**: AI Engineering Playbook Architecture Group  
-> **Primary Deliverable**: [`governance/maintenance-stage-pivot-design.md`](../../governance/maintenance-stage-pivot-design.md)  
+> **Primary Deliverable**: [`governance/maintenance-stage-pivot-design.md`](../../governance/maintenance-stage-pivot-design.md) v1.1.0  
 > **Referenced Standards**:
 > - [`governance/state-machine.md`](../../governance/state-machine.md) v1.3.0
 > - [`governance/lifecycle-reopening-design.md`](../../governance/lifecycle-reopening-design.md) v1.2.0
@@ -22,7 +22,7 @@ During Task 004F.2.2, an audit of the maintenance reopening workflow revealed a 
 3. The previous specification suggested running `playbook reopen --stage 0` to resolve this. However, executing `reopen` on an active maintenance milestone is strictly rejected with `LIFECYCLE_ALREADY_REOPENED`.
 4. Furthermore, the core state machine prohibited backward transitions, creating a state deadlock where an unapproved Stage 1 maintenance milestone with an obsolete PRD had no valid execution path forward or backward.
 
-In Task 004F.2.3, **Option 2: `PIVOT_TO_STAGE_0`** was formally selected. This report documents the architectural design, formal state transitions, human authorization mechanics, historical preservation guarantees, transaction safety, test criteria, and scientific boundaries established in [`governance/maintenance-stage-pivot-design.md`](../../governance/maintenance-stage-pivot-design.md).
+In Task 004F.2.3, **Option 2: `PIVOT_TO_STAGE_0`** was formally selected. This report documents the architectural design, formal state transitions, human authorization mechanics, historical preservation guarantees, transaction safety, test criteria, and scientific boundaries established in [`governance/maintenance-stage-pivot-design.md`](../../governance/maintenance-stage-pivot-design.md) v1.1.0.
 
 **In accordance with instructions, this task is strictly DESIGN ONLY. No runtime code, CLI command implementation, schemas, or tests have been modified.**
 
@@ -37,13 +37,13 @@ $$\Big(\text{lifecycle\_status: } \texttt{"reopened\_maintenance"},\, \text{curr
 
 Where $\sigma \in \{\texttt{"not\_started"}, \texttt{"in\_progress"}, \texttt{"blocked"}, \texttt{"pending\_review"}\}$.
 
-### 2.2 Invariant Precondition Matrix
+### 2.2 Invariant Precondition Matrix (Authoritative Validation Under Lock)
 
-The engine validates six mandatory preconditions before permitting the pivot. If any condition fails, the operation immediately aborts with zero side-effects:
+To eliminate Time-Of-Check to Time-Of-Use (TOCTOU) races, the engine validates all mandatory preconditions **exclusively under the transaction lock** against freshly read on-disk state. If any condition fails, the operation immediately aborts with zero side-effects:
 
 ```
 ┌────────────────────────────────────────────────────────────────────────┐
-│ Precondition Evaluation Order                                          │
+│ Precondition Evaluation Order (Under Exclusive Lock)                   │
 ├────────────────────────────────────────────────────────────────────────┤
 │ 1. Lifecycle Status Guard: state.lifecycle_status === "reopened_maint" │
 │ 2. Stage Boundary Guard:   state.current_stage === 1                   │
@@ -86,14 +86,15 @@ $$\texttt{"CONFIRM PIVOT TO STAGE 0 "} + \texttt{state.milestone\_id}$$
 For example, when `milestone_id` is `M-1.1.0`:
 ```text
 Confirm Stage Pivot to Stage 0:
-This will archive current Stage 1 work and return the active milestone M-1.1.0 to Stage 0.
+This will archive current Stage 1 work, archive the outdated PRD-CORE.md,
+and return the active milestone M-1.1.0 to Stage 0 for foundational problem reformulation.
 Type exact phrase 'CONFIRM PIVOT TO STAGE 0 M-1.1.0' to proceed:
 > CONFIRM PIVOT TO STAGE 0 M-1.1.0
 ```
 Any mismatch in casing, spacing, or milestone ID terminates the execution with `PIVOT_ABORTED` and causes zero state mutations. Flags cannot bypass this interactive confirmation.
 
 ### 3.3 Asserted Identity & Trust Model
-The authorization mechanism verifies interactive human agency via TTY checks and explicit typed confirmation phrases. In accordance with Playbook communication rules, this system does **not** claim cryptographic identity verification, PKI signatures, or OIDC authentication. Identity is asserted by the interactive operator and audited in repository records.
+The authorization mechanism verifies interactive human agency via TTY checks and explicit typed confirmation phrases. In accordance with Playbook communication rules, this system does **not** claim cryptographic identity verification, PKI signatures, or OIDC authentication. Identity is asserted by the interactive operator and audited in repository records. Writing an audit document to `docs/pivots/` creates the file in the local working directory; it does **not** automatically commit it to Git. Committing working tree files requires explicit human Git operations (`git add` and `git commit`).
 
 ---
 
@@ -101,29 +102,37 @@ The authorization mechanism verifies interactive human agency via TTY checks and
 
 A foundational rule of the AI Engineering Playbook is: **no engineering work is silently discarded or erased**.
 
-### 4.1 Preservation Topology
+### 4.1 Unique Pivot Event Identity
+Every pivot event is assigned a unique, deterministic ID: `PVT-<MILESTONE_ID>-<SEQ>` (e.g. `PVT-M-1.1.0-001`). Under the exclusive lock, sequence numbers advance monotonically without overwriting prior records. Repeated pivots within the same milestone are supported and preserved side-by-side.
+
+### 4.2 Preservation Topology
 
 ```
 .playbook/
 ├── pivots/
-│   └── state-M-1.1.0-stage-1-20261101T080000Z.json  <-- Immutable snapshot (0o444)
+│   ├── state-PVT-M-1.1.0-001.json                    <-- OS write-protected snapshot (0o444)
+│   └── state-PVT-M-1.1.0-002.json                    <-- Preserved on subsequent pivot
 docs/
 ├── pivots/
-│   └── PIVOT-M-1.1.0-STAGE-0.md                      <-- Committed audit markdown
+│   ├── PVT-M-1.1.0-001.md                            <-- Markdown audit record (working tree)
+│   └── PVT-M-1.1.0-002.md
 └── prd/
-    ├── PRD-CORE.md                                   <-- Retained; will be reformulated
-    ├── PRD-CORE-ASSESSMENT.md                        <-- Retained (OUTDATED record)
+    ├── archive/
+    │   └── PRD-CORE.PVT-M-1.1.0-001.outdated.md      <-- Archived outdated PRD with warning banner
+    ├── PRD-CORE.md                                   <-- REMOVED / Fresh authoring required in Stage 0
+    ├── PRD-CORE-ASSESSMENT.md                        <-- Retained Stage 1 assessment record
     └── REQUIREMENTS-SPEC.md                          <-- Retained on disk & Git tracked
 ```
 
-### 4.2 Preservation Guarantees
-1. **Pre-Pivot State Snapshot**: The full `state` object at Stage 1 (including all deliverables, validation results, evidence hashes, and timestamps) is written to `.playbook/pivots/state-<milestone_id>-stage-1-<timestamp>.json` and marked read-only (`0o444`).
-2. **Governance Audit Document**: A human-readable Markdown record is committed to `docs/pivots/PIVOT-<milestone_id>-STAGE-0.md`, capturing authorizer identity, role, timestamp, assessment summary, and explicit justification.
-3. **Work-Tree Retention**: Authored files (`REQUIREMENTS-SPEC.md`, test logs, reports) are **never unlinked or deleted** by the CLI. They remain in the filesystem and Git history for reuse or reference.
-4. **Stage History Ledger Protection**: The pivoted Stage 1 context is **strictly barred from `stage_history[]`**. 
+### 4.3 Preservation Guarantees
+1. **Pre-Pivot State Snapshot**: The full `state` object at Stage 1 (including all deliverables, validation results, evidence hashes, and timestamps) is written to `.playbook/pivots/state-<PIVOT_ID>.json` and marked with operating system file write protection (`0o444`).
+2. **Governance Audit Document**: A human-readable Markdown record is created at `docs/pivots/<PIVOT_ID>.md`, capturing authorizer identity, role, timestamp, assessment summary, explicit justification, and historical dispositions of RFCs, ADRs, and Exceptions.
+3. **PRD-CORE Archival & Freshness Enforcement**: The outdated `docs/prd/PRD-CORE.md` is copied to `docs/prd/archive/PRD-CORE.<PIVOT_ID>.outdated.md` with an archival warning banner, and unlinked from the active path. Stage 0 requires authoring a genuinely fresh problem formulation.
+4. **RFC, ADR, and Exception Dispositions**: Files on disk are permanent and never deleted. Stage 1 exceptions are explicitly disposed as `invalidated_by_pivot`. In `state.current_stage_detail`, arrays are initialized empty for the new Stage 0 scope.
+5. **Stage History Ledger Protection**: The pivoted Stage 1 context is **strictly barred from `stage_history[]`**. 
    - `stage_history` requires `status: ["approved", "waived"]`. Stage 1 was never approved.
    - Injecting Stage 1 would break the monotonically increasing stage sequence ($[1, 0, 1 \dots]$), causing errors in tooling and downstream parsers.
-   - For immediate compliance, storage is file-based (`.playbook/pivots/` and `docs/pivots/`). In the future runtime implementation task, an optional top-level `pivots: []` ledger can be added to `schemas/project-state.schema.json`.
+   - For immediate compliance, storage is file-based (`.playbook/pivots/`, `docs/pivots/`, `docs/prd/archive/`). In the future runtime implementation task, an optional top-level `pivots: []` ledger can be added to `schemas/project-state.schema.json`.
 
 ---
 
@@ -141,25 +150,30 @@ Upon successful pivot:
 - Approval sidecar `.playbook/approval-fingerprint.json`: Purged.
 - **Zero Evidence Inheritance**: Stage 0 deliverables **never** inherit validation evidence or approval signatures from prior milestones or the pivoted Stage 1.
 
-### 5.2 Transaction Integrity & Write-Ahead Logging (WAL)
-The pivot engine reuses the existing, production-proven transaction architecture:
-- **Lock Manager ([`src/core/lock/lock-manager.ts`](file:///f:/workspace/ai-engineering-playbook/tooling/playbook-cli/src/core/lock/lock-manager.ts))**: Exclusively acquires `.playbook/transaction.lock` using atomic `wx` flag creation. Automatically recovers stale locks via `.playbook/reclaim.lock`.
-- **Write-Ahead Log ([`src/core/transaction/transaction-manager.ts`](file:///f:/workspace/ai-engineering-playbook/tooling/playbook-cli/src/core/transaction/transaction-manager.ts))**: Two-phase atomic updates for `state.json` and `manifest.json`.
+### 5.2 Transaction Locking Order & Crash Recovery
+The pivot engine enforces strict lock ordering:
+1. **Advisory Pre-Check**: Quick read-only check before prompting.
+2. **Operator Prompt**: Interactive prompt for identity, role, reason, and confirmation.
+3. **Lock Acquisition**: Exclusive `.playbook/transaction.lock` acquisition.
+4. **Authoritative Re-Read & Validation**: State, manifest, and PRD applicability re-read under lock. If drifted, rejects with `STATE_CONCURRENTLY_MODIFIED`.
+5. **Atomic File Staging**: Snapshots and audit docs written to `.tmp.<PID>` staging files, then atomically renamed.
+6. **WAL Execution**: Two-phase atomic updates for `state.json` and `manifest.json`.
 
 #### Crash Interruption Recovery
-- **Interruption in `PREPARED` Phase**: On subsequent CLI execution, the transaction manager detects an uncommitted journal, performs a rollback, and cleans up. Project remains safely at Stage 1.
-- **Interruption in `COMMITTING` Phase**: On subsequent CLI execution, the transaction manager rolls forward, ensuring both `state.json` and `manifest.json` are atomically committed to Stage 0.
-- **Sidecar Cleanup Interruption**: If the process crashes before unlinking the approval sidecar, `checkGateEligibility` detects that the sidecar's recorded gate does not match `current_stage` ($1 \neq 0$), rejecting it with `APPROVAL_FINGERPRINT_MALFORMED`.
+- **Interruption during Staging**: State untouched. Stale `.tmp` files pruned during recovery. Project remains safely at Stage 1.
+- **Interruption in `PREPARED` Phase**: Transaction manager detects uncommitted journal, performs rollback, cleans up. Project remains safely at Stage 1.
+- **Interruption in `COMMITTING` Phase**: Transaction manager detects `COMMITTING` phase, rolls forward, ensuring both `state.json` and `manifest.json` are atomically committed to Stage 0.
+- **Sidecar Cleanup Interruption**: Gate mismatch check ($1 \neq 0$) invalidates the sidecar with `APPROVAL_FINGERPRINT_MALFORMED`.
 
 ---
 
 ## 6. Comprehensive Design Test Matrix
 
-The design defines 13 test scenarios for the future implementation phase:
+The design defines 22 test scenarios for the future implementation phase:
 
 | Scenario ID | Name | Objective & Invariants Tested |
 | :---: | :--- | :--- |
-| **T1** | Valid Stage 1-to-Stage 0 Pivot | Verifies happy path: `current_stage` becomes 0, snapshot created, audit doc created, manifest synchronized. |
+| **T1** | Valid Stage 1-to-Stage 0 Pivot | Verifies happy path: unique event ID generated, `current_stage` becomes 0, snapshot created, audit doc created, manifest synced. |
 | **T2** | Reject from Stage 2 | Verifies that pivot cannot be executed from Stage 2 (`PIVOT_INVALID_STAGE`). |
 | **T3** | Reject After Gate 1 Approval | Verifies that once Stage 1 is approved, it cannot be pivoted (`STAGE_ALREADY_APPROVED`). |
 | **T4** | Reject Non-Maintenance Lifecycle | Verifies that `active` or `completed_terminal` lifecycles reject pivot (`LIFECYCLE_NOT_MAINTENANCE`). |
@@ -172,6 +186,15 @@ The design defines 13 test scenarios for the future implementation phase:
 | **T11** | Stale Sidecar Rejection | Verifies that Stage 1 approval sidecars cannot authorize Stage 0. |
 | **T12** | Interruption and WAL Recovery | Verifies crash recovery roll-forward from `COMMITTING` phase. |
 | **T13** | Normal Progression and Closure | Verifies that after pivoting, the milestone can advance 0 $\to$ 1 $\dots \to$ 6 and seal into `completed_terminal`. |
+| **T14** | Concurrent Pivot Attempts (Lock Contention) | Verifies that concurrent pivot is rejected with `LOCK_HELD_BY_ACTIVE_PROCESS`. |
+| **T15** | TOCTOU State Modification Under Prompt | Verifies that state drift during interactive prompt rejects with `STATE_CONCURRENTLY_MODIFIED`. |
+| **T16** | Repeated Pivot Without Historical Overwrite | Verifies that second pivot produces `PVT-M-1.1.0-002` without overwriting `PVT-M-1.1.0-001`. |
+| **T17** | Snapshot Staging / Write Failure | Verifies rollback to Stage 1 if snapshot write fails. |
+| **T18** | Audit Document Write Failure | Verifies rollback if audit doc write fails. |
+| **T19** | WAL Preparation Failure | Verifies fail-closed behavior on journal prepare error. |
+| **T20** | Crash Recovery with Incomplete Artifacts | Verifies pruning of stale `.tmp` files during recovery. |
+| **T21** | PRD-CORE Archival & Freshness Enforcement | Verifies old PRD archived, active PRD removed, and old PRD hash rejected for Gate 0 approval. |
+| **T22** | Historical RFC, ADR, Exception Dispositions | Verifies audit dispositions and Stage 1 exception invalidation. |
 
 ---
 
@@ -193,20 +216,20 @@ The design defines 13 test scenarios for the future implementation phase:
 ## 8. Limitations & Unresolved Architectural Decisions
 
 1. **Schema Extension vs. File-Based Storage**:
-   - The design adopts file-based snapshot persistence under `.playbook/pivots/` and documentation under `docs/pivots/`. This enables zero schema breaking changes in the immediate term.
+   - The design adopts file-based snapshot persistence under `.playbook/pivots/`, `docs/pivots/`, and `docs/prd/archive/`. This enables zero schema breaking changes in the immediate term.
    - *Future Decision*: In the implementation task, determine whether to officially add `pivots: []` to `schemas/project-state.schema.json` to make pivot records directly queryable via `playbook inspect --json`.
 2. **Multi-Stage Pivot Requests**:
    - The pivot design intentionally limits backward transitions strictly from Stage 1 to Stage 0. 
    - Pivoting backward from Stage 3 (Implementation) to Stage 0 is rejected. If a project in Stage 3 discovers that the foundational business problem has dissolved, the recommended workflow is milestone cancellation/closure followed by a new milestone reopening, rather than multi-stage backward jumps.
-3. **Working Tree Artifact Strategy**:
-   - Authored files (`REQUIREMENTS-SPEC.md`) remain on disk. While Git tracks all changes, a future enhancement could optionally rename them to `docs/prd/REQUIREMENTS-SPEC.draft-M-1.1.0-pre-pivot.md` to prevent confusion during Stage 0 authoring.
+3. **Working Tree Artifact Tracking**:
+   - Snapshots and audit documents are created in the working tree. Automatic Git commits are intentionally not performed by the CLI; commits remain under explicit human developer authority.
 
 ---
 
 ## 9. Conclusion & Acceptance Status
 
-The active maintenance milestone stage pivot architecture is complete, verified against existing governance invariants, and documented across:
-- [`governance/maintenance-stage-pivot-design.md`](../../governance/maintenance-stage-pivot-design.md) (v1.0.0)
+The active maintenance milestone stage pivot architecture v1.1.0 is complete, verified against existing governance invariants, and documented across:
+- [`governance/maintenance-stage-pivot-design.md`](../../governance/maintenance-stage-pivot-design.md) (v1.1.0)
 - [`governance/state-machine.md`](../../governance/state-machine.md) (v1.3.0)
 - [`governance/lifecycle-reopening-design.md`](../../governance/lifecycle-reopening-design.md) (v1.2.0)
 
