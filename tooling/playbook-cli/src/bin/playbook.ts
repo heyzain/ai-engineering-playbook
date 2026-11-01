@@ -8,6 +8,7 @@ import { runInspect } from "../commands/inspect.js";
 import { runVerifyEvidence } from "../commands/verify-evidence.js";
 import { runApprove } from "../commands/approve.js";
 import { runAdvance } from "../commands/advance.js";
+import { runReopen } from "../commands/reopen.js";
 import type { GovernanceProfile, ApprovalMode } from "../constants.js";
 
 const CLI_VERSION = "1.0.0";
@@ -26,19 +27,23 @@ Commands:
   validate          Validate project manifest and state against JSON Schemas
   approve           Interactively review and approve/reject active stage gate (human only)
   advance           Advance to the next lifecycle stage following formal human approval
+  reopen            Reopen a completed project lifecycle for maintenance (human only)
   help              Show this help message
 
 Options:
   -h, --help              Show help message
   -v, --version           Show CLI and Playbook standard versions
   --gate <N>              Gate number to review/approve (0 to 6)
+  --stage <0|1>           Entry stage for maintenance reopening (0 or 1)
   --reviewer <name>       Claimed human reviewer full name
+  --authorized-by <name>  Claimed human authorizer full name (reopen command)
   --role <role>           Engineering role or title
+  --reason <text>         Reopening rationale or justification
   --mode <mode>           Approval mode (solo, team)
   --signature <ref>       Signature or review reference (e.g. PR #42)
   --conditions <conds>    Approval conditions or mandatory rework reasons
   --reject                Record formal gate rejection rather than approval
-  --json                  Output machine-readable JSON (inspect, verify-evidence, advance)
+  --json                  Output machine-readable JSON (inspect, verify-evidence, advance, reopen)
   -f, --force             Overwrite existing governance files (init command)
   --non-interactive       Execute without interactive terminal prompts
   --project-id <id>       Kebab-case project identifier (e.g. 'my-app')
@@ -83,8 +88,11 @@ async function main(): Promise<void> {
       milestone: { type: "string" },
       cwd: { type: "string" },
       gate: { type: "string" },
+      stage: { type: "string" },
       reviewer: { type: "string" },
+      "authorized-by": { type: "string" },
       role: { type: "string" },
+      reason: { type: "string" },
       signature: { type: "string" },
       conditions: { type: "string" },
       reject: { type: "boolean" },
@@ -182,6 +190,25 @@ async function main(): Promise<void> {
   if (command === "advance") {
     const res = await runAdvance({
       cwd: values.cwd as string | undefined,
+      json: Boolean(values.json),
+    });
+
+    process.exit(res.exitCode);
+  }
+
+  if (command === "reopen") {
+    const stageStr = values.stage as string | undefined;
+    const stage = stageStr !== undefined ? parseInt(stageStr, 10) : undefined;
+    const res = await runReopen({
+      cwd: values.cwd as string | undefined,
+      milestone: values.milestone as string | undefined,
+      name: values.name as string | undefined,
+      stage,
+      reason: values.reason as string | undefined,
+      authorizedBy: values["authorized-by"] as string | undefined,
+      role: values.role as string | undefined,
+      confirmationPhrase: values["confirmation-phrase"] as string | undefined,
+      nonInteractive: Boolean(values["non-interactive"]),
       json: Boolean(values.json),
     });
 

@@ -1,3 +1,5 @@
+import fs from "node:fs";
+import path from "node:path";
 import { SCHEMA_VERSION } from "../../constants.js";
 import { SchemaValidator } from "../validator.js";
 import type {
@@ -201,6 +203,35 @@ export class DiagnosticsEngine {
           path: "/lifecycle_status",
           remediation: "Resume active development before performing stage work.",
         });
+      } else if (state.lifecycle_status === "reopened_maintenance") {
+        diagnostics.push({
+          code: "LIFECYCLE_REOPENED_MAINTENANCE",
+          severity: "info",
+          message: `Project lifecycle is in maintenance mode for milestone '${state.milestone_id}' (archived milestones: ${state.archived_milestones?.length || 0}).`,
+          path: "/lifecycle_status",
+          remediation: "Execute maintenance deliverables and advance through stage gates.",
+        });
+
+        if (state.current_stage === 1) {
+          const prdCorePath = path.resolve(raw.targetDir, "docs/prd/PRD-CORE.md");
+          if (!fs.existsSync(prdCorePath)) {
+            diagnostics.push({
+              code: "PRD_CORE_MISSING",
+              severity: "error",
+              message: "Inherited foundational Problem Statement 'docs/prd/PRD-CORE.md' is missing from disk.",
+              path: "docs/prd/PRD-CORE.md",
+              remediation: "Restore PRD-CORE.md or reopen lifecycle at Stage 0 to re-establish the problem baseline.",
+            });
+          } else {
+            diagnostics.push({
+              code: "INHERITED_PREREQUISITE_ASSESSMENT",
+              severity: "info",
+              message: "Stage 1 maintenance milestone requires human assessment of inherited 'docs/prd/PRD-CORE.md' applicability during Gate 1 review.",
+              path: "docs/prd/PRD-CORE.md",
+              remediation: "Confirm continued validity in REQ-SPEC or reopen at Stage 0 if problem formulation has changed.",
+            });
+          }
+        }
       }
 
       // 5.2 Deliverables analysis

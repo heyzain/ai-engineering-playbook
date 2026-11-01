@@ -249,6 +249,21 @@ export function checkGateEligibility(
     });
   }
 
+  // Inherited Prerequisite Check: In Stage 1 maintenance, docs/prd/PRD-CORE.md must exist on disk
+  if (state.lifecycle_status === "reopened_maintenance" && requestedGate === 1) {
+    const prdCorePath = path.resolve(targetDir, "docs/prd/PRD-CORE.md");
+    if (!fs.existsSync(prdCorePath)) {
+      diagnostics.push({
+        code: "GATE_CRITERIA_UNMET",
+        severity: "error",
+        message:
+          "Inherited foundational Problem Statement 'docs/prd/PRD-CORE.md' is missing from disk. Maintenance requirements cannot proceed without a valid problem baseline. Reopen at Stage 0 to re-establish PRD Core.",
+        path: "docs/prd/PRD-CORE.md",
+        remediation: "Restore docs/prd/PRD-CORE.md or execute 'playbook reopen --stage 0'.",
+      });
+    }
+  }
+
   // 1. Mandatory Baseline Deliverables Enforcement
   if (requestedGate >= 0 && requestedGate <= 6) {
     const baselineDeliverables = getStageBaselineDeliverables(requestedGate as StageNumber);

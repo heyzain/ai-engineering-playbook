@@ -12,6 +12,7 @@
 - **Project Inspection & Governance Diagnostics (`playbook inspect`)**: Read-only evaluation of downstream project manifest and state against JSON schemas and governance invariants, computing an actionable readiness assessment (`blocked`, `needs_attention`, `ready_for_human_review`, `approved`, `completed_terminal`).
 - **Evidence Verification Engine (`playbook verify-evidence`)**: Read-only verification of evidence files against `.playbook/state.json`, checking file existence, path safety, and SHA-256 cryptographic integrity without modifying disk or state.
 - **Project Bootstrapping (`playbook init`)**: Scaffolds standard downstream repository directories (`.playbook/`, `docs/prd/`, `docs/adr/`, `docs/rfcs/`, `docs/gates/`, `docs/exceptions/`, `.playbook/logs/`) and generates schema-conforming `manifest.json` and Stage 0 `state.json`.
+- **Controlled Lifecycle Reopening (`playbook reopen`)**: Safely transitions a previously closed milestone (`completed_terminal`) into a new maintenance milestone (`reopened_maintenance`) under mandatory interactive human authorization, preserving prior milestone snapshots and archived history.
 - **Accidental State Overwrite Protection**: Refuses to overwrite existing governance manifests or lifecycle state files without explicit human confirmation or the `--force` flag.
 - **Real JSON Schema Validation**: Compiles and verifies JSON Schema Draft 2020-12 specifications (`schemas/project-manifest.schema.json` and `schemas/project-state.schema.json`) with detailed JSON-pointer diagnostics.
 - **Cross-Platform Path Normalization**: Enforces canonical POSIX forward slashes (`/`) for relative paths across Windows, macOS, and Linux, preventing git diff churn.
@@ -362,15 +363,64 @@ playbook advance --cwd /path/to/project
 #### Advancement Rules & Invariants
 - **Approval Precondition**: Active stage must have `stage_status: "approved"` and formal human sign-off recorded.
 - **Stale Approval Invalidation (`APPROVAL_STALE`)**: Re-verifies all evidence files and state payloads against `.playbook/approval-fingerprint.json`. If any deliverable or evidence file was tampered with or modified after human approval, advancement is blocked and requires re-approval.
-- **Atomic Two-Phase Commit**: State updates (`state.json`), manifest synchronization (`manifest.json`), and approval sidecar removal are committed atomically using Write-Ahead Logging (`.playbook/journal.json`) and advisory flock locking (`.playbook/playbook.lock`).
+- **Atomic Two-Phase Commit**: State updates (`state.json`), manifest synchronization (`manifest.json`), and approval sidecar removal are committed atomically using Write-Ahead Logging (`.playbook/tx-journal.json`) and transaction mutex locking (`.playbook/transaction.lock`).
 - **History Archival**: The completed stage detail is moved into `stage_history[]` with approval metadata and timestamp.
 - **Baseline Deliverable Initialization**: Next stage baseline deliverables are populated into `current_stage_detail.deliverables[]`.
 - **Stage 6 Terminal Closure (`CLOSE_LIFECYCLE`)**:
   - Advancing Stage 6 sets `lifecycle_status: "completed_terminal"` and seals the milestone.
   - The current stage remains `6` (Stage 7 is strictly prohibited and never created).
-  - Creates a frozen, read-only milestone snapshot at `.playbook/milestones/state-<milestone_id>.json`.
+  - Creates a governance-frozen milestone snapshot at `.playbook/milestones/state-<milestone_id>.json`.
   - Collision defense (`SNAPSHOT_CONFLICT`): Existing snapshots cannot be overwritten.
   - Subsequent calls to `playbook advance` throw `ADVANCEMENT_BLOCKED`.
+
+---
+
+### `playbook reopen`
+Safely reopens a completed terminal project (`completed_terminal`) into maintenance mode (`reopened_maintenance`) under an authorized human decision.
+
+```bash
+# Interactive terminal reopening prompt
+playbook reopen
+
+# Specify parameters with CLI options
+playbook reopen \
+  --milestone M-1.1.0 \
+  --name "Q1 Maintenance" \
+  --stage 1 \
+  --reason "Bug fixes and dependency updates" \
+  --authorized-by "Alice Human" \
+  --role "Lead Architect" \
+  --confirmation-phrase "CONFIRM REOPEN MILESTONE M-1.1.0"
+
+# Reopen in a specific project directory
+playbook reopen --cwd /path/to/project
+```
+
+#### Reopening Invariants & Rules
+- **Lifecycle Transition Precondition**: Only permitted from `completed_terminal`. Projects in `active`, `paused`, or `reopened_maintenance` cannot be reopened (`LIFECYCLE_NOT_TERMINAL`, `LIFECYCLE_ALREADY_REOPENED`).
+- **Mandatory Interactive Human Confirmation**:
+  - Requires an interactive terminal session (TTY). Headless invocations, pipes, and non-interactive calls reject with `TTY_REQUIRED` (`exit code 1`). The `--json` flag formats output only; it never bypasses interactive confirmation.
+  - Requires the exact typed confirmation phrase: `CONFIRM REOPEN MILESTONE <NEW_ID>`.
+  - Prohibits agent authorizer identities (`AI-Agent`, `Bot-Reviewer`, `Playbook-Controller`, etc.) via `AGENT_REOPEN_PROHIBITED`.
+- **Milestone Archiving & Preservation**:
+  - Appends the completed milestone into `archived_milestones[]` in `.playbook/state.json`.
+  - Preserves the existing snapshot at `.playbook/milestones/state-<previous_milestone_id>.json`.
+  - Verifies prior milestone snapshot exists before reopening (`SNAPSHOT_MISSING`).
+  - Milestone collision defense (`MILESTONE_ID_COLLISION`): The new milestone ID must conform to pattern `^M-[a-zA-Z0-9.-]+$`, cannot match the active milestone ID, and cannot match an existing file under `.playbook/milestones/`.
+- **Stage Selection**:
+  - Reopens to **Stage 1 (Requirements & Specification)** by default for incremental maintenance work.
+  - Permits explicit **Stage 0 (Discovery & Problem Formulation)** for fundamental domain pivots or problem reformulations.
+  - Target stages 2 through 6 are strictly barred (`INVALID_REOPEN_STAGE`).
+- **Inherited Prerequisite Assessment (Stage 1 Reopening)**:
+  - When reopening to Stage 1, the foundational problem definition (`docs/prd/PRD-CORE.md`) is inherited.
+  - `playbook inspect` and `playbook approve` verify that `docs/prd/PRD-CORE.md` exists on disk. If missing, gate eligibility is blocked (`PRD_CORE_MISSING`).
+  - Human reviewer must assess whether the inherited PRD remains valid for the maintenance scope during Gate 1 review.
+- **Fresh Deliverable State**:
+  - Resets `stage_history[]` for the new milestone.
+  - Populates new stage baseline deliverables with `validation_status: "unvalidated"`. Historical completion does not substitute for fresh evidence.
+- **Atomic WAL & Sidecar Cleanup**:
+  - Executes updates under Write-Ahead Logging (`.playbook/tx-journal.json`) and transaction mutex locking (`.playbook/transaction.lock`).
+  - Idempotently unlinks lingering approval sidecars (`.playbook/approval-fingerprint.json`). If sidecar persists due to crash, gate mismatch and fingerprint verification fail closed.
 
 ---
 

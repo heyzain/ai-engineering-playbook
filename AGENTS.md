@@ -100,6 +100,14 @@ When assigned a task, every AI agent must execute this standardized operational 
   - **Team Mode**: Formal Pull Request review sign-off (`playbook approve --gate <N> --mode team --signature <PR_REF>`).
 - Following human approval, run `playbook advance` to advance to the subsequent stage (`ADVANCE_STAGE` for Stages 0–5, or `CLOSE_LIFECYCLE` for Stage 6). Transitioning to a non-existent Stage 7 is strictly prohibited.
 
+### Post-Terminal Maintenance & Lifecycle Reopening
+When a project reaches terminal completion (`completed_terminal`):
+- **AI agents cannot self-reopen a lifecycle.** `REOPEN_LIFECYCLE` is strictly reserved for human authority via interactive terminal execution (`playbook reopen`).
+- **Maintenance Milestone Scope**: Reopening initializes a new milestone in `reopened_maintenance` resuming at Stage 1 (or Stage 0 for fundamental domain pivots). Prior milestones and governance-frozen snapshots under `.playbook/milestones/` are immutable and preserved.
+- **Inherited Prerequisites**: For Stage 1 maintenance milestones, the original problem formulation (`docs/prd/PRD-CORE.md`) is inherited. If missing or invalidated by scope changes, Gate 1 approval is blocked and requires reformulation in Stage 0.
+- **Fresh Evidence Required**: Deliverables in maintenance milestones are initialized as `unvalidated`. Prior milestone approvals do NOT waive verification for new work; all deliverables must provide fresh, verifiable evidence.
+- **Multi-Cycle Closure**: Advancing Stage 6 under `reopened_maintenance` archives the maintenance milestone, seals a new governance snapshot, and returns the project to `completed_terminal`.
+
 ---
 
 ## 3. Communication Standards for Agents
@@ -120,6 +128,7 @@ When interacting with human engineers, AI agents must:
 | **Controller Architecture & Halt Rules** | [governance/ENGINEERING_CONTROLLER.md](governance/ENGINEERING_CONTROLLER.md) |
 | **Stage Gates, Criteria & Deliverables** | [governance/stage-gate-rules.md](governance/stage-gate-rules.md) |
 | **Deterministic State Machine & Transitions** | [governance/state-machine.md](governance/state-machine.md) |
+| **Controlled Lifecycle Reopening Design** | [governance/lifecycle-reopening-design.md](governance/lifecycle-reopening-design.md) |
 | **Downstream Storage Architecture** | [governance/downstream-storage-convention.md](governance/downstream-storage-convention.md) |
 | **Machine-Readable Schemas & Contracts** | [schemas/README.md](schemas/README.md) |
 | **Standard Engineering Templates** | [templates/README.md](templates/README.md) |

@@ -161,6 +161,18 @@ export async function runApprove(options: ApproveCommandOptions = {}): Promise<A
         }
       }
       console.log("-".repeat(68));
+      if (state.lifecycle_status === "reopened_maintenance" && gate === 1) {
+        console.log(" INHERITED PREREQUISITE ASSESSMENT (Stage 0 Problem Formulation):");
+        const prdCorePath = path.resolve(targetDir, "docs/prd/PRD-CORE.md");
+        const prdCoreExists = fs.existsSync(prdCorePath);
+        console.log(`  Foundational Artifact: docs/prd/PRD-CORE.md (exists: ${prdCoreExists ? "YES" : "NO"})`);
+        console.log("  Applicability Notice:  The human reviewer must verify that the original");
+        console.log(`                         problem statement remains valid for milestone ${state.milestone_id}.`);
+        console.log("                         If the problem formulation is invalid or obsolete,");
+        console.log("                         Gate 1 approval MUST BE REJECTED and the project");
+        console.log("                         reopened at Stage 0 (playbook reopen --stage 0).");
+        console.log("-".repeat(68));
+      }
       console.log(" STAGE GATE EXIT PACKAGE CONTENT:");
       const exitLines = exitPkgContent.split(/\r?\n/);
       const displayLines = exitLines.slice(0, 30);

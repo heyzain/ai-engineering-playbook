@@ -32,6 +32,8 @@ export const STAGE_NAMES = [
   "Deployment & Operational Monitoring",
 ] as const;
 
+export const MILESTONE_REGEX = /^M-[a-zA-Z0-9.-]+$/;
+
 export type StageNumber = 0 | 1 | 2 | 3 | 4 | 5 | 6;
 export type StageName = typeof STAGE_NAMES[number];
 
