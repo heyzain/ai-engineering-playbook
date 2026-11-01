@@ -171,6 +171,8 @@ export interface ApprovalFingerprintSidecar {
   approved_by: string;
   role: string;
   signature_reference: string;
+  authorization_method?: "human_attestation" | "team_review_signature";
+  attestation_limitations?: string[];
   fingerprint: string;
   payload_digest_inputs: {
     deliverables_count: number;
@@ -231,6 +233,11 @@ export function buildApprovalFingerprintSidecar(
     approved_by: params.approvedBy,
     role: params.role,
     signature_reference: params.signatureReference,
+    authorization_method: "human_attestation",
+    attestation_limitations: [
+      "Attested via interactive terminal confirmation phrase.",
+      "Caller identity is human-asserted and unauthenticated cryptographically.",
+    ],
     fingerprint,
     payload_digest_inputs: {
       deliverables_count: deliverables.length,

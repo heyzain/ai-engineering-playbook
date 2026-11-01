@@ -172,10 +172,22 @@ export function validateCanonicalPath(
 
 /**
  * Durably writes file content using fsyncSync before closing.
+ * If requireParentDirectoryExists is true, fails closed without implicitly recreating missing directory.
  */
-export function safeWriteAndSync(filePath: string, content: string): void {
+export function safeWriteAndSync(
+  filePath: string,
+  content: string,
+  options?: { requireParentDirectoryExists?: boolean }
+): void {
   const dir = path.dirname(filePath);
   if (!fs.existsSync(dir)) {
+    if (options?.requireParentDirectoryExists) {
+      throw new TransactionError(
+        "PIVOT_STORAGE_LAYOUT_MISSING",
+        `Required storage directory is missing for write target: "${dir}". Directory creation is not permitted under strict storage layout policy.`,
+        { targetPath: filePath, missingDirectory: dir }
+      );
+    }
     fs.mkdirSync(dir, { recursive: true });
   }
 

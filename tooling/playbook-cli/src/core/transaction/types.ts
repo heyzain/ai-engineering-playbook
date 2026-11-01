@@ -168,7 +168,8 @@ export type TransactionFailureCode =
   | "PIVOT_REASON_REQUIRED"
   | "STATE_CONCURRENTLY_MODIFIED"
   | "PRD_CONTENT_UNALTERED"
-  | "PIVOT_TARGET_UNSUPPORTED";
+  | "PIVOT_TARGET_UNSUPPORTED"
+  | "COMMITTING_RECOVERY_BLOCKED";
 
 /**
  * Structured error class for transaction and WAL operations.
@@ -217,6 +218,10 @@ export interface TransactionFaultInjectionHooks {
   isCommitPhase?: boolean;
   /** Callback fired whenever parent directory fsync is invoked */
   onDirectoryFsync?: (dirPath: string) => void;
+  /** Hook called immediately before writing each staged temporary file during prepare Step 2 */
+  beforeStagedFileWrite?: (targetPath: string, tmpPath: string) => void | Promise<void>;
+  /** Hook called during commit phase before renaming a target file */
+  beforeTargetCommitRename?: (targetPath: string, absTarget: string) => void | Promise<void>;
 }
 
 /**

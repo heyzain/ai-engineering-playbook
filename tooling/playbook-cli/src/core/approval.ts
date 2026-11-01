@@ -28,6 +28,16 @@ const FORBIDDEN_SUBSTRINGS = [
   "gemini",
   "antigravity",
   "cursor",
+  "deepseek",
+  "llama",
+  "mistral",
+  "grok",
+  "qwen",
+  "assistant",
+  "subagent",
+  "synthetic",
+  "openai",
+  "anthropic",
 ];
 
 /**
@@ -718,7 +728,7 @@ export async function approveGate(
     timestamp: isoTimestamp,
     updated_by: `human:${options.reviewerName.trim()}`,
     actor_type: "human",
-    reason: `Human gate approval granted for Stage ${options.gate} (${newState.current_stage_detail.stage_name}).`,
+    reason: `Human-attested gate approval granted for Stage ${options.gate} (${newState.current_stage_detail.stage_name}). Method: ${approvalMode === "team" ? "team_review_signature" : "human_attestation"}.`,
   };
 
   // Build approval fingerprint sidecar

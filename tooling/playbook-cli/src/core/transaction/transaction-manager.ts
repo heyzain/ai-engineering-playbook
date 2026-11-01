@@ -344,7 +344,14 @@ export class WriteAheadTransactionManager {
           }
           fs.mkdirSync(tmpDir, { recursive: true });
         }
-        safeWriteAndSync(absTmp, file.target_content!);
+
+        if (this.faultInjection.beforeStagedFileWrite) {
+          await this.faultInjection.beforeStagedFileWrite(file.target_path, file.tmp_path);
+        }
+
+        safeWriteAndSync(absTmp, file.target_content!, {
+          requireParentDirectoryExists: requireParentForTmp,
+        });
         safeFsyncDir(tmpDir, this.faultInjection);
 
         const stagedHash = computeFileSha256(absTmp);
@@ -560,7 +567,31 @@ export class WriteAheadTransactionManager {
 
         // If temporary file does not exist, recreate it from durable journal target_content
         if (!fs.existsSync(absTmp)) {
-          safeWriteAndSync(absTmp, file.target_content!);
+          safeWriteAndSync(absTmp, file.target_content!, {
+            requireParentDirectoryExists: file.require_parent_directory_exists,
+          });
+        }
+
+        const targetParentDir = path.dirname(absTarget);
+        if (this.faultInjection.beforeTargetCommitRename) {
+          await this.faultInjection.beforeTargetCommitRename(file.target_path, absTarget);
+        }
+
+        if (!fs.existsSync(targetParentDir)) {
+          const relParent = path.relative(this.targetDir, targetParentDir);
+          throw new TransactionError(
+            "COMMITTING_RECOVERY_BLOCKED",
+            `Commit interrupted: destination directory "${relParent}" is missing for target file "${file.target_path}". ` +
+            `Transaction ${journal.tx_id} is in COMMITTING phase. ` +
+            `Operator Action Required: Restore or recreate directory "${relParent}" and rerun the command to complete recovery. Journal preserved at "${this.journalPath}".`,
+            {
+              txId: journal.tx_id,
+              phase: "COMMITTING",
+              targetPath: file.target_path,
+              missingDirectory: relParent,
+              remediation: `Recreate directory "${relParent}" and re-run playbook command.`,
+            }
+          );
         }
 
         // If target exists and is read-only, ensure target is writable before renaming over it
@@ -870,7 +901,28 @@ export class WriteAheadTransactionManager {
 
             const currentHash = computeFileSha256(absTarget);
             if (currentHash !== file.expected_target_hash) {
-              safeWriteAndSync(absTmp, file.target_content!);
+              const targetParentDir = path.dirname(absTarget);
+              if (!fs.existsSync(targetParentDir)) {
+                const relParent = path.relative(this.targetDir, targetParentDir);
+                throw new TransactionError(
+                  "COMMITTING_RECOVERY_BLOCKED",
+                  `Recovery roll-forward blocked: destination directory "${relParent}" is missing for target file "${file.target_path}". ` +
+                  `Transaction ${journal.tx_id} remains in COMMITTING phase. ` +
+                  `Operator Action Required: Restore or recreate directory "${relParent}" with appropriate permissions, ` +
+                  `then rerun the command to allow recovery roll-forward to complete automatically. Journal preserved at "${this.journalPath}".`,
+                  {
+                    txId: journal.tx_id,
+                    phase: journal.phase,
+                    targetPath: file.target_path,
+                    missingDirectory: relParent,
+                    remediation: `Recreate directory "${relParent}" and re-run playbook command.`,
+                  }
+                );
+              }
+
+              safeWriteAndSync(absTmp, file.target_content!, {
+                requireParentDirectoryExists: file.require_parent_directory_exists,
+              });
               if (fs.existsSync(absTarget)) {
                 try {
                   fs.chmodSync(absTarget, 0o666);

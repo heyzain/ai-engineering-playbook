@@ -40,6 +40,7 @@ export interface PivotExecutionOptions {
   role: string;
   reason: string;
   confirmationPhrase: string;
+  isTTY?: boolean;
   baseline?: PrePromptBaseline;
   now?: Date;
   lockTimeoutMs?: number;
@@ -371,6 +372,9 @@ function buildAuditMarkdown(params: {
 - **Executed At**: \`${nowIso}\`
 - **Authorized By**: \`${authorizedBy}\`
 - **Role / Authority**: \`${role}\`
+- **Authorization Method**: \`human_attestation\`
+- **Attestation Status**: \`human-attested\` (unauthenticated; asserted via interactive terminal confirmation)
+- **Attestation Limitations**: Caller identity is human-asserted; no cryptographic human authentication was performed.
 - **Source PRD Hash**: \`${sourcePrdHash}\`
 - **State Snapshot Reference**: \`.playbook/pivots/state-${pivotId}.json\`
 - **Archived PRD Reference**: \`docs/prd/archive/PRD-CORE.${pivotId}.outdated.md\`
@@ -411,6 +415,14 @@ export async function executeStagePivot(
     throw new TransactionError(
       "PIVOT_TARGET_UNSUPPORTED",
       `Unsupported pivot target stage: ${options.targetStage}. Only pivot to Stage 0 is supported.`
+    );
+  }
+
+  // Interactive session requirement
+  if (options.isTTY === false) {
+    throw new TransactionError(
+      "TTY_REQUIRED",
+      "Stage pivot requires an interactive terminal session with human attestation. Automated, headless, or scripted execution claiming human authorization is strictly prohibited."
     );
   }
 
@@ -687,7 +699,7 @@ ${rawPrdContent}`;
             timestamp: nowIso,
             updated_by: authorizedBy,
             actor_type: "human",
-            reason: `Stage pivot to Stage 0 under event ${pivotId}: ${reason}`,
+            reason: `Stage pivot to Stage 0 under event ${pivotId} (human-attested): ${reason}`,
           },
           pivots: [...priorPivots, newPivotRecord],
         };
