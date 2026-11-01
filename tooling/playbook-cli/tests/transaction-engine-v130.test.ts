@@ -4,7 +4,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { WriteAheadTransactionManager } from "../src/core/transaction/transaction-manager.js";
-import { readJournal } from "../src/core/transaction/journal.js";
+import { readJournal, writeJournalDurable } from "../src/core/transaction/journal.js";
 import { computeSha256 } from "../src/core/transaction/fs-utils.js";
 import { TransactionError } from "../src/core/transaction/types.js";
 import { ProjectScaffolder } from "../src/core/scaffold.js";
@@ -446,5 +446,316 @@ describe("WriteAheadTransactionManager v1.3.0 Engine & Storage Upgrades", () => 
     assert.ok(result.createdDirs.some((d) => d.includes(path.normalize(DEFAULT_PATHS.pivotsDir))));
     assert.ok(fs.existsSync(path.join(tempDir, DEFAULT_PATHS.pivotsDir)));
     assert.ok(fs.existsSync(path.join(tempDir, DEFAULT_PATHS.pivotsDir, ".gitkeep")));
+  });
+
+  // --- Adversarial Audit Scenarios (Task 004F.2.4-A.1) ---
+
+  test("Adversarial Scenario 1: Crash while writing PREPARING journal leaves orphaned journal.tmp without live mutation", async () => {
+    // Simulate crash before atomic rename of journal tmp file
+    const orphanedJournalTmp = `${journalPath}.tmp.tx-crashed-before-prep`;
+    fs.writeFileSync(orphanedJournalTmp, '{"incomplete": true}', "utf-8");
+    assert.ok(fs.existsSync(orphanedJournalTmp));
+    assert.ok(!fs.existsSync(journalPath));
+
+    const targetFile = "docs/live.txt";
+    fs.mkdirSync(path.join(tempDir, "docs"), { recursive: true });
+    fs.writeFileSync(path.join(tempDir, targetFile), "original live content", "utf-8");
+
+    const manager = new WriteAheadTransactionManager({ targetDir: tempDir, journalPath });
+    const recoveryResult = await manager.lockManager.withLock(async (handle) => {
+      return await manager.recover(handle);
+    });
+
+    // Recovery sees no valid journal, takes no speculative action
+    assert.equal(recoveryResult.recovered, false);
+    assert.equal(recoveryResult.actionTaken, "none");
+    assert.equal(fs.readFileSync(path.join(tempDir, targetFile), "utf-8"), "original live content");
+
+    // Subsequent legitimate transaction executes cleanly
+    await manager.executeTransaction("LEGIT_TX", [
+      { targetPath: targetFile, content: "updated live content" },
+    ]);
+    assert.equal(fs.readFileSync(path.join(tempDir, targetFile), "utf-8"), "updated live content");
+  });
+
+  test("Adversarial Scenario 5: Crash after COMMITTING before first operation rolls forward all operations", async () => {
+    const fileToWrite = "docs/written.txt";
+    const fileToUnlink = "docs/to-delete.txt";
+    fs.mkdirSync(path.join(tempDir, "docs"), { recursive: true });
+    fs.writeFileSync(path.join(tempDir, fileToUnlink), "doomed content", "utf-8");
+
+    const crashingManager = new WriteAheadTransactionManager({
+      targetDir: tempDir,
+      journalPath,
+      faultInjection: {
+        failAfterEnteringCommitting: true,
+      },
+    });
+
+    await assert.rejects(
+      async () => {
+        await crashingManager.executeTransaction("MULTI_OP_COMMITTING_CRASH", [
+          { operation: "write", targetPath: fileToWrite, content: "new content" },
+          { operation: "unlink", targetPath: fileToUnlink, mustExist: true },
+        ]);
+      },
+      (err: unknown) => {
+        assert.ok(err instanceof TransactionError);
+        assert.equal(err.code, "TRANSACTION_COMMIT_FAILED");
+        return true;
+      }
+    );
+
+    // Initial crash state: journal is in COMMITTING, neither operation has been applied
+    const journalState = readJournal(journalPath);
+    assert.equal(journalState.journal?.phase, "COMMITTING");
+    assert.ok(!fs.existsSync(path.join(tempDir, fileToWrite)));
+    assert.ok(fs.existsSync(path.join(tempDir, fileToUnlink)));
+
+    // Recovery rolls forward
+    const recoveryManager = new WriteAheadTransactionManager({ targetDir: tempDir, journalPath });
+    const recResult = await recoveryManager.lockManager.withLock(async (handle) => {
+      return await recoveryManager.recover(handle);
+    });
+
+    assert.equal(recResult.recovered, true);
+    assert.equal(recResult.actionTaken, "rolled_forward");
+    assert.equal(recResult.originalPhase, "COMMITTING");
+
+    // Both operations completed
+    assert.ok(fs.existsSync(path.join(tempDir, fileToWrite)));
+    assert.equal(fs.readFileSync(path.join(tempDir, fileToWrite), "utf-8"), "new content");
+    assert.ok(!fs.existsSync(path.join(tempDir, fileToUnlink)));
+    assert.ok(!fs.existsSync(journalPath));
+  });
+
+  test("Adversarial Scenario 6: Crash after one operation in multi-operation transaction reconciles remainder", async () => {
+    const file1 = "docs/file1.txt";
+    const file2 = "docs/file2.txt";
+    const file3 = "docs/file3-delete.txt";
+    fs.mkdirSync(path.join(tempDir, "docs"), { recursive: true });
+    fs.writeFileSync(path.join(tempDir, file3), "delete me", "utf-8");
+
+    const crashingManager = new WriteAheadTransactionManager({
+      targetDir: tempDir,
+      journalPath,
+      faultInjection: {
+        failAfterFirstTargetWrite: true, // crashes immediately after file 0 is written
+      },
+    });
+
+    await assert.rejects(
+      async () => {
+        await crashingManager.executeTransaction("MULTI_OP_PARTIAL_CRASH", [
+          { operation: "write", targetPath: file1, content: "file 1 content" },
+          { operation: "write", targetPath: file2, content: "file 2 content" },
+          { operation: "unlink", targetPath: file3, mustExist: true },
+        ]);
+      },
+      (err: unknown) => {
+        assert.ok(err instanceof TransactionError);
+        return true;
+      }
+    );
+
+    // Partial state: file1 was renamed; file2 was not yet renamed; file3 still exists
+    assert.ok(fs.existsSync(path.join(tempDir, file1)));
+    assert.ok(!fs.existsSync(path.join(tempDir, file2)));
+    assert.ok(fs.existsSync(path.join(tempDir, file3)));
+
+    // Recovery rolls forward
+    const recoveryManager = new WriteAheadTransactionManager({ targetDir: tempDir, journalPath });
+    const recResult = await recoveryManager.lockManager.withLock(async (handle) => {
+      return await recoveryManager.recover(handle);
+    });
+
+    assert.equal(recResult.recovered, true);
+    assert.equal(recResult.actionTaken, "rolled_forward");
+    assert.equal(fs.readFileSync(path.join(tempDir, file1), "utf-8"), "file 1 content");
+    assert.equal(fs.readFileSync(path.join(tempDir, file2), "utf-8"), "file 2 content");
+    assert.ok(!fs.existsSync(path.join(tempDir, file3)));
+  });
+
+  test("Adversarial Scenario 8: Crash after unlink but before directory fsync recovers cleanly", async () => {
+    const fileToUnlink = "docs/unlink-fsync.txt";
+    fs.mkdirSync(path.join(tempDir, "docs"), { recursive: true });
+    fs.writeFileSync(path.join(tempDir, fileToUnlink), "content", "utf-8");
+
+    // Manually author a COMMITTING journal where file is already unlinked on disk
+    writeJournalDurable(journalPath, {
+      tx_id: "tx-unlink-fsync-crash",
+      phase: "COMMITTING",
+      created_at: new Date().toISOString(),
+      action: "TEST_UNLINK_FSYNC",
+      lock_nonce: "nonce-unlink",
+      files: [
+        {
+          operation: "unlink",
+          target_path: fileToUnlink,
+          tmp_path: `${fileToUnlink}.tmp.tx`,
+          bak_path: `${fileToUnlink}.bak.tx`,
+          existed_before: true,
+          expected_source_hash: computeSha256("content"),
+          must_exist: true,
+        },
+      ],
+    });
+
+    // Target is already removed (simulating crash after unlink before directory fsync / committed mark)
+    fs.unlinkSync(path.join(tempDir, fileToUnlink));
+    assert.ok(!fs.existsSync(path.join(tempDir, fileToUnlink)));
+
+    const recoveryManager = new WriteAheadTransactionManager({ targetDir: tempDir, journalPath });
+    const recResult = await recoveryManager.lockManager.withLock(async (handle) => {
+      return await recoveryManager.recover(handle);
+    });
+
+    assert.equal(recResult.recovered, true);
+    assert.equal(recResult.actionTaken, "rolled_forward");
+    assert.ok(!fs.existsSync(path.join(tempDir, fileToUnlink)));
+    assert.ok(!fs.existsSync(journalPath));
+  });
+
+  test("Adversarial Scenario 9: Repeated recovery executions on multi-op transaction are strictly idempotent", async () => {
+    const fileWrite = "docs/multi-idemp.txt";
+    const fileUnlink = "docs/multi-idemp-del.txt";
+    fs.mkdirSync(path.join(tempDir, "docs"), { recursive: true });
+    fs.writeFileSync(path.join(tempDir, fileUnlink), "to delete", "utf-8");
+
+    const crashingManager = new WriteAheadTransactionManager({
+      targetDir: tempDir,
+      journalPath,
+      faultInjection: {
+        failAfterAllTargetsWrittenBeforeCommitted: true,
+      },
+    });
+
+    await assert.rejects(
+      async () => {
+        await crashingManager.executeTransaction("IDEMPOTENT_MULTI_OP", [
+          { operation: "write", targetPath: fileWrite, content: "persisted" },
+          { operation: "unlink", targetPath: fileUnlink, mustExist: true },
+        ]);
+      },
+      (err: unknown) => {
+        assert.ok(err instanceof TransactionError);
+        return true;
+      }
+    );
+
+    const recoveryManager = new WriteAheadTransactionManager({ targetDir: tempDir, journalPath });
+
+    // Run 1: rolls forward and marks committed
+    const rec1 = await recoveryManager.lockManager.withLock(async (handle) => {
+      return await recoveryManager.recover(handle);
+    });
+    assert.equal(rec1.recovered, true);
+    assert.equal(rec1.actionTaken, "rolled_forward");
+    assert.equal(fs.readFileSync(path.join(tempDir, fileWrite), "utf-8"), "persisted");
+    assert.ok(!fs.existsSync(path.join(tempDir, fileUnlink)));
+    assert.ok(!fs.existsSync(journalPath));
+
+    // Run 2: immediately repeated recovery is a clean no-op
+    const rec2 = await recoveryManager.lockManager.withLock(async (handle) => {
+      return await recoveryManager.recover(handle);
+    });
+    assert.equal(rec2.recovered, false);
+    assert.equal(rec2.actionTaken, "none");
+    assert.equal(fs.readFileSync(path.join(tempDir, fileWrite), "utf-8"), "persisted");
+    assert.ok(!fs.existsSync(path.join(tempDir, fileUnlink)));
+  });
+
+  test("Adversarial Scenario 11: Unexpected target content during COMMITTING roll-forward overwrites mutable target", async () => {
+    const mutableTarget = "docs/mutable.txt";
+    fs.mkdirSync(path.join(tempDir, "docs"), { recursive: true });
+    fs.writeFileSync(path.join(tempDir, mutableTarget), "initial content", "utf-8");
+
+    const crashingManager = new WriteAheadTransactionManager({
+      targetDir: tempDir,
+      journalPath,
+      faultInjection: {
+        failAfterEnteringCommitting: true,
+      },
+    });
+
+    await assert.rejects(
+      async () => {
+        await crashingManager.executeTransaction("MUTABLE_ROLL_FORWARD", [
+          { operation: "write", targetPath: mutableTarget, content: "authoritative journal content" },
+        ]);
+      },
+      (err: unknown) => {
+        assert.ok(err instanceof TransactionError);
+        return true;
+      }
+    );
+
+    // External rogue write happens while in COMMITTING phase
+    fs.writeFileSync(path.join(tempDir, mutableTarget), "rogue external change", "utf-8");
+
+    // Recovery rolls forward deterministically using authoritative journal content
+    const recoveryManager = new WriteAheadTransactionManager({ targetDir: tempDir, journalPath });
+    const recResult = await recoveryManager.lockManager.withLock(async (handle) => {
+      return await recoveryManager.recover(handle);
+    });
+
+    assert.equal(recResult.recovered, true);
+    assert.equal(recResult.actionTaken, "rolled_forward");
+    assert.equal(fs.readFileSync(path.join(tempDir, mutableTarget), "utf-8"), "authoritative journal content");
+  });
+
+  test("Adversarial Scenario 15: Read-only target handling supports overwrite, unlink, and rollback on Windows/POSIX", async () => {
+    const readOnlyFile1 = "docs/ro-overwrite.txt";
+    const readOnlyFile2 = "docs/ro-unlink.txt";
+    const readOnlyFile3 = "docs/ro-rollback.txt";
+    fs.mkdirSync(path.join(tempDir, "docs"), { recursive: true });
+
+    fs.writeFileSync(path.join(tempDir, readOnlyFile1), "ro content 1", "utf-8");
+    fs.writeFileSync(path.join(tempDir, readOnlyFile2), "ro content 2", "utf-8");
+    fs.writeFileSync(path.join(tempDir, readOnlyFile3), "ro content 3", "utf-8");
+
+    // Apply read-only permissions (0o444) to existing files
+    try { fs.chmodSync(path.join(tempDir, readOnlyFile1), 0o444); } catch {}
+    try { fs.chmodSync(path.join(tempDir, readOnlyFile2), 0o444); } catch {}
+    try { fs.chmodSync(path.join(tempDir, readOnlyFile3), 0o444); } catch {}
+
+    const manager = new WriteAheadTransactionManager({ targetDir: tempDir, journalPath });
+
+    // Test 1: Overwrite readOnlyFile1 and unlink readOnlyFile2
+    await manager.executeTransaction("READ_ONLY_MUTATIONS", [
+      { operation: "write", targetPath: readOnlyFile1, content: "overwritten ro content" },
+      { operation: "unlink", targetPath: readOnlyFile2, mustExist: true },
+    ]);
+
+    assert.equal(fs.readFileSync(path.join(tempDir, readOnlyFile1), "utf-8"), "overwritten ro content");
+    assert.ok(!fs.existsSync(path.join(tempDir, readOnlyFile2)));
+
+    // Test 2: Rollback of a read-only target restores source state without EPERM
+    const crashingManager = new WriteAheadTransactionManager({
+      targetDir: tempDir,
+      journalPath,
+      faultInjection: {
+        failAfterStagingBeforePrepared: true,
+      },
+    });
+
+    await assert.rejects(
+      async () => {
+        await crashingManager.executeTransaction("RO_ROLLBACK_CRASH", [
+          { operation: "write", targetPath: readOnlyFile3, content: "should not be applied" },
+        ]);
+      },
+      (err: unknown) => {
+        assert.ok(err instanceof TransactionError);
+        return true;
+      }
+    );
+
+    const recResult = await manager.lockManager.withLock(async (handle) => {
+      return await manager.recover(handle);
+    });
+    assert.equal(recResult.recovered, true);
+    assert.equal(recResult.actionTaken, "rolled_back");
+    assert.equal(fs.readFileSync(path.join(tempDir, readOnlyFile3), "utf-8"), "ro content 3");
   });
 });
