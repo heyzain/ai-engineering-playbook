@@ -58,6 +58,56 @@ export class ProjectScaffolder {
   }
 
   /**
+   * Ensures that standard downstream storage layout directories exist.
+   * Non-destructive: does not modify or overwrite existing manifest or state files.
+   */
+  public ensureStorageLayout(targetDir: string, createGitkeeps = false): { createdDirs: string[] } {
+    const dirsToCreate = [
+      path.join(targetDir, DEFAULT_PATHS.playbookDir),
+      path.join(targetDir, DEFAULT_PATHS.logsDir),
+      path.join(targetDir, DEFAULT_PATHS.pivotsDir),
+      path.join(targetDir, DEFAULT_PATHS.docsRoot),
+      path.join(targetDir, DEFAULT_PATHS.prdDir),
+      path.join(targetDir, DEFAULT_PATHS.prdArchiveDir),
+      path.join(targetDir, DEFAULT_PATHS.adrDir),
+      path.join(targetDir, DEFAULT_PATHS.rfcDir),
+      path.join(targetDir, DEFAULT_PATHS.gatesDir),
+      path.join(targetDir, DEFAULT_PATHS.exceptionsDir),
+      path.join(targetDir, DEFAULT_PATHS.docsPivotsDir),
+    ];
+
+    const createdDirs: string[] = [];
+    for (const dir of dirsToCreate) {
+      if (!fs.existsSync(dir)) {
+        fs.mkdirSync(dir, { recursive: true });
+        createdDirs.push(dir);
+      }
+    }
+
+    if (createGitkeeps) {
+      const gitkeepDirs = [
+        path.join(targetDir, DEFAULT_PATHS.logsDir),
+        path.join(targetDir, DEFAULT_PATHS.pivotsDir),
+        path.join(targetDir, DEFAULT_PATHS.prdDir),
+        path.join(targetDir, DEFAULT_PATHS.prdArchiveDir),
+        path.join(targetDir, DEFAULT_PATHS.adrDir),
+        path.join(targetDir, DEFAULT_PATHS.rfcDir),
+        path.join(targetDir, DEFAULT_PATHS.gatesDir),
+        path.join(targetDir, DEFAULT_PATHS.exceptionsDir),
+        path.join(targetDir, DEFAULT_PATHS.docsPivotsDir),
+      ];
+      for (const dir of gitkeepDirs) {
+        const gitkeepFile = path.join(dir, ".gitkeep");
+        if (!fs.existsSync(gitkeepFile)) {
+          fs.writeFileSync(gitkeepFile, "", "utf-8");
+        }
+      }
+    }
+
+    return { createdDirs };
+  }
+
+  /**
    * Scaffolds downstream project directory layout and writes initial manifest and state.
    */
   public scaffold(options: ScaffoldOptions): ScaffoldResult {
@@ -92,21 +142,27 @@ export class ProjectScaffolder {
     const dirsToCreate = [
       path.join(targetDir, DEFAULT_PATHS.playbookDir),
       path.join(targetDir, DEFAULT_PATHS.logsDir),
+      path.join(targetDir, DEFAULT_PATHS.pivotsDir),
       path.join(targetDir, DEFAULT_PATHS.docsRoot),
       path.join(targetDir, DEFAULT_PATHS.prdDir),
+      path.join(targetDir, DEFAULT_PATHS.prdArchiveDir),
       path.join(targetDir, DEFAULT_PATHS.adrDir),
       path.join(targetDir, DEFAULT_PATHS.rfcDir),
       path.join(targetDir, DEFAULT_PATHS.gatesDir),
       path.join(targetDir, DEFAULT_PATHS.exceptionsDir),
+      path.join(targetDir, DEFAULT_PATHS.docsPivotsDir),
     ];
 
     const gitkeepDirs = [
       path.join(targetDir, DEFAULT_PATHS.logsDir),
+      path.join(targetDir, DEFAULT_PATHS.pivotsDir),
       path.join(targetDir, DEFAULT_PATHS.prdDir),
+      path.join(targetDir, DEFAULT_PATHS.prdArchiveDir),
       path.join(targetDir, DEFAULT_PATHS.adrDir),
       path.join(targetDir, DEFAULT_PATHS.rfcDir),
       path.join(targetDir, DEFAULT_PATHS.gatesDir),
       path.join(targetDir, DEFAULT_PATHS.exceptionsDir),
+      path.join(targetDir, DEFAULT_PATHS.docsPivotsDir),
     ];
 
     const manifestPath = path.join(targetDir, DEFAULT_PATHS.manifestFile);

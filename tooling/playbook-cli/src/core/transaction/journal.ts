@@ -40,7 +40,10 @@ export function parseJournal(content: string): TransactionJournal | null {
     if (
       typeof data.tx_id !== "string" ||
       data.tx_id.trim().length === 0 ||
-      (data.phase !== "PREPARED" && data.phase !== "COMMITTING" && data.phase !== "COMMITTED") ||
+      (data.phase !== "PREPARING" &&
+        data.phase !== "PREPARED" &&
+        data.phase !== "COMMITTING" &&
+        data.phase !== "COMMITTED") ||
       typeof data.created_at !== "string" ||
       isNaN(Date.parse(data.created_at)) ||
       typeof data.action !== "string" ||
@@ -62,15 +65,28 @@ export function parseJournal(content: string): TransactionJournal | null {
         !isSyntacticallySafeRelativePath(f.tmp_path) ||
         !isSyntacticallySafeRelativePath(f.bak_path) ||
         typeof f.existed_before !== "boolean" ||
-        (f.expected_source_hash !== null && typeof f.expected_source_hash !== "string") ||
-        typeof f.expected_target_hash !== "string" ||
-        !/^sha256:[a-f0-9]{64}$/.test(f.expected_target_hash) ||
-        typeof f.target_content !== "string"
+        (f.expected_source_hash !== null && typeof f.expected_source_hash !== "string")
       ) {
         return null;
       }
 
+      const op = f.operation ?? "write";
+      if (op !== "write" && op !== "unlink") {
+        return null;
+      }
+
+      if (op === "write") {
+        if (
+          typeof f.expected_target_hash !== "string" ||
+          !/^sha256:[a-f0-9]{64}$/.test(f.expected_target_hash) ||
+          typeof f.target_content !== "string"
+        ) {
+          return null;
+        }
+      }
+
       validatedFiles.push({
+        operation: op,
         target_path: f.target_path,
         tmp_path: f.tmp_path,
         bak_path: f.bak_path,
@@ -79,6 +95,9 @@ export function parseJournal(content: string): TransactionJournal | null {
         expected_target_hash: f.expected_target_hash,
         target_content: f.target_content,
         original_content: typeof f.original_content === "string" ? f.original_content : null,
+        create_only: typeof f.create_only === "boolean" ? f.create_only : undefined,
+        read_only_on_commit: typeof f.read_only_on_commit === "boolean" ? f.read_only_on_commit : undefined,
+        must_exist: typeof f.must_exist === "boolean" ? f.must_exist : undefined,
       });
     }
 

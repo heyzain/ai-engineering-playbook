@@ -7,6 +7,8 @@ import {
   type TransactionJournal,
   type JournalFileEntry,
   type FileWriteSpec,
+  type FileUnlinkSpec,
+  type FileOperationSpec,
   type RecoveryResult,
   type TransactionManagerOptions,
   type TransactionFaultInjectionHooks,
@@ -33,15 +35,18 @@ import {
  *
  * Implements strict safety invariants:
  * 1. Lock integration: All operations run under the exclusive TransactionLockManager.
- * 2. Three-phase protocol: PREPARED -> COMMITTING -> COMMITTED.
- * 3. Complete serialized target contents in journal for zero in-memory recovery dependency.
- * 4. Deterministic recovery:
- *    - PREPARED rolls back cleanly to source state.
+ * 2. Four-phase protocol: PREPARING -> PREPARED -> COMMITTING -> COMMITTED.
+ * 3. Journal-first staging invariant: PREPARING journal is durably written before staging files exist.
+ * 4. Multi-operation support: Atomic multi-file writes (createOnly, expectedPreviousSha256, readOnlyOnCommit)
+ *    and unlinks (mustExist, expectedSha256).
+ * 5. Complete serialized target contents in journal for zero in-memory recovery dependency.
+ * 6. Deterministic recovery:
+ *    - PREPARING and PREPARED roll back cleanly to source state.
  *    - COMMITTING rolls forward cleanly to target state.
  *    - COMMITTED verifies targets and finalizes cleanup.
- * 5. Corrupted, unreadable, or conflicting journals fail closed immediately.
- * 6. Path containment: Target paths must be relative and strictly within project root.
- * 7. Recovery idempotency: Re-running recovery produces identical valid state without corruption.
+ * 7. Corrupted, unreadable, or conflicting journals fail closed immediately.
+ * 8. Path containment: Target paths must be relative and strictly within project root.
+ * 9. Recovery idempotency: Re-running recovery produces identical valid state without corruption.
  */
 export class WriteAheadTransactionManager {
   readonly targetDir: string;
@@ -77,10 +82,10 @@ export class WriteAheadTransactionManager {
    */
   async executeTransaction<T>(
     action: string,
-    fileWrites: FileWriteSpec[],
+    fileOperations: (FileWriteSpec | FileOperationSpec)[],
     metadata?: Record<string, unknown>
   ): Promise<{ txId: string; recovery?: RecoveryResult }> {
-    return await this.withTransaction(action, fileWrites, undefined, metadata);
+    return await this.withTransaction(action, fileOperations, undefined, metadata);
   }
 
   /**
@@ -88,7 +93,7 @@ export class WriteAheadTransactionManager {
    */
   async withTransaction<T>(
     action: string,
-    fileWrites: FileWriteSpec[],
+    fileOperations: (FileWriteSpec | FileOperationSpec)[],
     callback?: (journal: TransactionJournal) => Promise<T>,
     metadata?: Record<string, unknown>
   ): Promise<{ txId: string; result?: T; recovery?: RecoveryResult }> {
@@ -99,7 +104,7 @@ export class WriteAheadTransactionManager {
         const recovery = await this.recover(lockHandle);
 
         // Step 1: Prepare transaction
-        const journal = await this.prepare(action, fileWrites, lockHandle, metadata);
+        const journal = await this.prepare(action, fileOperations, lockHandle, metadata);
 
         // Optional callback prior to commit
         let result: T | undefined;
@@ -118,12 +123,12 @@ export class WriteAheadTransactionManager {
 
   /**
    * Phase 1: Prepares the transaction journal.
-   * Validates paths, records original hashes, writes temporary files and backups,
-   * and durably writes the journal in PREPARED phase before live files are modified.
+   * Validates paths, records original hashes, creates PREPARING journal first,
+   * stages temporary files, and transitions journal to PREPARED phase before live files are modified.
    */
   async prepare(
     action: string,
-    fileWrites: FileWriteSpec[],
+    fileOperations: (FileWriteSpec | FileOperationSpec)[],
     lockHandle: TransactionLockHandle,
     metadata?: Record<string, unknown>
   ): Promise<TransactionJournal> {
@@ -134,10 +139,10 @@ export class WriteAheadTransactionManager {
       );
     }
 
-    if (!Array.isArray(fileWrites) || fileWrites.length === 0) {
+    if (!Array.isArray(fileOperations) || fileOperations.length === 0) {
       throw new TransactionError(
         "TRANSACTION_PREPARATION_FAILED",
-        "Transaction must contain at least one file write specification."
+        "Transaction must contain at least one file operation specification."
       );
     }
 
@@ -149,7 +154,9 @@ export class WriteAheadTransactionManager {
       fs.mkdirSync(this.playbookDir, { recursive: true });
     }
 
-    for (const spec of fileWrites) {
+    for (const spec of fileOperations) {
+      const opType: "write" | "unlink" =
+        "operation" in spec && spec.operation === "unlink" ? "unlink" : "write";
       const { relativePath, absolutePath } = validateCanonicalPath(this.targetDir, spec.targetPath);
       const existedBefore = fs.existsSync(absolutePath);
 
@@ -171,25 +178,101 @@ export class WriteAheadTransactionManager {
         }
       }
 
-      const targetHash = computeSha256(spec.content);
       const tmpRelative = `${relativePath}.tmp.${txId}`;
       const bakRelative = `${relativePath}.bak.${txId}`;
 
-      journalFiles.push({
-        target_path: relativePath,
-        tmp_path: tmpRelative,
-        bak_path: bakRelative,
-        existed_before: existedBefore,
-        expected_source_hash: sourceHash,
-        expected_target_hash: targetHash,
-        target_content: spec.content,
-        original_content: originalContent,
-      });
+      if (opType === "unlink") {
+        const unlinkSpec = spec as FileUnlinkSpec;
+        const mustExist = unlinkSpec.mustExist !== false;
+
+        if (unlinkSpec.expectedSha256) {
+          if (!existedBefore) {
+            throw new TransactionError(
+              "EXTERNAL_TARGET_MODIFIED",
+              `Target file "${relativePath}" expected to exist with hash ${unlinkSpec.expectedSha256}, but was not found.`,
+              { targetPath: relativePath, expectedHash: unlinkSpec.expectedSha256 }
+            );
+          }
+          if (sourceHash !== unlinkSpec.expectedSha256) {
+            throw new TransactionError(
+              "EXTERNAL_TARGET_MODIFIED",
+              `Target file "${relativePath}" hash mismatch prior to unlink (expected ${unlinkSpec.expectedSha256}, found ${sourceHash}).`,
+              {
+                targetPath: relativePath,
+                expectedHash: unlinkSpec.expectedSha256,
+                actualHash: sourceHash,
+              }
+            );
+          }
+        } else if (mustExist && !existedBefore) {
+          throw new TransactionError(
+            "TRANSACTION_PREPARATION_FAILED",
+            `Target file "${relativePath}" is required to exist for unlink, but was not found.`,
+            { targetPath: relativePath }
+          );
+        }
+
+        journalFiles.push({
+          operation: "unlink",
+          target_path: relativePath,
+          tmp_path: tmpRelative,
+          bak_path: bakRelative,
+          existed_before: existedBefore,
+          expected_source_hash: sourceHash,
+          original_content: originalContent,
+          must_exist: mustExist,
+        });
+      } else {
+        const writeSpec = spec as FileWriteSpec;
+        if (writeSpec.createOnly && existedBefore) {
+          throw new TransactionError(
+            "TARGET_ALREADY_EXISTS",
+            `Target file "${relativePath}" already exists on disk, but createOnly was specified.`,
+            { targetPath: relativePath }
+          );
+        }
+
+        if (writeSpec.expectedPreviousSha256) {
+          if (!existedBefore) {
+            throw new TransactionError(
+              "EXTERNAL_TARGET_MODIFIED",
+              `Target file "${relativePath}" was expected to have prior hash ${writeSpec.expectedPreviousSha256}, but file does not exist.`,
+              { targetPath: relativePath, expectedHash: writeSpec.expectedPreviousSha256 }
+            );
+          }
+          if (sourceHash !== writeSpec.expectedPreviousSha256) {
+            throw new TransactionError(
+              "EXTERNAL_TARGET_MODIFIED",
+              `Target file "${relativePath}" hash mismatch prior to write (expected ${writeSpec.expectedPreviousSha256}, found ${sourceHash}).`,
+              {
+                targetPath: relativePath,
+                expectedHash: writeSpec.expectedPreviousSha256,
+                actualHash: sourceHash,
+              }
+            );
+          }
+        }
+
+        const targetHash = computeSha256(writeSpec.content);
+        journalFiles.push({
+          operation: "write",
+          target_path: relativePath,
+          tmp_path: tmpRelative,
+          bak_path: bakRelative,
+          existed_before: existedBefore,
+          expected_source_hash: sourceHash,
+          expected_target_hash: targetHash,
+          target_content: writeSpec.content,
+          original_content: originalContent,
+          create_only: writeSpec.createOnly,
+          read_only_on_commit: writeSpec.readOnlyOnCommit,
+        });
+      }
     }
 
     const journal: TransactionJournal = {
       tx_id: txId,
-      phase: "PREPARED",
+      phase: "PREPARING",
       created_at: new Date().toISOString(),
       action,
       lock_nonce: lockHandle.nonce,
@@ -197,19 +280,50 @@ export class WriteAheadTransactionManager {
       files: journalFiles,
     };
 
-    // Pre-stage temporary files (.tmp) and backup files (.bak)
-    for (const file of journalFiles) {
-      const { absolutePath: absTmp } = validateCanonicalPath(this.targetDir, file.tmp_path);
-      safeWriteAndSync(absTmp, file.target_content);
+    // 1. Journal-First Invariant: Durably write journal in PREPARING phase before staging files
+    writeJournalDurable(this.journalPath, journal, {
+      maxRenameRetries: this.maxRenameRetries,
+      renameRetryDelayMs: this.renameRetryDelayMs,
+      faultInjection: this.faultInjection,
+    });
 
-      if (file.existed_before && file.original_content !== null && file.original_content !== undefined) {
-        const { absolutePath: absBak } = validateCanonicalPath(this.targetDir, file.bak_path);
-        safeWriteAndSync(absBak, file.original_content);
-      }
-      safeFsyncDir(path.dirname(absTmp), this.faultInjection);
+    if (this.faultInjection.failAfterJournalPreparing) {
+      throw new TransactionError(
+        "TRANSACTION_PREPARATION_FAILED",
+        "Fault injection: crash after journal in PREPARING phase."
+      );
     }
 
-    // Durably write the transaction journal in PREPARED phase
+    // 2. Pre-stage temporary files (.tmp) only for write operations
+    for (const file of journalFiles) {
+      if (file.operation !== "unlink") {
+        const { absolutePath: absTmp } = validateCanonicalPath(this.targetDir, file.tmp_path);
+        const tmpDir = path.dirname(absTmp);
+        if (!fs.existsSync(tmpDir)) {
+          fs.mkdirSync(tmpDir, { recursive: true });
+        }
+        safeWriteAndSync(absTmp, file.target_content!);
+        safeFsyncDir(tmpDir, this.faultInjection);
+
+        const stagedHash = computeFileSha256(absTmp);
+        if (stagedHash !== file.expected_target_hash) {
+          throw new TransactionError(
+            "TRANSACTION_PREPARATION_FAILED",
+            `Staged temporary file "${file.tmp_path}" hash verification failed (expected ${file.expected_target_hash}, got ${stagedHash}).`
+          );
+        }
+      }
+    }
+
+    if (this.faultInjection.failAfterStagingBeforePrepared) {
+      throw new TransactionError(
+        "TRANSACTION_PREPARATION_FAILED",
+        "Fault injection: crash after staging files before PREPARED."
+      );
+    }
+
+    // 3. Atomically transition journal to PREPARED phase
+    journal.phase = "PREPARED";
     writeJournalDurable(this.journalPath, journal, {
       maxRenameRetries: this.maxRenameRetries,
       renameRetryDelayMs: this.renameRetryDelayMs,
@@ -228,7 +342,7 @@ export class WriteAheadTransactionManager {
 
   /**
    * Phase 2 & 3: Commits the transaction.
-   * Transitions journal to COMMITTING, atomically renames temporary files to target paths,
+   * Transitions journal to COMMITTING, atomically applies writes and unlinks,
    * transitions journal to COMMITTED, and finalizes cleanup of temporary and backup files.
    */
   async commit(journal: TransactionJournal, lockHandle: TransactionLockHandle): Promise<void> {
@@ -243,36 +357,78 @@ export class WriteAheadTransactionManager {
     for (const file of journal.files) {
       const { absolutePath: absTarget } = validateCanonicalPath(this.targetDir, file.target_path);
       const existsNow = fs.existsSync(absTarget);
+      const op = file.operation ?? "write";
 
-      if (file.existed_before && !existsNow) {
-        throw new TransactionError(
-          "EXTERNAL_TARGET_MODIFIED",
-          `Target file "${file.target_path}" was deleted externally after transaction preparation. Aborting commit to prevent data loss.`,
-          { targetPath: file.target_path, reason: "file_deleted_externally" }
-        );
-      }
-
-      if (!file.existed_before && existsNow) {
-        throw new TransactionError(
-          "EXTERNAL_TARGET_MODIFIED",
-          `Target file "${file.target_path}" was created externally after transaction preparation. Aborting commit to prevent data loss.`,
-          { targetPath: file.target_path, reason: "file_created_externally" }
-        );
-      }
-
-      if (file.existed_before && existsNow) {
-        const currentHash = computeFileSha256(absTarget);
-        if (currentHash !== file.expected_source_hash) {
+      if (op === "unlink") {
+        if (file.existed_before) {
+          if (!existsNow && file.must_exist) {
+            throw new TransactionError(
+              "EXTERNAL_TARGET_MODIFIED",
+              `Target file "${file.target_path}" was deleted externally after transaction preparation. Aborting commit to prevent data loss.`,
+              { targetPath: file.target_path, reason: "file_deleted_externally" }
+            );
+          }
+          if (existsNow) {
+            const currentHash = computeFileSha256(absTarget);
+            if (file.expected_source_hash && currentHash !== file.expected_source_hash) {
+              throw new TransactionError(
+                "EXTERNAL_TARGET_MODIFIED",
+                `Target file "${file.target_path}" was modified externally after transaction preparation (expected ${file.expected_source_hash}, found ${currentHash}). Aborting commit.`,
+                {
+                  targetPath: file.target_path,
+                  expectedHash: file.expected_source_hash,
+                  actualHash: currentHash,
+                  reason: "hash_mismatch",
+                }
+              );
+            }
+          }
+        } else {
+          if (existsNow) {
+            throw new TransactionError(
+              "EXTERNAL_TARGET_MODIFIED",
+              `Target file "${file.target_path}" was created externally after transaction preparation. Aborting commit.`,
+              { targetPath: file.target_path, reason: "file_created_externally" }
+            );
+          }
+        }
+      } else {
+        // write
+        if (file.create_only && existsNow) {
           throw new TransactionError(
             "EXTERNAL_TARGET_MODIFIED",
-            `Target file "${file.target_path}" was modified externally after transaction preparation (expected ${file.expected_source_hash}, found ${currentHash}). Aborting commit to prevent overwriting external changes.`,
-            {
-              targetPath: file.target_path,
-              expectedHash: file.expected_source_hash,
-              actualHash: currentHash,
-              reason: "hash_mismatch",
-            }
+            `Target file "${file.target_path}" already exists for create-only write. Aborting commit.`,
+            { targetPath: file.target_path, reason: "target_already_exists" }
           );
+        }
+        if (file.existed_before && !existsNow) {
+          throw new TransactionError(
+            "EXTERNAL_TARGET_MODIFIED",
+            `Target file "${file.target_path}" was deleted externally after transaction preparation. Aborting commit to prevent data loss.`,
+            { targetPath: file.target_path, reason: "file_deleted_externally" }
+          );
+        }
+        if (!file.existed_before && existsNow) {
+          throw new TransactionError(
+            "EXTERNAL_TARGET_MODIFIED",
+            `Target file "${file.target_path}" was created externally after transaction preparation. Aborting commit to prevent data loss.`,
+            { targetPath: file.target_path, reason: "file_created_externally" }
+          );
+        }
+        if (file.existed_before && existsNow) {
+          const currentHash = computeFileSha256(absTarget);
+          if (file.expected_source_hash && currentHash !== file.expected_source_hash) {
+            throw new TransactionError(
+              "EXTERNAL_TARGET_MODIFIED",
+              `Target file "${file.target_path}" was modified externally after transaction preparation (expected ${file.expected_source_hash}, found ${currentHash}). Aborting commit to prevent overwriting external changes.`,
+              {
+                targetPath: file.target_path,
+                expectedHash: file.expected_source_hash,
+                actualHash: currentHash,
+                reason: "hash_mismatch",
+              }
+            );
+          }
         }
       }
     }
@@ -293,38 +449,118 @@ export class WriteAheadTransactionManager {
       );
     }
 
-    // 2. Sequentially replace live target files via atomic rename
+    // 2. Sequentially apply operations
     for (let i = 0; i < journal.files.length; i++) {
       const file = journal.files[i];
+      const op = file.operation ?? "write";
       const { absolutePath: absTarget } = validateCanonicalPath(this.targetDir, file.target_path);
       const { absolutePath: absTmp } = validateCanonicalPath(this.targetDir, file.tmp_path);
+      const { absolutePath: absBak } = validateCanonicalPath(this.targetDir, file.bak_path);
 
-      // If temporary file does not exist, recreate it from durable journal target_content
-      if (!fs.existsSync(absTmp)) {
-        safeWriteAndSync(absTmp, file.target_content);
-      }
+      if (op === "unlink") {
+        if (this.faultInjection.failDuringUnlinkCommit) {
+          throw new TransactionError(
+            "TRANSACTION_COMMIT_FAILED",
+            "Fault injection: crash during unlink commit."
+          );
+        }
 
-      // Atomically rename temporary file over destination
-      try {
-        atomicRenameWithRetry(
-          absTmp,
-          absTarget,
-          this.maxRenameRetries,
-          this.renameRetryDelayMs,
-          this.faultInjection
-        );
-        safeFsyncDir(path.dirname(absTarget), {
-          ...this.faultInjection,
-          isCommitPhase: true,
-        });
-      } catch (err: unknown) {
-        throw new TransactionError(
-          "TRANSACTION_COMMIT_FAILED",
-          `Failed to replace target file "${file.target_path}": ${
-            err instanceof Error ? err.message : String(err)
-          }`,
-          { originalError: err, targetPath: file.target_path }
-        );
+        if (fs.existsSync(absTarget)) {
+          if (!fs.existsSync(absBak)) {
+            try {
+              fs.chmodSync(absTarget, 0o666);
+            } catch {
+              // ignore
+            }
+            atomicRenameWithRetry(
+              absTarget,
+              absBak,
+              this.maxRenameRetries,
+              this.renameRetryDelayMs,
+              this.faultInjection
+            );
+          } else {
+            safeUnlink(absTarget);
+          }
+          safeFsyncDir(path.dirname(absTarget), {
+            ...this.faultInjection,
+            isCommitPhase: true,
+          });
+        }
+      } else {
+        // write
+        if (file.create_only && fs.existsSync(absTarget)) {
+          const currentHash = computeFileSha256(absTarget);
+          if (currentHash !== file.expected_target_hash) {
+            throw new TransactionError(
+              "TRANSACTION_RECOVERY_REQUIRED",
+              `Create-only target collision: target "${file.target_path}" unexpectedly exists with different content during commit.`,
+              { targetPath: file.target_path }
+            );
+          }
+        }
+
+        // If mutable target existed before, back it up to absBak if not already done
+        if (file.existed_before && fs.existsSync(absTarget) && !fs.existsSync(absBak)) {
+          try {
+            fs.copyFileSync(absTarget, absBak);
+            safeFsyncDir(path.dirname(absBak), this.faultInjection);
+          } catch (err: unknown) {
+            throw new TransactionError(
+              "TRANSACTION_COMMIT_FAILED",
+              `Failed to create backup copy of "${file.target_path}": ${
+                err instanceof Error ? err.message : String(err)
+              }`,
+              { originalError: err, targetPath: file.target_path }
+            );
+          }
+        }
+
+        // If temporary file does not exist, recreate it from durable journal target_content
+        if (!fs.existsSync(absTmp)) {
+          safeWriteAndSync(absTmp, file.target_content!);
+        }
+
+        // If target exists and is read-only, ensure target is writable before renaming over it
+        if (fs.existsSync(absTarget)) {
+          try {
+            fs.chmodSync(absTarget, 0o666);
+          } catch {
+            // ignore
+          }
+        }
+
+        // Atomically rename temporary file over destination
+        try {
+          atomicRenameWithRetry(
+            absTmp,
+            absTarget,
+            this.maxRenameRetries,
+            this.renameRetryDelayMs,
+            this.faultInjection
+          );
+          safeFsyncDir(path.dirname(absTarget), {
+            ...this.faultInjection,
+            isCommitPhase: true,
+          });
+        } catch (err: unknown) {
+          throw new TransactionError(
+            "TRANSACTION_COMMIT_FAILED",
+            `Failed to replace target file "${file.target_path}": ${
+              err instanceof Error ? err.message : String(err)
+            }`,
+            { originalError: err, targetPath: file.target_path }
+          );
+        }
+
+        // If readOnlyOnCommit is set, apply 0o444 permissions
+        if (file.read_only_on_commit) {
+          try {
+            fs.chmodSync(absTarget, 0o444);
+          } catch {
+            // ignore chmod failures on unsupported platforms
+          }
+        }
       }
 
       // Fault injection points
@@ -350,7 +586,29 @@ export class WriteAheadTransactionManager {
       );
     }
 
-    // 3. Transition journal to COMMITTED
+    // 3. Post-mutation verification
+    for (const file of journal.files) {
+      const { absolutePath: absTarget } = validateCanonicalPath(this.targetDir, file.target_path);
+      const op = file.operation ?? "write";
+      if (op === "unlink") {
+        if (fs.existsSync(absTarget)) {
+          throw new TransactionError(
+            "TRANSACTION_COMMIT_FAILED",
+            `Verification failed: target file "${file.target_path}" was scheduled for unlink but is still present.`
+          );
+        }
+      } else {
+        const finalHash = computeFileSha256(absTarget);
+        if (finalHash !== file.expected_target_hash) {
+          throw new TransactionError(
+            "TRANSACTION_COMMIT_FAILED",
+            `Verification failed: target file "${file.target_path}" content hash mismatch (expected ${file.expected_target_hash}, found ${finalHash}).`
+          );
+        }
+      }
+    }
+
+    // 4. Transition journal to COMMITTED
     journal.phase = "COMMITTED";
     journal.committed_at = new Date().toISOString();
     writeJournalDurable(this.journalPath, journal, {
@@ -366,7 +624,7 @@ export class WriteAheadTransactionManager {
       );
     }
 
-    // 4. Finalize cleanup: remove temporary files, backup copies, and transaction journal
+    // 5. Finalize cleanup: remove temporary files, backup copies, and transaction journal
     this.cleanupTransactionFiles(journal);
     cleanupJournalDurable(this.journalPath, journal.tx_id, {
       faultInjection: this.faultInjection,
@@ -377,8 +635,8 @@ export class WriteAheadTransactionManager {
    * Deterministic crash recovery protocol.
    *
    * Executes fail-closed recovery based on durable journal state:
-   * - PREPARED: Rolls back to source state; removes temporary files and journal.
-   * - COMMITTING: Deterministically rolls forward using target_content; transitions to COMMITTED.
+   * - PREPARING & PREPARED: Roll back to source state; remove temporary files and journal.
+   * - COMMITTING: Deterministically rolls forward using target_content and unlink plan; transitions to COMMITTED.
    * - COMMITTED: Verifies targets and finalizes cleanup.
    * - Corrupted / Unreadable: Fails closed (CRITICAL_RECOVERY_FAILURE).
    */
@@ -409,7 +667,6 @@ export class WriteAheadTransactionManager {
     }
 
     // Step 0: Validate all journal paths against project root and symlink boundaries
-    // Treats journal as untrusted input; fails closed if any path escapes or contains traversal tokens.
     for (const file of journal.files) {
       try {
         validateCanonicalPath(this.targetDir, file.target_path);
@@ -429,6 +686,7 @@ export class WriteAheadTransactionManager {
     const filesAffected: string[] = journal.files.map((f) => f.target_path);
 
     switch (journal.phase) {
+      case "PREPARING":
       case "PREPARED": {
         // Roll Backward: The transaction never reached COMMITTING.
         // Revert any staged files and restore source state.
@@ -440,8 +698,14 @@ export class WriteAheadTransactionManager {
           safeUnlink(absTmp);
 
           if (file.existed_before) {
-            // Restore from backup file or original_content if target was modified
             if (fs.existsSync(absBak)) {
+              if (fs.existsSync(absTarget)) {
+                try {
+                  fs.chmodSync(absTarget, 0o666);
+                } catch {
+                  // ignore
+                }
+              }
               atomicRenameWithRetry(
                 absBak,
                 absTarget,
@@ -452,35 +716,42 @@ export class WriteAheadTransactionManager {
             } else if (file.original_content !== null && file.original_content !== undefined) {
               const currentHash = computeFileSha256(absTarget);
               if (currentHash !== file.expected_source_hash) {
+                if (fs.existsSync(absTarget)) {
+                  try {
+                    fs.chmodSync(absTarget, 0o666);
+                  } catch {
+                    // ignore
+                  }
+                }
                 safeWriteAndSync(absTarget, file.original_content);
               }
             }
             safeFsyncDir(path.dirname(absTarget), this.faultInjection);
 
-            // F-03 Verification: Verify restored target matches expected_source_hash
-            const restoredHash = computeFileSha256(absTarget);
-            if (restoredHash !== file.expected_source_hash) {
-              throw new TransactionError(
-                "CRITICAL_RECOVERY_FAILURE",
-                `PREPARED rollback verification failed: target file "${file.target_path}" does not match expected source hash (expected ${file.expected_source_hash}, got ${restoredHash}). Journal preserved for operator triage.`,
-                {
-                  targetPath: file.target_path,
-                  expectedHash: file.expected_source_hash,
-                  actualHash: restoredHash,
-                }
-              );
+            if (file.expected_source_hash) {
+              const restoredHash = computeFileSha256(absTarget);
+              if (restoredHash !== file.expected_source_hash) {
+                throw new TransactionError(
+                  "CRITICAL_RECOVERY_FAILURE",
+                  `${journal.phase} rollback verification failed: target file "${file.target_path}" does not match expected source hash (expected ${file.expected_source_hash}, got ${restoredHash}). Journal preserved for operator triage.`,
+                  {
+                    targetPath: file.target_path,
+                    expectedHash: file.expected_source_hash,
+                    actualHash: restoredHash,
+                  }
+                );
+              }
             }
           } else {
-            // File did not exist before transaction; ensure it is removed
+            // File did not exist before transaction
             safeUnlink(absTarget);
             safeUnlink(absBak);
             safeFsyncDir(path.dirname(absTarget), this.faultInjection);
 
-            // F-03 Verification: Verify absence where original target did not exist
             if (fs.existsSync(absTarget)) {
               throw new TransactionError(
                 "CRITICAL_RECOVERY_FAILURE",
-                `PREPARED rollback verification failed: target file "${file.target_path}" should not exist, but is still present on disk. Journal preserved for operator triage.`,
+                `${journal.phase} rollback verification failed: target file "${file.target_path}" should not exist, but is still present on disk. Journal preserved for operator triage.`,
                 { targetPath: file.target_path }
               );
             }
@@ -495,51 +766,109 @@ export class WriteAheadTransactionManager {
           recovered: true,
           actionTaken: "rolled_back",
           txId: journal.tx_id,
-          originalPhase: "PREPARED",
+          originalPhase: journal.phase,
           filesAffected,
-          details: "Transaction in PREPARED phase safely rolled back; live state restored.",
+          details: `Transaction in ${journal.phase} phase safely rolled back; live state restored.`,
         };
       }
 
       case "COMMITTING": {
         // Roll Forward: The transaction was in COMMITTING.
-        // Deterministically complete file replacements using target_content from journal.
+        // Deterministically complete operations using target_content and unlink plan from journal.
         for (const file of journal.files) {
           const { absolutePath: absTarget } = validateCanonicalPath(this.targetDir, file.target_path);
           const { absolutePath: absTmp } = validateCanonicalPath(this.targetDir, file.tmp_path);
           const { absolutePath: absBak } = validateCanonicalPath(this.targetDir, file.bak_path);
+          const op = file.operation ?? "write";
 
-          // Check if target file already matches expected_target_hash
-          const currentHash = computeFileSha256(absTarget);
-          if (currentHash !== file.expected_target_hash) {
-            // Target was not yet renamed; write payload from journal and rename into place
-            safeWriteAndSync(absTmp, file.target_content);
-            atomicRenameWithRetry(
-              absTmp,
-              absTarget,
-              this.maxRenameRetries,
-              this.renameRetryDelayMs,
-              this.faultInjection
-            );
+          if (op === "unlink") {
+            if (fs.existsSync(absTarget)) {
+              if (!fs.existsSync(absBak)) {
+                try {
+                  fs.chmodSync(absTarget, 0o666);
+                } catch {
+                  // ignore
+                }
+                atomicRenameWithRetry(
+                  absTarget,
+                  absBak,
+                  this.maxRenameRetries,
+                  this.renameRetryDelayMs,
+                  this.faultInjection
+                );
+              } else {
+                safeUnlink(absTarget);
+              }
+              safeFsyncDir(path.dirname(absTarget), this.faultInjection);
+            }
+
+            if (fs.existsSync(absTarget)) {
+              throw new TransactionError(
+                "CRITICAL_RECOVERY_FAILURE",
+                `Recovery roll-forward failed: unlink target "${file.target_path}" is still present on disk.`,
+                { targetPath: file.target_path }
+              );
+            }
+
+            safeUnlink(absTmp);
+            safeUnlink(absBak);
+            safeFsyncDir(path.dirname(absTmp), this.faultInjection);
+          } else {
+            // write
+            if (file.create_only && fs.existsSync(absTarget)) {
+              const currentHash = computeFileSha256(absTarget);
+              if (currentHash !== file.expected_target_hash) {
+                throw new TransactionError(
+                  "TRANSACTION_RECOVERY_REQUIRED",
+                  `Create-only target collision during recovery roll-forward: "${file.target_path}" exists with unexpected content. Manual resolution required.`,
+                  { targetPath: file.target_path }
+                );
+              }
+            }
+
+            const currentHash = computeFileSha256(absTarget);
+            if (currentHash !== file.expected_target_hash) {
+              safeWriteAndSync(absTmp, file.target_content!);
+              if (fs.existsSync(absTarget)) {
+                try {
+                  fs.chmodSync(absTarget, 0o666);
+                } catch {
+                  // ignore
+                }
+              }
+              atomicRenameWithRetry(
+                absTmp,
+                absTarget,
+                this.maxRenameRetries,
+                this.renameRetryDelayMs,
+                this.faultInjection
+              );
+            }
+            safeFsyncDir(path.dirname(absTarget), this.faultInjection);
+
+            const finalHash = computeFileSha256(absTarget);
+            if (finalHash !== file.expected_target_hash) {
+              throw new TransactionError(
+                "CRITICAL_RECOVERY_FAILURE",
+                `Recovery roll-forward failed: target file "${file.target_path}" hash mismatch (expected ${file.expected_target_hash}, got ${finalHash}).`,
+                { targetPath: file.target_path }
+              );
+            }
+
+            if (file.read_only_on_commit) {
+              try {
+                fs.chmodSync(absTarget, 0o444);
+              } catch {
+                // ignore
+              }
+            }
+
+            safeUnlink(absTmp);
+            safeUnlink(absBak);
+            safeFsyncDir(path.dirname(absTmp), this.faultInjection);
           }
-          safeFsyncDir(path.dirname(absTarget), this.faultInjection);
-
-          // Verify target hash after roll-forward
-          const finalHash = computeFileSha256(absTarget);
-          if (finalHash !== file.expected_target_hash) {
-            throw new TransactionError(
-              "CRITICAL_RECOVERY_FAILURE",
-              `Recovery roll-forward failed: target file "${file.target_path}" hash mismatch (expected ${file.expected_target_hash}, got ${finalHash}).`,
-              { targetPath: file.target_path }
-            );
-          }
-
-          safeUnlink(absTmp);
-          safeUnlink(absBak);
-          safeFsyncDir(path.dirname(absTmp), this.faultInjection);
         }
 
-        // Transition journal to COMMITTED
         journal.phase = "COMMITTED";
         journal.committed_at = new Date().toISOString();
         writeJournalDurable(this.journalPath, journal, {
@@ -548,7 +877,6 @@ export class WriteAheadTransactionManager {
           faultInjection: this.faultInjection,
         });
 
-        // Finalize cleanup
         cleanupJournalDurable(this.journalPath, journal.tx_id, {
           faultInjection: this.faultInjection,
         });
@@ -565,19 +893,30 @@ export class WriteAheadTransactionManager {
 
       case "COMMITTED": {
         // Finalize Cleanup: The transaction committed successfully, but cleanup was interrupted.
-        // Verify all target files match expected_target_hash, then purge temporary files and journal.
+        // Verify all target files match their expected post-condition, then purge temporary files and journal.
         for (const file of journal.files) {
           const { absolutePath: absTarget } = validateCanonicalPath(this.targetDir, file.target_path);
           const { absolutePath: absTmp } = validateCanonicalPath(this.targetDir, file.tmp_path);
           const { absolutePath: absBak } = validateCanonicalPath(this.targetDir, file.bak_path);
+          const op = file.operation ?? "write";
 
-          const finalHash = computeFileSha256(absTarget);
-          if (finalHash !== file.expected_target_hash) {
-            throw new TransactionError(
-              "CRITICAL_RECOVERY_FAILURE",
-              `Committed transaction verification failed during cleanup: target file "${file.target_path}" missing or modified.`,
-              { targetPath: file.target_path }
-            );
+          if (op === "unlink") {
+            if (fs.existsSync(absTarget)) {
+              throw new TransactionError(
+                "CRITICAL_RECOVERY_FAILURE",
+                `Committed transaction verification failed during cleanup: target file "${file.target_path}" was scheduled for unlink but is present.`,
+                { targetPath: file.target_path }
+              );
+            }
+          } else {
+            const finalHash = computeFileSha256(absTarget);
+            if (finalHash !== file.expected_target_hash) {
+              throw new TransactionError(
+                "CRITICAL_RECOVERY_FAILURE",
+                `Committed transaction verification failed during cleanup: target file "${file.target_path}" missing or modified.`,
+                { targetPath: file.target_path }
+              );
+            }
           }
 
           safeUnlink(absTmp);

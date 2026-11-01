@@ -307,6 +307,15 @@ export function safeUnlink(filePath: string): boolean {
     if (error && error.code === "ENOENT") {
       return false;
     }
+    if (error && (error.code === "EPERM" || error.code === "EACCES")) {
+      try {
+        fs.chmodSync(filePath, 0o666);
+        fs.unlinkSync(filePath);
+        return true;
+      } catch {
+        // Fall through to rethrow original error if chmod+unlink still fails
+      }
+    }
     throw err;
   }
 }
