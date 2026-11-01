@@ -1,7 +1,7 @@
 # Project State Transition Machine & Validation Specifications
 
-> **Specification Version**: 1.2.0  
-> **Applicable Scope**: Engineering Lifecycle Stages 0–6, Agent Execution Loop Steps 1–7, Milestone Cycles  
+> **Specification Version**: 1.3.0  
+> **Applicable Scope**: Engineering Lifecycle Stages 0–6, Agent Execution Loop Steps 1–7, Milestone Cycles, Recovery Pivots  
 > **Status**: Mandatory Governance Specification
 
 ---
@@ -22,6 +22,7 @@ stateDiagram-v2
     approved --> not_started : ADVANCE_STAGE (Stages 0-5)
     approved --> completed_terminal : CLOSE_LIFECYCLE (Stage 6 Sealed & Snapshot Archived)
     completed_terminal --> not_started : REOPEN_LIFECYCLE (Stage 0 for New Scope / Stage 1 for Enhancements)
+    in_progress --> not_started : PIVOT_TO_STAGE_0 (Stage 1 to Stage 0 Recovery in Reopened Maintenance)
 ```
 
 ### The Cardinal Governance Invariants
@@ -33,6 +34,7 @@ stateDiagram-v2
 5. **Evidence Precondition Invariant**: A deliverable cannot transition from `completed` to `verified` without recorded verification evidence (`result: "passed"`). Automated checks must record an exit code (0 for success); manual reviews must record a verified procedure, summary, and reviewer identity.
 6. **Strict Stage 6 Terminal Boundary**: The engineering lifecycle strictly terminates at Stage 6. Any transition to a hypothetical "Stage 7" is physically barred by schema constraints (`maximum: 6`) and state machine guards. Stage 6 approval triggers `CLOSE_LIFECYCLE`.
 7. **Milestone History Preservation Invariant**: When a project is reopened for a new milestone, prior milestone histories and evidence snapshots must remain permanently preserved in `archived_milestones[]`. A new milestone never silently overwrites previous approved states.
+8. **Authorized Recovery Pivot Invariant**: Backward stage movement is strictly prohibited during normal engineering progression. An active maintenance milestone may return from Stage 1 to Stage 0 *only* through an explicit, human-authorized `PIVOT_TO_STAGE_0` recovery transition after its foundational PRD assessment is certified as `OUTDATED`. Stage 1 work and evidence must be preserved in snapshot archives before Stage 0 is initialized.
 
 ---
 
@@ -304,6 +306,35 @@ Represents the micro lifecycle of an individual deliverable artifact:
   - `stage_status` set to `not_started`.
   - `stage_history` re-initialized to empty array `[]` for the active milestone.
   - `current_stage_detail` populated with deliverables for the target stage.
+
+---
+
+### 3.14 `PIVOT_TO_STAGE_0` (Active Maintenance Stage Pivot Protocol)
+- **Purpose**: Authorizes an emergency recovery transition returning an active maintenance milestone from Stage 1 to Stage 0 when its inherited problem formulation (`PRD-CORE`) is determined to be `OUTDATED`.
+- **Trigger**: Human operator executes `playbook pivot --stage 0` via interactive TTY.
+- **Architectural Scope**: Governed by [`governance/maintenance-stage-pivot-design.md`](maintenance-stage-pivot-design.md). This transition is **not** ordinary stage advancement, **not** an automated rollback, and **not** a lifecycle reopening.
+- **Mandatory Preconditions**:
+  1. `lifecycle_status` is strictly `reopened_maintenance`. (All other statuses reject with `LIFECYCLE_NOT_MAINTENANCE`).
+  2. `current_stage` is strictly `1`. (All other stages reject with `PIVOT_INVALID_STAGE`).
+  3. `stage_status` is not `approved` and `current_stage_detail.human_approval.decision` is not `GATE_APPROVED`. (Approved stages reject with `STAGE_ALREADY_APPROVED`).
+  4. Inherited PRD applicability assessment for the active milestone is certified as `OUTDATED`. (Valid, missing, or mismatched assessments reject with `PIVOT_PRD_NOT_OUTDATED`).
+  5. Interactive terminal session (`isatty(stdin) == true`). (Headless/piped execution rejects with `TTY_REQUIRED`).
+  6. Operator enters exact confirmation phrase: `CONFIRM PIVOT TO STAGE 0 <MILESTONE_ID>`.
+  7. Non-empty justification reason recorded.
+- **Historical Preservation Procedure**:
+  - Pre-pivot Stage 1 state serialized to immutable snapshot: `.playbook/pivots/state-<milestone_id>-stage-1-<timestamp>.json` (mode `0o444`).
+  - Governance audit document generated: `docs/pivots/PIVOT-<milestone_id>-STAGE-0.md`.
+  - Authored files in working tree (`REQUIREMENTS-SPEC.md`, test logs) remain intact and tracked by Git.
+  - Pivoted Stage 1 records are **never** appended to `stage_history[]` to preserve schema validity (`status: ["approved", "waived"]`) and monotonic stage sequencing.
+- **State Mutation**:
+  - `milestone_id` retained unchanged.
+  - `current_stage` set to `0`.
+  - `stage_status` set to `not_started`.
+  - `current_stage_detail` freshly populated with Stage 0 baseline deliverables (`PRD-CORE` with `status: "not_started"`, `validation_status: "unvalidated"`, empty evidence).
+  - No verification hashes or approval signatures are inherited from prior stages or milestones.
+  - Manifest `active_lifecycle_stage` synchronized to `0`.
+  - Approval sidecar `.playbook/approval-fingerprint.json` safely unlinked/purged.
+  - Lifecycle status remains `reopened_maintenance`.
 
 ---
 

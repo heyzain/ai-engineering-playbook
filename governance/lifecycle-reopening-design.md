@@ -1,12 +1,12 @@
 # Controlled Lifecycle Reopening: Architecture & State-Transition Design
 
-> **Document Version**: 1.1.0  
-> **Status**: Accepted Architectural Specification (Design Only)  
+> **Document Version**: 1.2.0  
+> **Status**: Accepted Architectural Specification (Design & Recovery Architecture)  
 > **Target Package**: `@ai-engineering-playbook/cli`  
 > **Preceding Specifications**:
 > - [`governance/state-machine.md`](state-machine.md)
+> - [`governance/maintenance-stage-pivot-design.md`](maintenance-stage-pivot-design.md)
 > - [`governance/approval-and-advancement-design.md`](approval-and-advancement-design.md)
-> - [`governance/downstream-storage-convention.md`](downstream-storage-convention.md)
 > - [`schemas/project-state.schema.json`](../schemas/project-state.schema.json)
 > - [`schemas/project-manifest.schema.json`](../schemas/project-manifest.schema.json)
 
@@ -177,10 +177,11 @@ When reopening at Stage 1, the relationship with the foundational Stage 0 Proble
    - `REQ-SPEC` must contain an explicit traceability reference linking new requirements to the foundational problem statement.
 3. **Outdated Prerequisite & Blocking Progression**:
    - If the foundational problem statement in `PRD-CORE` is outdated, invalidated by market changes, or no longer reflects the product's true problem formulation, Stage 1 progression is **BLOCKED**.
-   - The human engineer must halt the maintenance milestone and re-open at **Stage 0** (`playbook reopen --stage 0`) to re-formulate the core problem statement through a formal Stage 0 gate exit package and human sign-off.
+   - Attempting to execute `playbook reopen --stage 0` while already in `reopened_maintenance` is strictly rejected with `LIFECYCLE_ALREADY_REOPENED`.
+   - Instead, the human engineer must execute the authorized recovery transition `PIVOT_TO_STAGE_0` (`playbook pivot --stage 0`), governed by [`governance/maintenance-stage-pivot-design.md`](maintenance-stage-pivot-design.md), to archive Stage 1 work and re-initialize Stage 0 under the active milestone without terminating the milestone.
 4. **Recording Changes to the Foundational Problem Statement**:
    - *Minor refinements / scope clarifications*: Documented as an explicitly marked amendment section within `docs/prd/PRD-CORE.md`, or captured via a Clarification RFC (`docs/rfcs/RFC-YYYYMMDD-###.md`).
-   - *Fundamental pivots / scope invalidation*: Prohibited in Stage 1. Requires Stage 0 reopening.
+   - *Fundamental pivots / scope invalidation*: Prohibited in Stage 1. Requires executing `playbook pivot --stage 0` (or selecting Stage 0 upon initial milestone reopening).
 5. **Separation of Inherited Prerequisites from Active Deliverables**:
    - **Never automatically mark inherited material as verified**: Stage 1 deliverables (`REQ-SPEC`, `TEST-STRATEGY`) are initialized with `status: "not_started"`, `validation_status: "unvalidated"`, and empty `evidence: []`.
    - Inherited artifacts from prior milestones are contextual baselines, not newly satisfied deliverables for the active milestone. All active deliverables must produce fresh verifiable evidence.
