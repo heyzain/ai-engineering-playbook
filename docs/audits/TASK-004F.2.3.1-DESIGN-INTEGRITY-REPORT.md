@@ -6,7 +6,7 @@
 > **Date**: 2026-11-01  
 > **Author**: AI Engineering Playbook Architecture Group  
 > **Governing Specifications**:
-> - [`governance/maintenance-stage-pivot-design.md`](../../governance/maintenance-stage-pivot-design.md) v1.1.0
+> - [`governance/maintenance-stage-pivot-design.md`](../../governance/maintenance-stage-pivot-design.md) v1.2.0
 > - [`governance/state-machine.md`](../../governance/state-machine.md) v1.3.0
 > - [`governance/lifecycle-reopening-design.md`](../../governance/lifecycle-reopening-design.md) v1.2.0
 
@@ -167,7 +167,7 @@ As a sanity check, the existing Playbook CLI test suite was executed against the
 
 ## 4. Conclusion & Handshake Status
 
-All seven review items have been resolved and incorporated into [`governance/maintenance-stage-pivot-design.md`](../../governance/maintenance-stage-pivot-design.md) v1.1.0.
+All seven review items have been resolved and incorporated into [`governance/maintenance-stage-pivot-design.md`](../../governance/maintenance-stage-pivot-design.md) (v1.2.0) and finalized in [`docs/audits/TASK-004F.2.3.2-TRANSACTION-INTEGRITY-REPORT.md`](TASK-004F.2.3.2-TRANSACTION-INTEGRITY-REPORT.md).
 
 **Final Status**: `DESIGN_READY_FOR_REVIEW`  
 The design is ready for human architectural sign-off prior to scheduling runtime implementation in Task 004F.2.4.
