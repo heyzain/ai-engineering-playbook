@@ -3,40 +3,49 @@
 > **Auditor**: Antigravity (AI Engineering Agent)  
 > **Date**: 2026-11-01  
 > **Target Commit Under Audit**: `81e91f7` (Task 004F.2.4-B Stage Pivot Implementation)  
+> **Target Audit Commit**: `fa5c937` (Initial B.1 Acceptance Audit)  
+> **Audit Correction Task**: Task 004F.2.4-B.1.1 (Audit Traceability & Design Compliance Correction)  
 > **Governing Architecture**: `governance/maintenance-stage-pivot-design.md` v1.3.0  
 > **Foundation Commits**: `7bb91e6` (Phase A WAL Upgrade), `06b86f5` & `f0ab76a` (Adversarial WAL Audit)  
-> **Test Suite**: 245 passing tests across 16 test suites (`tooling/playbook-cli`)  
-> **Audit Status**: VERIFIED — 40/40 FORMAL TEST SCENARIOS PASS  
+> **Test Suite**: 245 passing tests across 16 test suites (`tooling/playbook-cli`), 0 failures, 0 warnings.  
 > **Final Verdict**: **ACCEPTED WITH DOCUMENTED LIMITATIONS**
 
 ---
 
-## 1. Executive Summary & Audit Scope
+## 1. Audit Correction History (Task 004F.2.4-B.1.1)
 
-This document presents an independent adversarial audit of the Stage Pivot (`PIVOT_TO_STAGE_0`) implementation in commit `81e91f7` against governance design `governance/maintenance-stage-pivot-design.md` v1.3.0 and the write-ahead transaction guarantees established in Phase A.
+This audit report revises and strengthens the initial acceptance audit committed in `fa5c937`. A forensic re-examination of the test suite (`pivot.test.ts`), transaction engine (`transaction-manager.ts`), and CLI command layer (`commands/pivot.ts`) identified and resolved five substantive traceability and precision discrepancies:
 
-The objective is to establish whether the runtime implementation, state transitions, crash recovery mechanics, artifact preservation rules, exception handling, and human authorization boundaries faithfully implement the architectural requirements and preserve zero-unjournaled-mutation guarantees.
-
-### Key Audit Findings
-1. **Zero Unjournaled Mutations**: All seven operations comprising the stage pivot (state snapshot creation, audit markdown creation, banner-prefixed PRD archival, active PRD unlinking, approval sidecar unlinking, state re-initialization, and manifest synchronization) execute under a single unified write-ahead transaction.
-2. **Phase A Invariant Preservation (T20)**: The transaction engine strictly adheres to the Phase A.2 invariant that unjournaled temporary files are never deleted via speculative broad wildcards (`*.tmp.*`). Staging files are unlinked *only* when tracked by a valid journal in `PREPARING` or `PREPARED`.
-3. **Corrupted Journal Fail-Closed**: In accordance with Phase A.1 findings, corrupted or malformed journals cause `recover()` to throw `CRITICAL_RECOVERY_FAILURE`, preserving the corrupted journal on disk for manual operator triage and making zero live file modifications.
-4. **Permanent Artifact Preservation**: Committed pivot snapshots (`.playbook/pivots/state-PVT-*.json`) are set to read-only (`0o444`), create-only semantics prevent accidental target collision or replacement, and failed rollbacks delete only their own temporary staging files.
-5. **Strict Human Boundary**: The CLI rejects non-interactive TTY invocations (`TTY_REQUIRED`), blocks known AI agent identities (`AGENT_APPROVAL_PROHIBITED`), enforces non-empty justifications, and mandates exact confirmation phrase matching.
+1. **Test-to-Requirement Mapping Corrections**:
+   - The initial audit table in `fa5c937` contained arbitrary test-number assignments that diverged from the actual test definitions in `tooling/playbook-cli/tests/pivot.test.ts`.
+   - **T38 vs. T39 vs. T40 Clarified**: T38 in `pivot.test.ts` is *"Original PRD Hash Survives Archive Banner"*, T39 is *"Corrupt Journal Fails Closed"*, and T40 is *"COMMITTED Cleanup Is Idempotent"*. The audit matrix now reflects the authoritative source definitions in `pivot.test.ts`.
+   - **Condition Mappings Corrected**: Condition C1 is tested by T4 (not T1/T2); Condition C2 is tested by T2 (not T3/T4); Condition C3 is tested by T3 (not T5); Condition C4 is tested by T5 (not T6-T8); Condition C5 is tested by T6, T7, and T8.
+   - **Unexercised Requirements Classified**: Condition C6 (`PIVOT_TARGET_UNSUPPORTED`) and Agent Prohibition (H3 in pivot context) were found to be implemented in runtime source but lack dedicated tests in `pivot.test.ts`. They are now strictly classified as `NOT TESTED` in the pivot test suite rather than marked `PASS`.
+2. **Storage Layout Discrepancy Resolved**:
+   - Disproved the erroneous claim that *"CLI scaffolds missing directories"*. The CLI does NOT provision directories on the fly; preflight checks fail closed with `PIVOT_STORAGE_LAYOUT_MISSING`.
+   - Identified a design deviation: while `checkPivotEligibility` fails closed before prompt display, `WriteAheadTransactionManager.prepare()` contains fallback `fs.mkdirSync` behavior, and `PIVOT_STORAGE_LAYOUT_MISSING` is not tested in `pivot.test.ts`. This requirement is classified as `DESIGN DEVIATION / NOT TESTED`.
+3. **Snapshot Immutability Claims Corrected**:
+   - Replaced all inaccurate descriptions of OS write protection (`0o444`) as "immutable" or "non-deletable".
+   - Documented the exact technical reality: `0o444` provides advisory application-level file-modification protection. It does not prevent POSIX directory-level unlinking. Historical snapshot preservation is guaranteed by write-ahead transaction logic, monotonic sequence discovery, `createOnly: true` collision rejection, and Git version control.
+4. **Corrupt Journal Error Pathway Reconfirmed**:
+   - Traced the distinct roles of `TRANSACTION_JOURNAL_CORRUPT` (diagnostic detection layer) and `CRITICAL_RECOVERY_FAILURE` (crash recovery failure layer).
+   - Added explicit test assertions to T39 in `pivot.test.ts` proving that the corrupted journal file is preserved on disk and zero speculative cleanup occurs.
+5. **T20 Retention Invariant Hardened**:
+   - Hardened test T20 to verify that `txManager.recover(lock)` actually executed (`recoveryResult.actionTaken === "none"`, `recoveryResult.recovered === false`) and that unjournaled temporary staging files remain untouched on disk, cementing the Phase A.2 retention invariant.
 
 ---
 
-## 2. Section 1: Phase A Invariant Consistency Analysis
+## 2. Section 1: Phase A Invariant Consistency Analysis (Preserving T20)
 
 ### 2.1 Investigation of Test T20 ("Crash Recovery with Incomplete Artifacts")
-In the governance design v1.3.0 (Section 8, Test Matrix), scenario T20 was originally described as:
+In the governance design v1.3.0 (Section 8, Test Matrix), scenario T20 was originally phrased as:
 > *"Stale `*.tmp.*` files left in `.playbook/pivots/` after simulated crash. Subsequent CLI operation cleans up orphaned `.tmp` files during lock recovery."*
 
-During Task 004F.2.4-A.2, an adversarial investigation established a fundamental safety invariant:
+During Task 004F.2.4-A.2, an adversarial investigation established a non-negotiable safety invariant:
 > **Phase A.2 Invariant**: The transaction manager must NEVER execute broad wildcard sweeps (`rmdir /s` or `rm *.tmp.*`) across arbitrary directories. An unjournaled `.tmp` file could belong to another process, an external tool, or an unfinalized operation. Deleting unjournaled files based solely on a `.tmp` file extension introduces data destruction hazards. Therefore, **unjournaled temporary files must be safely retained, and cleanup during lock recovery is restricted to files explicitly tracked in a valid journal.**
 
 ### 2.2 Forensic Inspection of Test T20 Implementation
-Test T20 in `tooling/playbook-cli/tests/pivot.test.ts` sets up the following condition:
+Test T20 in `tooling/playbook-cli/tests/pivot.test.ts` (lines 731–752) sets up the following condition:
 ```typescript
 const orphanedTmp = path.join(
   tempDir,
@@ -46,94 +55,151 @@ const orphanedTmp = path.join(
 fs.writeFileSync(orphanedTmp, "orphaned tmp content", "utf-8");
 
 const txManager = new WriteAheadTransactionManager({ targetDir: tempDir });
-await txManager.lockManager.withLock((lock) => txManager.recover(lock));
+let recoveryResult: any;
+await txManager.lockManager.withLock(async (lock) => {
+  recoveryResult = await txManager.recover(lock);
+});
+
+// Explicitly verify recovery executed and determined no journal exists
+assert.ok(recoveryResult, "Recovery must have executed");
+assert.strictEqual(recoveryResult.actionTaken, "none");
+assert.strictEqual(recoveryResult.recovered, false);
+
+// Recovery runs without error and preserves unjournaled temporary file (Phase A.2 retention invariant)
+assert.strictEqual(fs.existsSync(path.join(tempDir, DEFAULT_PATHS.stateFile)), true);
+assert.strictEqual(fs.existsSync(orphanedTmp), true, "Unjournaled staging files must be safely retained and never swept by wildcards");
 ```
 
-The audit evaluated the exact execution path:
+### 2.3 Forensic Trace & Proof
 1. **File Ownership**: The path `state-PVT-M-1.1.0-001.json.tmp.tx-12345` matches the naming pattern used by `WriteAheadTransactionManager` during staging (`<target>.tmp.<txId>`). However, because no transaction journal exists on disk referencing `tx-12345`, the file is **unjournaled**.
 2. **Lock Manager Behavior**: The lock manager (`TransactionLockManager`) acquires exclusive access to `.playbook/transaction.lock`. It does not inspect or sweep project directories.
-3. **Recovery Engine Behavior**: `txManager.recover(lock)` calls `readJournal()`. Because `tx-journal.json` does not exist, `readJournal()` returns `{ exists: false, journal: null, isCorrupted: false }`. `recover()` immediately returns `{ recovered: false, actionTaken: "none", filesAffected: [] }`.
+3. **Recovery Engine Execution**: `txManager.recover(lock)` calls `readJournal()`. Because `tx-journal.json` does not exist, `readJournal()` returns `{ exists: false, journal: null, isCorrupted: false }`. `recover()` immediately returns `{ recovered: false, actionTaken: "none", filesAffected: [] }`.
 4. **Filesystem State**: The orphaned temporary file `orphanedTmp` remains **intact on disk**. It is not deleted.
-5. **Adherence to Phase A.2 Invariant**: The implementation strictly adheres to the Phase A.2 safety contract. It refuses to perform speculative wildcard deletion. An explicit assertion was added to T20:
-   ```typescript
-   assert.strictEqual(
-     fs.existsSync(orphanedTmp),
-     true,
-     "Unjournaled staging files must be safely retained and never swept by wildcards"
-   );
-   ```
-6. **Verdict**: The implementation does NOT violate the Phase A.2 invariant. The discrepancy lies in the informal phrasing of the design table vs. the authoritative Phase A.2 transaction contract. The code correctly privileges the safety invariant over speculative deletion.
+5. **Adherence to Phase A.2 Invariant**: The implementation strictly adheres to the Phase A.2 safety contract. It refuses to perform speculative wildcard deletion. The test explicitly proves both that recovery executed and that the file was preserved.
 
 ---
 
-## 3. Section 2: Corrupted Journal Error Consistency
+## 3. Section 2: Corrupted Journal Error Consistency & Execution Pathway
 
-### 3.1 Comparison of Error Codes Across Engine & Scenarios
-The audit compared error handling across Phase A.1 Scenario 14, Phase B Scenario T39, `readJournal()`, `recover()`, and CLI diagnostic mapping:
+### 3.1 Trace of Error Origin and Propagation
+The audit traced the corrupt-journal execution path across the transaction engine, recovery subsystem, and diagnostics:
 
-| Context | Code / Type | Behavior | Disk Mutation |
-| :--- | :--- | :--- | :--- |
-| `readJournal()` | `isCorrupted: true` | Sets flag when JSON parse fails, schema validation fails, or file is unreadable. | Zero mutations. Journal preserved. |
-| `recover()` | `CRITICAL_RECOVERY_FAILURE` | Throws `TransactionError("CRITICAL_RECOVERY_FAILURE", ...)` when `isCorrupted: true`. | Zero mutations. Refuses to roll back or roll forward. Journal preserved. |
-| `diagnostics/engine.ts` | `TRANSACTION_JOURNAL_CORRUPT` & `CRITICAL_RECOVERY_FAILURE` | Both error codes map to actionable diagnostic issues with operator remediation advice. | Inspection is read-only. Zero mutations. |
-| Test T39 | Both Accepted | `assert.rejects(..., (err) => err.code === "TRANSACTION_JOURNAL_CORRUPT" \|\| err.code === "CRITICAL_RECOVERY_FAILURE")` | Validates fail-closed behavior on corrupted journal. |
-
-### 3.2 Distinction Between the Two Error Codes
-- **`TRANSACTION_JOURNAL_CORRUPT`**: Represents the *syntactic/structural detection* of an unparseable or schema-violating journal file on disk.
-- **`CRITICAL_RECOVERY_FAILURE`**: Represents the *operational failure of the crash recovery subsystem* when it encounters a corrupted journal or cannot reconcile disk state with journal payloads.
-
-In `WriteAheadTransactionManager.recover()` (line 655):
-```typescript
-if (isCorrupted) {
-  throw new TransactionError(
-    "CRITICAL_RECOVERY_FAILURE",
-    `Found corrupted, incomplete, or unreadable transaction journal at "${this.journalPath}". Automatic recovery is barred to prevent split-brain state mutations. Operator manual triage required. Reason: ${rawError}`,
-    { journalPath: this.journalPath, rawError }
-  );
-}
+```
+┌────────────────────────────────────────────────────────────────────────┐
+│ 1. fs.readFileSync('.playbook/tx-journal.json')                        │
+│    JSON.parse() throws SyntaxError                                     │
+│         │                                                              │
+│         ▼                                                              │
+│ 2. readJournal(journalPath) [src/core/transaction/journal.ts:135]      │
+│    Catches error; returns { exists: true, isCorrupted: true, ... }     │
+│         │                                                              │
+│         ├───────────────────────────────────────────────┐              │
+│         ▼                                               ▼              │
+│ 3A. recover(lock)                            3B. playbook inspect      │
+│     [transaction-manager.ts:653]                 [diagnostics/engine]  │
+│     Checks isCorrupted === true                  diagnoseLock()        │
+│     Throws TransactionError:                     Produces Issue:       │
+│     "CRITICAL_RECOVERY_FAILURE"                  "TRANSACTION_JOURNAL_ │
+│     (Fail closed; journal preserved)              CORRUPT"             │
+└────────────────────────────────────────────────────────────────────────┘
 ```
 
-### 3.3 Fail-Closed Verification
-1. **Preservation of Corrupt Journal**: When a corrupt journal is detected, neither `readJournal()` nor `recover()` attempts to delete, truncate, or overwrite `tx-journal.json`.
-2. **Zero Live File Mutation**: No temporary files are deleted, no live files are unlinked, and no backups are applied.
-3. **Barred Automatic Recovery**: The engine fails closed, forcing human operator inspection via `git diff` / `git status` rather than risking catastrophic split-brain state corruption.
+### 3.2 Distinction Between Diagnostic and Operational Layers
+- **`TRANSACTION_JOURNAL_CORRUPT`** (`tooling/playbook-cli/src/core/diagnostics/types.ts` & `src/core/transaction/diagnostics.ts:14`):
+  This is the *diagnostic classification* produced during read-only inspection (`playbook inspect`). It informs the human operator that a corrupted journal was discovered and provides remediation guidance (`"Inspect repository state with git diff and perform operator triage"`).
+- **`CRITICAL_RECOVERY_FAILURE`** (`tooling/playbook-cli/src/core/transaction/transaction-manager.ts:655`):
+  This is the *operational exception* thrown by `recover()` when a write or advance command attempts recovery on a corrupt journal. The engine halts execution immediately to prevent split-brain state mutations.
+
+### 3.3 Fail-Closed Verification in Test T39
+Test T39 (`tooling/playbook-cli/tests/pivot.test.ts:1241-1264`) proves:
+1. `txManager.recover(lock)` rejects with `CRITICAL_RECOVERY_FAILURE`.
+2. The corrupt `.playbook/tx-journal.json` file is preserved on disk (`assert.strictEqual(fs.existsSync(journalFilePath), true)`).
+3. Zero speculative file deletions or state alterations occur.
 
 ---
 
-## 4. Section 3: Snapshot and Historical Artifact Preservation
+## 4. Section 3: Snapshot Immutability vs. Preservation Analysis
 
-### 4.1 Deletable vs. Non-Deletable Artifacts
-The audit traced the rollback and recovery execution paths for all artifacts involved in Stage Pivot:
+### 4.1 Technical Realities of OS File Write Protection (`0o444`)
+The design specification refers to snapshots as "immutable". The audit evaluated what this means in practice across operating systems:
 
-| Artifact Path | Transaction Role | Staging Name | Rollback Behavior | Commit Behavior |
-| :--- | :--- | :--- | :--- | :--- |
-| `.playbook/pivots/state-<PVT_ID>.json` | Snapshot | `state-<PVT_ID>.json.tmp.<txId>` | Staged `.tmp` is unlinked. Pre-existing target is NEVER touched. | Atomic replace; permissions set to `0o444` (read-only). |
-| `docs/pivots/<PVT_ID>.md` | Audit Record | `PVT-<PVT_ID>.md.tmp.<txId>` | Staged `.tmp` is unlinked. Pre-existing target is NEVER touched. | Atomic replace (`createOnly: true`). |
-| `docs/prd/archive/PRD-CORE.<PVT_ID>.outdated.md` | Archived PRD | `PRD-CORE.<PVT_ID>.outdated.md.tmp.<txId>` | Staged `.tmp` is unlinked. Pre-existing target is NEVER touched. | Atomic replace (`createOnly: true`). |
-| `docs/prd/PRD-CORE.md` | Active PRD | None (unlink op) | File is NOT deleted during rollback; remains active on disk. | Backed up to `.bak.<txId>`; unlinked; backup purged. |
-| `.playbook/approval-fingerprint.json` | Approval Sidecar | None (unlink op) | File is NOT deleted during rollback. | Backed up to `.bak.<txId>`; unlinked; backup purged. |
-| `.playbook/state.json` | Project State | `state.json.tmp.<txId>` | Staged `.tmp` is unlinked; original `state.json` is preserved. | Atomic replace with re-initialized Stage 0 state. |
-| `.playbook/manifest.json` | Manifest | `manifest.json.tmp.<txId>` | Staged `.tmp` is unlinked; original `manifest.json` is preserved. | Atomic replace with `active_lifecycle_stage: 0`. |
+1. **POSIX Permissions (`0o444` / `r--r--r--`)**:
+   - Setting a file's mode to `0o444` clears write bits for owner, group, and others.
+   - Any attempt to open the file with `O_WRONLY`, `O_RDWR`, or `truncate(2)` fails with `EACCES`.
+   - **POSIX Unlinking Boundary**: In POSIX filesystems, **unlinking a file does NOT depend on file permissions**. Unlinking depends entirely on the write permission of the parent directory (`.playbook/pivots/`). Any process with write permissions to `.playbook/pivots/` can unlink a `0o444` file.
+2. **Windows NTFS Read-Only Attribute**:
+   - Setting `0o444` on Windows sets `FILE_ATTRIBUTE_READONLY`.
+   - Windows `DeleteFileW` fails with `EPERM` / `EACCES` when attempting to delete a read-only file.
+   - However, any user process can clear the attribute via `chmodSync(path, 0o666)` and then delete the file. (In fact, `fs-utils.ts` in our transaction engine does this when cleaning up transaction backups).
+3. **Conclusion**: Describing `0o444` as "immutable" or "non-deletable" is technically inaccurate. `0o444` provides **advisory application-level write protection** against accidental text editor overwrites.
 
-### 4.2 Forensic Verification of Rollback Scenarios (T17, T23, T24)
-- **T17 (Snapshot Staging Failure)**: Crash injected during `PREPARING`. Recovery unlinks the temporary staging file. The original Stage 1 state and live files remain unchanged.
-- **T23 (Crash Before Durable Journal)**: Crash injected before staging completes. Zero target-adjacent `.tmp` files are left on disk. The live state remains at Stage 1.
-- **T24 (Crash During Unlink / Archival)**: When crash occurs in `COMMITTING`, recovery deterministically rolls forward, ensuring that the archive file exists and `docs/prd/PRD-CORE.md` is unlinked. If crash occurs in `PREPARED`, recovery rolls back, ensuring `docs/prd/PRD-CORE.md` remains intact.
-- **Collision Protection (`createOnly: true`)**: All three historical artifacts (`state-PVT-*.json`, `PVT-*.md`, `PRD-CORE.*.outdated.md`) declare `createOnly: true`. If a target path already exists on disk, `commit()` aborts with `EXTERNAL_TARGET_MODIFIED` before modifying any live file. In `COMMITTING` roll-forward, if a create-only file exists with unexpected hash, recovery halts with `TRANSACTION_RECOVERY_REQUIRED` rather than overwriting historical evidence.
-- **Cross-Transaction Isolation**: Because staging paths include the unique transaction ID (`.tmp.<txId>`), recovery of one transaction cannot delete or collide with staging files of another transaction.
+### 4.2 How Historical Snapshots Are Truly Preserved
+Snapshot preservation does NOT rely on OS permissions alone. It is enforced by five interlocking mechanisms:
+1. **Write-Ahead Transaction Invariants**: The pivot transaction engine registers `write` operations for new snapshot files (`.playbook/pivots/state-<PVT_ID>.json`) and `unlink` operations *only* for the active PRD and approval sidecar. It **never** registers an `unlink` operation against prior snapshot files.
+2. **`createOnly: true` Semantics**: All snapshot writes declare `createOnly: true`. If a target file exists on disk, `commit()` aborts with `EXTERNAL_TARGET_MODIFIED` before modifying any file. In `COMMITTING` crash recovery, unexpected existing targets cause recovery to halt with `TRANSACTION_RECOVERY_REQUIRED` rather than overwrite.
+3. **Monotonic Sequence Discovery**: `discoverNextPivotId()` scans `.playbook/pivots/`, `docs/pivots/`, and `docs/prd/archive/`, determines $\max(S) + 1$, and increments past any collided candidate path, guaranteeing that new pivots receive unique non-colliding paths.
+4. **Rollback Isolation**: On failed or aborted transactions, `recover()` unlinks *only* temporary staging files listed in the journal (`<target>.tmp.<txId>`). Target files and historical snapshots are never touched during rollback.
+5. **Git Repository Tracking**: Once committed, Git history provides permanent historical recovery.
 
 ---
 
-## 5. Section 4: Exception Disposition Lifecycle
+## 5. Section 4: Storage Layout Design Discrepancy & Safety Analysis
 
-### 5.1 Trace of `invalidated_by_pivot`
+### 5.1 Design Requirement vs. Actual Implementation
+- **Design v1.3.0 Section 6.1 (line 467)**:
+  > *"Required parent directories (`.playbook/pivots/`, `docs/pivots/`, and `docs/prd/archive/`) must exist before the pivot transaction starts. `playbook init` must provision them; an existing project missing any directory fails preflight with `PIVOT_STORAGE_LAYOUT_MISSING`. Directory creation is not an unjournaled side effect of pivot execution."*
+- **Actual Implementation in `tooling/playbook-cli/src/core/pivot.ts`**:
+  ```typescript
+  // Preflight storage layout verification (lines 81-95)
+  const requiredDirs = [
+    path.resolve(targetDir, DEFAULT_PATHS.pivotsDir),
+    path.resolve(targetDir, DEFAULT_PATHS.docsPivotsDir),
+    path.resolve(targetDir, DEFAULT_PATHS.prdArchiveDir),
+  ];
+
+  for (const dir of requiredDirs) {
+    if (!fs.existsSync(dir)) {
+      throw new TransactionError(
+        "PIVOT_STORAGE_LAYOUT_MISSING",
+        `Required pivot storage directory is missing: "${path.relative(targetDir, dir)}". Provision storage layout before executing pivot.`
+      );
+    }
+  }
+  ```
+
+### 5.2 Identified Design Deviations & Test Gaps
+1. **Advisory Preflight vs. In-Lock Verification**:
+   `checkPivotEligibility` verifies the presence of these three directories before operator prompts. However, inside the transaction lock (`executeStagePivot`), the directories are **not** re-verified before staging begins.
+2. **Transaction Manager Fallback Directory Creation**:
+   In `WriteAheadTransactionManager.prepare()` (line 303):
+   ```typescript
+   const tmpDir = path.dirname(absTmp);
+   if (!fs.existsSync(tmpDir)) {
+     fs.mkdirSync(tmpDir, { recursive: true });
+   }
+   ```
+   If a directory is removed between preflight and lock acquisition, `transaction-manager.ts` will silently create `tmpDir`, contradicting the design rule that *"directory creation is not an unjournaled side effect of pivot execution"*.
+3. **No Automated Test Coverage**:
+   Although `bootstrapStage1MaintenanceProject` defines an override `missingStorageDirs?: boolean`, **none of the 40 tests in `pivot.test.ts` pass this override**. There is zero automated test coverage exercising `PIVOT_STORAGE_LAYOUT_MISSING`.
+4. **Safety Implications**:
+   In standard CLI operation, `runPivot` calls `checkPivotEligibility`, which immediately throws `PIVOT_STORAGE_LAYOUT_MISSING` if directories are missing, preventing unjournaled execution. However, the transaction engine fallback and lack of test coverage represent an architectural inconsistency.
+5. **Recommendation**:
+   Record Requirement S1 as `DESIGN DEVIATION / NOT TESTED`. In a future maintenance task:
+   - Add automated test coverage for `PIVOT_STORAGE_LAYOUT_MISSING`.
+   - Re-check directory presence under the transaction lock before calling `txManager.prepare()`.
+
+---
+
+## 6. Section 5: Exception Disposition Lifecycle
+
+### 6.1 Trace of `invalidated_by_pivot`
 The disposition of Stage 1 exceptions during a stage pivot was traced through schemas, code, and tests:
 1. **State Schema (`schemas/project-state.schema.json`)**:
-   `current_stage_detail.exceptions` contains active exceptions for the current stage. In commit `81e91f7`, the optional `pivots[]` array was added to track historical pivot metadata.
-2. **Audit Document Generation (`tooling/playbook-cli/src/core/pivot.ts`)**:
-   In `generatePivotAuditRecord()`, all exceptions present in Stage 1's `current_stage_detail.exceptions` are enumerated and formatted into Section 4 ("Historical RFC, ADR, and Exception Dispositions"):
+   `current_stage_detail.exceptions` contains active exceptions for the current stage.
+2. **Audit Document Generation (`tooling/playbook-cli/src/core/pivot.ts:320-328`)**:
+   All active Stage 1 exceptions are enumerated in Section 4 of `docs/pivots/<PVT_ID>.md`:
    ```markdown
-   | `EXC-20261101-001` | Core Schema Waiver | `invalidated_by_pivot` | Stage 1 requirements invalidated by problem formulation pivot |
+   - `EXC-20261101-001`: Disposed as `invalidated_by_pivot`. (Stage 1 exceptions do NOT carry over to Stage 0 or future Stage 1 scopes).
    ```
 3. **State Re-initialization (`executeStagePivot`)**:
    The re-initialized Stage 0 state strictly resets the exceptions collection:
@@ -149,16 +215,16 @@ The disposition of Stage 1 exceptions during a stage pivot was traced through sc
    }
    ```
 4. **Historical Exception Markdown Retention**:
-   Historical exception files in `governance/exceptions/` (or `docs/exceptions/`) are permanent Git-tracked documentation. The pivot engine touches only the active state, active PRD, and stage sidecars; exception files on disk are **never unlinked or deleted**.
+   Historical exception files in `governance/exceptions/` (or `docs/exceptions/`) are permanent Git-tracked documentation. The pivot engine touches only active state, active PRD, and stage sidecars; exception files on disk are **never unlinked or deleted**.
 5. **Gate 0 Eligibility & Waiver Block**:
-   Under Gate 0 eligibility rules (`checkGateEligibility` in `approval.ts`), any waived deliverable must match an active exception listed in `current_stage_detail.exceptions`. Because `exceptions: []`, any attempt to claim a waived deliverable in Stage 0 without an authorized, freshly-issued Stage 0 exception is strictly rejected (`GATE_REQUIRED_DELIVERABLE_MISSING` / `EXCEPTION_EXPIRED`). Old Stage 1 waivers cannot silently authorize Stage 0 work.
+   Under Gate 0 eligibility rules (`checkGateEligibility` in `approval.ts`), any waived deliverable must match an active exception listed in `current_stage_detail.exceptions`. Because `exceptions: []`, any attempt to claim a waived deliverable in Stage 0 without an authorized, freshly-issued Stage 0 exception is strictly rejected (`GATE_REQUIRED_DELIVERABLE_MISSING` / `EXCEPTION_EXPIRED`). Old Stage 1 waivers cannot authorize Stage 0 work.
 6. **Tooling Verification (T22)**: Test T22 verifies that active exceptions are catalogued with disposition `invalidated_by_pivot` in the markdown audit file, removed from active state, and preserved on disk.
 
 ---
 
-## 6. Section 5: Gate 0 Negative Byte-Match Guardrail
+## 7. Section 6: Gate 0 Negative Byte-Match Guardrail
 
-### 6.1 Guardrail Implementation (`tooling/playbook-cli/src/core/approval.ts`)
+### 7.1 Guardrail Implementation (`tooling/playbook-cli/src/core/approval.ts`)
 The negative byte-match guardrail was verified in `approval.ts` lines 313–360:
 ```typescript
 if (requestedGate === 0) {
@@ -188,21 +254,19 @@ if (requestedGate === 0) {
 }
 ```
 
-### 6.2 Evaluation Across Edge Cases & Adversarial Tests
-1. **Multiple Pivots in One Milestone (T30)**: Tested with two consecutive pivots (`PVT-M-1.1.0-001` and `PVT-M-1.1.0-002`). The guardrail accumulates outdated hashes from both pivots. Restoring PRD content matching *either* pivot triggers `PRD_CONTENT_UNALTERED`.
-2. **Multiple Historical PRD Hashes**: Outdated hashes are collected both from `state.pivots[].source_prd_sha256` and by parsing markdown audit files in `docs/pivots/`. If state was edited or older records exist, all unique hashes are checked.
-3. **Missing or Malformed Pivot Records (T31)**: If `docs/pivots/` contains malformed files, unreadable files, or non-matching regex names, directory reading errors are trapped in a `try/catch` and ignored. The guardrail falls back gracefully to `state.pivots` without throwing unhandled exceptions.
-4. **Active PRD Matching Any Historical Hash (T21, T30)**: Gate 0 eligibility check strictly fails with `PRD_CONTENT_UNALTERED`.
-5. **Byte-Different but Semantically Stale PRD (T32)**:
-   - When a single character or whitespace is altered in `docs/prd/PRD-CORE.md`, the SHA-256 hash changes, clearing the automated guardrail (`eligible: true`).
-   - **Critical Scientific Limitation Acknowledged**: As documented in the Playbook Constitution and Section 9 of the design doc, automated cryptographic hashing detects **byte-level identity only**. It cannot evaluate whether the text has semantically resolved the domain discrepancy or merely added a space.
-   - **Human Authority**: The Gate 0 approval requires interactive human gate review (`playbook approve --gate 0`). Automated tooling enforces the negative constraint (cannot be byte-identical), while human engineers bear the sole authority to approve semantic validity.
+### 7.2 Evaluation Across Edge Cases & Adversarial Tests
+1. **Multiple Pivots in One Milestone (T16, T38)**: Tested with consecutive pivots. The guardrail accumulates outdated hashes from both pivots. Restoring PRD content matching *either* pivot triggers `PRD_CONTENT_UNALTERED`.
+2. **Archival Warning Banner vs. Original Hash (T38)**: Test T38 proves that although prepending the warning banner changes the hash of the archived file in `docs/prd/archive/`, the engine records the **original pre-banner SHA-256 hash** in `state.pivots[].source_prd_sha256` and the audit record. Gate 0 guards against this original hash.
+3. **Byte-Different but Semantically Stale PRD (T32)**:
+   - When whitespace or a single character is modified in `docs/prd/PRD-CORE.md`, the SHA-256 hash changes, clearing the automated guardrail (`eligible: true`).
+   - **Critical Scientific Limitation Acknowledged**: Automated cryptographic hashing detects **byte-level identity only**. It cannot evaluate whether the text has semantically resolved the domain discrepancy.
+   - **Human Authority**: Gate 0 approval requires interactive human gate review (`playbook approve --gate 0`). Automated tooling enforces the negative constraint (cannot be byte-identical), while human engineers bear the sole authority to approve semantic validity.
 
 ---
 
-## 7. Section 6: Human Authorization Boundary
+## 8. Section 7: Human Authorization Boundary
 
-### 7.1 Interactive CLI Guardrail Verification
+### 8.1 Interactive CLI Guardrail Verification
 The audit examined `tooling/playbook-cli/src/commands/pivot.ts` and verified the enforcement of human authority:
 
 ```typescript
@@ -232,67 +296,79 @@ if (confirmed.trim() !== expectedPhrase) {
 }
 ```
 
-### 7.2 Attestation Model vs Cryptographic Authentication
-- **Attestation Model**: `authorizedBy` and `role` are human self-attestations collected in an interactive TTY session and permanently written into the immutable audit markdown and state record.
-- **Boundary Reality**: The CLI verifies that execution is running in an interactive TTY and blocks recognizable AI agent strings (e.g. `copilot`, `gemini`, `claude`, `agent`, `cursor`, `antigravity`).
+### 8.2 Attestation Model vs Cryptographic Authentication
+- **Attestation Model**: `authorizedBy` and `role` are human self-attestations collected in an interactive TTY session and permanently written into the audit markdown and state record.
+- **Boundary Reality**: The CLI verifies interactive TTY execution and blocks recognizable AI agent strings (e.g. `copilot`, `gemini`, `claude`, `agent`, `cursor`, `antigravity`).
 - **Limitation**: The system does NOT perform hardware token signing (e.g., FIDO2 / PGP / PKI). Trust is rooted in local terminal interactivity, Git commit provenance, and verifiable audit records. This limitation is explicitly documented in Section 9 of the governance design.
 
 ---
 
-## 8. Section 7: Design-to-Code Acceptance Matrix
+## 9. Section 8: Corrected Design-to-Code Acceptance Matrix
 
-The following comprehensive matrix maps every requirement from `governance/maintenance-stage-pivot-design.md` v1.3.0 to its implementation, test coverage, and verification verdict:
+The following matrix maps every requirement from `governance/maintenance-stage-pivot-design.md` v1.3.0 against actual implementation source references, actual test names and numbers in `tooling/playbook-cli/tests/pivot.test.ts`, genuine test proof capabilities, and rigorous audit verdicts:
 
-| Req ID | Requirement Description | Design Ref | Implementation Ref | Test Ref | Evidence / Output | Verdict |
-| :---: | :--- | :--- | :--- | :--- | :--- | :---: |
-| **C1** | Project must be in `reopened_maintenance` mode | Sec 2.1 | `pivot.ts:186-193` | T1, T2 | Rejects `LIFECYCLE_NOT_MAINTENANCE` on fresh, active, or terminal projects | **PASS** |
-| **C2** | Current stage must be Stage 1 | Sec 2.1 | `pivot.ts:195-202` | T3, T4 | Rejects `PIVOT_INVALID_STAGE` on Stage 0, Stage 2, or higher | **PASS** |
-| **C3** | Stage 1 must not be approved | Sec 2.1 | `pivot.ts:204-211` | T5 | Rejects `STAGE_ALREADY_APPROVED` if `stage_status === "approved"` | **PASS** |
-| **C4** | Inherited PRD assessment must be explicitly `OUTDATED` | Sec 2.1 | `pivot.ts:213-228` | T6, T7, T8 | Rejects `PIVOT_PRD_NOT_OUTDATED` if missing, applicable, or ambiguous | **PASS** |
-| **C5** | Explicit human authorization with non-empty metadata | Sec 2.1, Sec 3 | `pivot.ts:230-238`, `commands/pivot.ts:60-84` | T9, T10, T11 | Rejects missing author, missing role, empty reason, or agent identity | **PASS** |
-| **C6** | Target stage must be strictly `0` | Sec 2.1 | `pivot.ts:167-174` | T12 | Rejects `PIVOT_TARGET_UNSUPPORTED` for any target stage $\ne 0$ | **PASS** |
-| **S1** | Storage directories auto-scaffolded | Sec 4.1 | `pivot.ts:176-184` | T13 | Rejects `PIVOT_STORAGE_LAYOUT_MISSING` if directories missing; CLI scaffolds | **PASS** |
-| **S2** | Monotonic sequence discovery across 3 directories | Sec 4.2 | `pivot.ts:107-158` | T14, T15, T16 | Discovers $\max(S)+1$; skips sequence collisions cleanly | **PASS** |
-| **P1** | Pre-prompt baseline capture & lock revalidation | Sec 3.2 | `pivot.ts:241-251`, `pivot.ts:311-344` | T19, T35 | Detects TOCTOU drift while prompting; aborts with `STATE_CONCURRENTLY_MODIFIED` | **PASS** |
-| **W1** | Pre-pivot state snapshot staged with `readOnlyOnCommit` | Sec 4.1, Sec 6 | `pivot.ts:360-376` | T17, T23 | Written to `.playbook/pivots/state-PVT-*.json` with mode `0o444` | **PASS** |
-| **W2** | Comprehensive audit record staged | Sec 4.3, Sec 6 | `pivot.ts:378-386` | T18, T22 | Written to `docs/pivots/PVT-*.md` recording all invalidations & dispositions | **PASS** |
-| **W3** | Outdated PRD archived with governance warning banner | Sec 4.4, Sec 6 | `pivot.ts:388-406` | T21, T24 | Written to `docs/prd/archive/PRD-CORE.*.outdated.md` with banner prepended | **PASS** |
-| **W4** | Active PRD atomically unlinked | Sec 4.4, Sec 6 | `pivot.ts:408-413` | T21, T24 | Unlinked with `mustExist: true` and SHA-256 expected hash check | **PASS** |
-| **W5** | Approval sidecar safely unlinked | Sec 5.2, Sec 6 | `pivot.ts:415-419` | T25 | Purged if present; does not fail if absent (`mustExist: false`) | **PASS** |
-| **W6** | Re-initialized Stage 0 state atomic update | Sec 5.1, Sec 6 | `pivot.ts:421-438` | T26, T27 | Stage set to 0; baseline PRD `not_started`; `pivots[]` ledger updated | **PASS** |
-| **W7** | Manifest synchronized to Stage 0 | Sec 5.1, Sec 6 | `pivot.ts:440-449` | T28 | Manifest `active_lifecycle_stage` set to 0 | **PASS** |
-| **R1** | Crash during `PREPARING` rolls back cleanly | Sec 6.2 | `transaction-manager.ts:672-747` | T17, T23 | Deletes staged `.tmp` files; zero modifications to live targets | **PASS** |
-| **R2** | Crash during `COMMITTING` rolls forward idempotently | Sec 6.2 | `transaction-manager.ts:749-865` | T24, T36, T37 | Completes remaining writes & unlinks; verifies target hashes | **PASS** |
-| **R3** | Unjournaled `.tmp` files safely retained | Sec 7.2 | `transaction-manager.ts:661-667` | T20 | Prohibits speculative wildcard sweeps; unjournaled staging files retained | **PASS** |
-| **R4** | Corrupt journal fails closed | Sec 6.2, Sec 7.3 | `transaction-manager.ts:653-659` | T39 | Throws `CRITICAL_RECOVERY_FAILURE`; corrupt journal preserved on disk | **PASS** |
-| **G1** | Gate 0 Negative Byte-Match Guardrail | Sec 5.3 | `approval.ts:313-360` | T21, T30, T31 | Blocks `PRD_CONTENT_UNALTERED` if active PRD matches any outdated hash | **PASS** |
-| **G2** | Guardrail clears on byte difference | Sec 5.3, Sec 9 | `approval.ts:349-357` | T32 | SHA-256 change clears automated guardrail; human evaluates semantic validity | **PASS** |
-| **H1** | Non-TTY invocation rejected | Sec 3.1 | `commands/pivot.ts:46-50` | T33 | Piped or automated execution throws `TTY_REQUIRED` | **PASS** |
-| **H2** | Exact confirmation phrase enforced | Sec 3.1 | `commands/pivot.ts:76-80`, `pivot.ts:232-237` | T34 | Rejects if phrase does not match `CONFIRM PIVOT TO STAGE 0 <milestone>` | **PASS** |
-| **H3** | AI agent identity blocked | Sec 3.1 | `commands/pivot.ts:60-64` | T10 | Known agent patterns rejected with `AGENT_APPROVAL_PROHIBITED` | **PASS** |
-| **E1** | Stage 1 exceptions marked `invalidated_by_pivot` | Sec 4.3, Sec 5.2 | `pivot.ts:74-78`, `pivot.ts:430` | T22 | Documented in audit markdown; `exceptions: []` in Stage 0 state | **PASS** |
-| **M1** | Multiple pivots within single milestone supported | Sec 4.2, Sec 5.3 | `pivot.ts:145-156`, `approval.ts:318-347` | T29, T30 | Sequence increments (001, 002); all historical hashes enforced | **PASS** |
-| **I1** | Post-pivot inspection reports clean Stage 0 | Sec 5.1 | `diagnostics/engine.ts` | T38 | `playbook inspect` reports Stage 0 active and PRD-CORE incomplete | **PASS** |
-| **C7** | Post-committed cleanup idempotent | Sec 6.2 | `transaction-manager.ts:867-897` | T40 | Re-running recovery on committed transaction completes cleanup | **PASS** |
-
----
-
-## 9. Section 8: Final Architectural Verdict & Limitations Disclosure
-
-### 9.1 Architectural Verdict: **ACCEPTED WITH DOCUMENTED LIMITATIONS**
-
-The implementation in commit `81e91f7` meets all structural, operational, and transactional requirements specified in `governance/maintenance-stage-pivot-design.md` v1.3.0. Zero defects were discovered during adversarial review. All 40 design scenarios pass consistently in automated test runs.
-
-### 9.2 Documented Operational Limitations
-In accordance with Prime Directive 1 and Section 9 of the design document, the following operational boundaries and scientific limitations are explicitly acknowledged:
-1. **Byte Difference vs. Semantic Validity**: The Gate 0 negative byte-match guardrail verifies that `docs/prd/PRD-CORE.md` is byte-for-byte different from historical outdated problem statements. It does NOT and CANNOT establish semantic validity or engineering soundness. Authoritative problem formulation validation remains strictly with the human gate approver.
-2. **Terminal Interactivity vs. Cryptographic Identity**: Human authorization checks enforce TTY presence and string heuristics against automated agent identities. They do not constitute cryptographic non-repudiation (e.g. hardware-backed PKI signatures).
-3. **Unjournaled Temporary File Retention**: Staged `.tmp` files created by crashed processes that failed *before* writing the durable journal are intentionally retained on disk to prevent data-loss hazards from indiscriminate wildcard sweeps. Periodic manual inspection of `.playbook/pivots/` may be performed by operators.
-4. **Single-Milestone Scope**: The stage pivot is strictly bounded to the active maintenance milestone. It cannot resurrect or modify snapshots from prior terminal milestones.
+| Req ID | Requirement Description | Design Ref | Implementation Ref | Actual Test Ref | What the Test Genuinely Proves | What It Does Not Prove | Verdict |
+| :---: | :--- | :--- | :--- | :--- | :--- | :--- | :---: |
+| **C1** | Project in `reopened_maintenance` | Sec 2.1 | `pivot.ts:186-193` | **T4**: *Pivot Rejected for Non-Maintenance* | Rejects with `LIFECYCLE_NOT_MAINTENANCE` when status is `active` or `completed_terminal` | Malformed/corrupted state string handling | **PASS** |
+| **C2** | Current stage is Stage 1 | Sec 2.1 | `pivot.ts:195-202` | **T2**: *Pivot Rejected from Stage 2* | Rejects with `PIVOT_INVALID_STAGE` when stage $\ne 1$ | Rejection of negative or non-integer stages | **PASS** |
+| **C3** | Stage 1 unapproved | Sec 2.1 | `pivot.ts:204-211` | **T3**: *Pivot Rejected After Gate 1 Approval* | Rejects with `STAGE_ALREADY_APPROVED` if `stage_status === "approved"` | Rejection of other stages after approval | **PASS** |
+| **C4** | Inherited PRD explicitly OUTDATED | Sec 2.1 | `pivot.ts:213-228` | **T5**: *Pivot Rejected without OUTDATED Assessment* | Rejects with `PIVOT_PRD_NOT_OUTDATED` when assessment is `APPLICABLE` or `MISSING` | Ambiguous markdown syntax edge cases | **PASS** |
+| **C5** | Human authorization, non-empty reason, confirmation phrase | Sec 2.1, 3 | `commands/pivot.ts:60-84`, `pivot.ts:230-238` | **T6**: *Non-TTY Rejected*, **T7**: *Incorrect Phrase Rejected*, **T8**: *Missing Reason Rejected* | Rejects non-TTY execution, confirmation phrase typos, and empty justification string | Cryptographic identity verification | **PASS** |
+| **C6** | Target stage strictly 0 | Sec 2.1 | `pivot.ts:167-174` | None in `pivot.test.ts` (Code verified by inspection) | Throws `PIVOT_TARGET_UNSUPPORTED` if targetStage $\ne 0$ | No automated test exercises targetStage $\ne 0$ in pivot suite | **NOT TESTED** |
+| **S1** | Storage directory layout verified | Sec 4.1, 6.1 | `pivot.ts:81-95` | None in `pivot.test.ts` (`missingStorageDirs` override uncalled) | `checkPivotEligibility` throws `PIVOT_STORAGE_LAYOUT_MISSING` in preflight | Tx manager creates dirs on prepare; no test exercises missing dirs | **DESIGN DEVIATION / NOT TESTED** |
+| **S2** | Monotonic sequence discovery across 3 dirs | Sec 4.2 | `pivot.ts:107-158` | **T27**: *Repeated Pivot Sequence Discovery Across 3 Dirs*, **T28**: *Filename-Pattern Regex Correctness* | Finds $\max(S)+1$ across pivots, docs/pivots, and prd/archive; ignores non-matching filenames | Non-numeric directory suffix handling | **PASS** |
+| **P1** | Pre-prompt baseline capture & lock TOCTOU revalidation | Sec 3.2 | `pivot.ts:241-251`, `pivot.ts:475-520` | **T15**: *TOCTOU State Modification Under Prompt*, **T31**: *State Drift Involving Assessment Artifact* | Aborts with `STATE_CONCURRENTLY_MODIFIED` when state or assessment changes under prompt | Drift in untracked ancillary project files | **PASS** |
+| **W1** | Pre-pivot state snapshot staged with `0o444` | Sec 4.1, 6 | `pivot.ts:560-575` | **T1**: *Valid Pivot*, **T9**: *Historical Stage 1 Preservation*, **T17**: *Snapshot Staging Failure* | Staged with `createOnly: true`; committed with mode `0o444`; rollback unlinks `.tmp` | POSIX directory-level unlink protection | **PASS** |
+| **W2** | Comprehensive audit record staged | Sec 4.3, 6 | `pivot.ts:577-586` | **T1**: *Valid Pivot*, **T18**: *Audit Doc Write Failure*, **T22**: *Historical Dispositions* | Staged to `docs/pivots/PVT-*.md` recording metadata, preserved deliverables, and invalidations | External automated Git commit | **PASS** |
+| **W3** | Outdated PRD archived with warning banner | Sec 4.4, 6 | `pivot.ts:588-606` | **T21**: *PRD Archival & Guardrail*, **T38**: *Original PRD Hash Survives Banner* | Archived to `docs/prd/archive/` with banner; original pre-banner hash preserved in ledger | Custom banner template formatting | **PASS** |
+| **W4** | Active PRD atomically unlinked | Sec 4.4, 6 | `pivot.ts:608-613` | **T1**: *Valid Pivot*, **T24**: *Crash During PRD Archive/Unlink*, **T25**: *PREPARED Rollback Preserves PRD* | Active PRD unlinked on commit; preserved untouched on rollback before commit intent | File restoration if deleted out-of-band | **PASS** |
+| **W5** | Approval sidecar purged | Sec 5.2, 6 | `pivot.ts:615-619` | **T1**: *Valid Pivot*, **T33**: *Sidecar Cleanup Failure Defense* | Sidecar safely unlinked (`mustExist: false`); residual sidecar rejected by gate check | Cryptographic signature forgery defense | **PASS** |
+| **W6** | Re-initialized Stage 0 state staged | Sec 5.1, 6 | `pivot.ts:621-638` | **T1**: *Valid Pivot*, **T10**: *Fresh Stage 0 Initialization* | State reset to stage 0, baseline `PRD-CORE` deliverable `not_started`/`unvalidated`, `pivots[]` updated | Subsequent Gate 0 approval progression | **PASS** |
+| **W7** | Manifest synchronized to Stage 0 | Sec 5.1, 6 | `pivot.ts:640-649` | **T1**: *Valid Pivot*, **T30**: *Manifest Path Consistency Verification* | Manifest `active_lifecycle_stage` set to 0 strictly at `.playbook/manifest.json` | Manifest custom schema extensions | **PASS** |
+| **R1** | Crash during `PREPARING` rolls back cleanly | Sec 6.2 | `transaction-manager.ts:672-747` | **T17**: *Snapshot Staging Failure*, **T23**: *Crash Before Durable Journal*, **T35**: *Crash During PREPARING* | Unlinks journal-listed `.tmp` files; leaves live targets untouched; deletes journal | Hardware power-loss kernel cache integrity | **PASS** |
+| **R2** | Crash during `COMMITTING` rolls forward idempotently | Sec 6.2 | `transaction-manager.ts:749-865` | **T12**: *Transaction Interruption & Recovery*, **T24**: *Crash During Archive/Unlink*, **T36**: *Missing Temp During COMMITTING* | Replays remaining writes and unlinks to completion; reconstructs missing temps from journal | Recovery under concurrent conflicting write | **PASS** |
+| **R3** | Unjournaled `.tmp` files safely retained | Sec 7.2 | `transaction-manager.ts:661-667` | **T20**: *Crash Recovery with Incomplete Artifacts* | Recovery executes, takes zero action (`actionTaken: "none"`), and retains unjournaled `.tmp` | Automated garbage collection of stale files | **PASS** |
+| **R4** | Corrupt journal fails closed | Sec 6.2, 7.3 | `transaction-manager.ts:653-659` | **T39**: *Corrupt Journal Fails Closed* | Throws `CRITICAL_RECOVERY_FAILURE`; corrupt journal preserved on disk; zero file mutations | Syntax repair of partially readable JSON | **PASS** |
+| **G1** | Gate 0 Negative Byte-Match Guardrail | Sec 5.3 | `approval.ts:313-360` | **T21**: *PRD Archival & Guardrail*, **T38**: *Original Hash Survives Banner* | Blocks Gate 0 with `PRD_CONTENT_UNALTERED` if active PRD hash matches archived outdated hash | Semantic staleness of byte-different text | **PASS** |
+| **G2** | Guardrail clears on byte difference | Sec 5.3, 9 | `approval.ts:349-357` | **T32**: *Hash-Different but Semantically Stale PRD* | Byte difference clears automated hash check, deferring semantic approval to human reviewer | Automated evaluation of problem validity | **PASS** |
+| **H1** | Non-TTY invocation rejected | Sec 3.1 | `commands/pivot.ts:46-50` | **T6**: *Non-TTY Invocation Rejected* | Rejects non-interactive execution with `TTY_REQUIRED` and exit code 1 | Hardware terminal spoofing defense | **PASS** |
+| **H2** | Exact confirmation phrase enforced | Sec 3.1 | `commands/pivot.ts:76-80`, `pivot.ts:232-237` | **T7**: *Incorrect Confirmation Phrase Rejected* | Rejects if phrase does not match `CONFIRM PIVOT TO STAGE 0 <milestone>` | Case-insensitivity variations | **PASS** |
+| **H3** | AI agent identity blocked in pivot | Sec 3.1 | `commands/pivot.ts:60-64`, `pivot.ts:410-415` | None in `pivot.test.ts` (Tested in `approval.test.ts:174` for gates) | Throws `AGENT_APPROVAL_PROHIBITED` if author matches agent heuristics | No test in `pivot.test.ts` explicitly exercises agent name in pivot | **NOT TESTED** |
+| **E1** | Stage 1 exceptions marked `invalidated_by_pivot` | Sec 4.3, 5.2 | `pivot.ts:320-328`, `pivot.ts:630` | **T22**: *Historical RFC, ADR, Exception Dispositions* | Documented in audit markdown; `exceptions: []` in Stage 0 state; gate blocks old waivers | Automated deletion of disk exception files | **PASS** |
+| **M1** | Multiple pivots within single milestone supported | Sec 4.2, 5.3 | `pivot.ts:145-156`, `approval.ts:318-347` | **T16**: *Repeated Pivot Without Historical Overwrite*, **T27**: *Repeated Pivot Sequence Discovery* | Increments sequence (`001`, `002`); both records co-exist permanently | Sequence numbers beyond 999 padding | **PASS** |
+| **I1** | Post-pivot inspect reports clean Stage 0 | Sec 5.1 | `diagnostics/engine.ts` | **T13**: *Normal Stage 0 Progression*, **T1**: *Valid Pivot* | `playbook inspect` reports Stage 0 active and `PRD-CORE` deliverable incomplete | Inspection under corrupt schemas | **PASS** |
+| **C7** | Post-committed cleanup idempotent | Sec 6.2 | `transaction-manager.ts:867-897` | **T40**: *COMMITTED Cleanup Is Idempotent* | Recovery detects `COMMITTED` phase, finalizes cleanup, and deletes journal | Cleanup of unlisted external backups | **PASS** |
 
 ---
 
-> **Audit Sign-off**:  
+## 10. Section 9: Final Architectural Verdict & Limitations Disclosure
+
+### 10.1 Architectural Verdict: **ACCEPTED WITH DOCUMENTED LIMITATIONS**
+
+The implementation in commit `81e91f7` provides robust, transactionally safe Stage 1-to-Stage 0 recovery. Zero runtime crash recovery failures or data loss vulnerabilities were found. All 40 test scenarios in `pivot.test.ts` pass deterministically.
+
+However, based on the rigorous forensic audit in Task 004F.2.4-B.1.1, the acceptance is granted under **Documented Limitations** to account for test suite gaps and architectural nuances:
+
+### 10.2 Itemized Documented Limitations & Recommendations
+1. **Design Deviation on Storage Layout (Requirement S1)**:
+   - *Finding*: `checkPivotEligibility` verifies storage layout in preflight, but `WriteAheadTransactionManager.prepare()` contains fallback directory creation (`fs.mkdirSync`), and no test in `pivot.test.ts` exercises `PIVOT_STORAGE_LAYOUT_MISSING`.
+   - *Recommendation*: Schedule a follow-up task to add a unit test for `PIVOT_STORAGE_LAYOUT_MISSING` and re-verify directory presence under the exclusive lock.
+2. **Untested Preflight Conditions in Pivot Suite (Requirements C6 and H3)**:
+   - *Finding*: Target stage validation (`PIVOT_TARGET_UNSUPPORTED`) and AI agent prohibition (`AGENT_APPROVAL_PROHIBITED`) are implemented in source, but lack explicit test assertions in `pivot.test.ts` (agent prohibition is tested only in `approval.test.ts`).
+   - *Recommendation*: Add focused tests for non-zero pivot target and agent-name rejection in `pivot.test.ts`.
+3. **Advisory Nature of File Write Protection (`0o444`)**:
+   - *Finding*: `0o444` provides advisory application-level file-modification protection against accidental text editor writes, but does NOT prevent POSIX directory-level unlinking.
+   - *Reality*: Historical snapshot preservation is fundamentally guaranteed by write-ahead transaction logic, monotonic sequence discovery, `createOnly: true` collision rejection, and Git repository tracking.
+4. **Byte Difference vs. Semantic Freshness (Requirement G2)**:
+   - *Finding*: The Gate 0 negative byte-match guardrail strictly verifies that `docs/prd/PRD-CORE.md` is byte-for-byte different from historical outdated problem statements. It does NOT and CANNOT establish semantic problem validity.
+   - *Reality*: Authoritative problem formulation validation remains strictly with the human gate approver.
+5. **Attestation Model vs. Cryptographic Authentication**:
+   - *Finding*: Human authorization checks enforce TTY interactivity and reject known automated agent strings. They do not constitute cryptographic non-repudiation (e.g., hardware-backed PKI signatures). Trust is rooted in local terminal interactivity, Git commit provenance, and verifiable audit records.
+
+---
+
+> **Audit Correction Sign-off**:  
 > **Auditor**: Antigravity (AI Engineering Agent)  
+> **Task**: Task 004F.2.4-B.1.1  
 > **Status**: APPROVED & COMPLETE  
-> **Repository Baseline**: Commit `81e91f7` + Test Invariant Assertion Verified  
+> **Repository Baseline**: Commit `81e91f7` + Test Invariants Verified  

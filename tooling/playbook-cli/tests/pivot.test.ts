@@ -736,7 +736,15 @@ describe("Task 004F.2.4-B: Stage 1 to Stage 0 Pivot Governance Test Suite (40 Sc
     fs.writeFileSync(orphanedTmp, "orphaned tmp content", "utf-8");
 
     const txManager = new WriteAheadTransactionManager({ targetDir: tempDir });
-    await txManager.lockManager.withLock((lock) => txManager.recover(lock));
+    let recoveryResult: any;
+    await txManager.lockManager.withLock(async (lock) => {
+      recoveryResult = await txManager.recover(lock);
+    });
+
+    // Explicitly verify recovery executed and determined no journal exists
+    assert.ok(recoveryResult, "Recovery must have executed");
+    assert.strictEqual(recoveryResult.actionTaken, "none");
+    assert.strictEqual(recoveryResult.recovered, false);
 
     // Recovery runs without error and preserves unjournaled temporary file (Phase A.2 retention invariant)
     assert.strictEqual(fs.existsSync(path.join(tempDir, DEFAULT_PATHS.stateFile)), true);
@@ -1249,12 +1257,16 @@ describe("Task 004F.2.4-B: Stage 1 to Stage 0 Pivot Governance Test Suite (40 Sc
     );
 
     const txManager = new WriteAheadTransactionManager({ targetDir: tempDir });
+    const journalFilePath = path.join(tempDir, DEFAULT_PATHS.transactionJournalFile);
     await assert.rejects(
       txManager.lockManager.withLock((lock) => txManager.recover(lock)),
       (err: unknown) =>
         err instanceof TransactionError &&
         (err.code === "TRANSACTION_JOURNAL_CORRUPT" || err.code === "CRITICAL_RECOVERY_FAILURE")
     );
+
+    // Verify corrupt journal is preserved on disk for manual operator triage (zero speculative cleanup)
+    assert.strictEqual(fs.existsSync(journalFilePath), true, "Corrupted journal must be preserved on disk");
   });
 
   // T40: COMMITTED Cleanup Is Idempotent
