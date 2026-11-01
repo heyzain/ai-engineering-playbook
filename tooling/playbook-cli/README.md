@@ -315,6 +315,65 @@ Returns exit code `0` on success and non-zero exit code (`1`) with clear, field-
 
 ---
 
+### `playbook approve`
+Interactive, human-only stage gate review and sign-off engine.
+
+```bash
+# Interactively review and approve the active stage gate
+playbook approve
+
+# Review a specific gate number
+playbook approve --gate 1
+
+# Provide reviewer name and title via flags (confirmation phrase prompted in TTY)
+playbook approve --gate 1 --reviewer "Jane Doe" --role "Principal Architect"
+
+# Formally reject a gate with mandatory rework conditions
+playbook approve --gate 1 --reviewer "Jane Doe" --role "Principal Architect" --reject --conditions "Missing negative test edge cases in REQ-SPEC"
+```
+
+#### Human Review & Anti-Self-Approval Protections
+- **Mandatory Interactive TTY**: Automated, scripted, or piped invocations without an interactive terminal are strictly rejected with `TTY_REQUIRED` (exit code `1`).
+- **AI Agent Prohibition**: Reviewer names matching known AI or synthetic agent patterns (e.g. `AI-Agent`, `Bot`, `Assistant`, `Claude`, `GPT`, `Gemini`, `Copilot`) are immediately rejected with `AGENT_APPROVAL_PROHIBITED`.
+- **Pre-Approval Gate Eligibility Validation**:
+  - 100% of stage deliverables must be `verified` (or `waived` under an active, unexpired exception).
+  - Zero blocking unresolved RFCs (`is_blocking: true`).
+  - Zero expired exceptions.
+  - Exit package markdown must exist, be structurally complete (minimum sections), and contain zero unresolved placeholders.
+- **Typed Confirmation Phrase**: Approver must type the explicit confirmation phrase (e.g. `CONFIRM APPROVAL GATE 1`) to prevent accidental keystroke approvals.
+- **Cryptographic State & Evidence Fingerprinting**: Upon approval, a cryptographic SHA-256 fingerprint of the entire state and all referenced evidence files is calculated and committed to `.playbook/approval-fingerprint.json` via a write-ahead log (WAL) transaction.
+
+---
+
+### `playbook advance`
+Atomically advances the lifecycle to the next stage (or closes the lifecycle at Stage 6) following formal human gate approval.
+
+```bash
+# Advance current approved stage to the next stage
+playbook advance
+
+# Advance with machine-readable JSON output
+playbook advance --json
+
+# Advance in a specific project directory
+playbook advance --cwd /path/to/project
+```
+
+#### Advancement Rules & Invariants
+- **Approval Precondition**: Active stage must have `stage_status: "approved"` and formal human sign-off recorded.
+- **Stale Approval Invalidation (`APPROVAL_STALE`)**: Re-verifies all evidence files and state payloads against `.playbook/approval-fingerprint.json`. If any deliverable or evidence file was tampered with or modified after human approval, advancement is blocked and requires re-approval.
+- **Atomic Two-Phase Commit**: State updates (`state.json`), manifest synchronization (`manifest.json`), and approval sidecar removal are committed atomically using Write-Ahead Logging (`.playbook/journal.json`) and advisory flock locking (`.playbook/playbook.lock`).
+- **History Archival**: The completed stage detail is moved into `stage_history[]` with approval metadata and timestamp.
+- **Baseline Deliverable Initialization**: Next stage baseline deliverables are populated into `current_stage_detail.deliverables[]`.
+- **Stage 6 Terminal Closure (`CLOSE_LIFECYCLE`)**:
+  - Advancing Stage 6 sets `lifecycle_status: "completed_terminal"` and seals the milestone.
+  - The current stage remains `6` (Stage 7 is strictly prohibited and never created).
+  - Creates a frozen, read-only milestone snapshot at `.playbook/milestones/state-<milestone_id>.json`.
+  - Collision defense (`SNAPSHOT_CONFLICT`): Existing snapshots cannot be overwritten.
+  - Subsequent calls to `playbook advance` throw `ADVANCEMENT_BLOCKED`.
+
+---
+
 ## 4. Downstream Directory Layout Created
 
 Running `playbook init` creates the canonical downstream layout defined in [governance/downstream-storage-convention.md](../../governance/downstream-storage-convention.md):
@@ -428,6 +487,12 @@ The CLI includes comprehensive tests running on Node's native test runner (`node
   - Tests CLI executable output formatting and machine-readable JSON.
 - **CLI Executable Integration Tests (`tests/cli.test.ts`)**:
   - Tests command dispatch, exit codes, version flags, and end-to-end `init` and `validate` executions.
+- **Gate Approval Engine Tests (`tests/approve.test.ts`)**:
+  - Tests TTY enforcement, confirmation phrase validation, agent anti-self-approval rejection, gate eligibility checks, and WAL-backed sidecar generation.
+- **Advancement Engine Tests (`tests/advance.test.ts`)**:
+  - Tests stage progression, manifest synchronization, stale approval invalidation, Stage 6 terminal closure, milestone snapshots, crash recovery, and lock cleanup.
+- **End-to-End Lifecycle Integration Tests (`tests/lifecycle-e2e.test.ts`)**:
+  - Validates full end-to-end downstream projects across Scenarios A through F (init, Stage 0, approval & advancement, multi-stage progressions, rejections, blocking RFCs, active/expired waivers, and Stage 6 terminal closure).
 
 Run tests:
 ```bash

@@ -52,11 +52,13 @@ When assigned a task, every AI agent must execute this standardized operational 
 ### Step 1: Context & State Inspection
 - Check current directory topology, Git status, and active branch.
 - Inspect machine-readable state (`.playbook/manifest.json` and `.playbook/state.json`) where configured, per [downstream-storage-convention.md](governance/downstream-storage-convention.md).
+- Run `playbook inspect` (or `playbook inspect --json`) to evaluate preliminary readiness, active blockers, unverified deliverables, and diagnostics.
 - Locate existing specifications, ADRs, active stage deliverables, and blocking RFCs.
 - Establish the current baseline without modifying any files.
 
 ### Step 2: Stage & Prerequisite Validation
 - Determine the target lifecycle stage according to [stage-gate-rules.md](governance/stage-gate-rules.md) and state file.
+- Run `playbook validate` to ensure project manifest and state strictly conform to JSON Schemas.
 - Verify that preceding stage artifacts exist and have been formally approved (confirmed in `stage_history`).
 - If prerequisites are missing or unapproved, **halt** and notify the human operator.
 
@@ -83,7 +85,8 @@ When assigned a task, every AI agent must execute this standardized operational 
 
 ### Step 6: Work Verification & Evidence Gathering
 - Execute relevant validation disciplines (automated test suites, type checks, static analysis, or manual/visual reviews).
-- Collect verifiable evidence (command output, test counts, linter output, or manual inspection checklist).
+- Collect verifiable evidence (command output, test counts, linter output, or manual inspection checklist) and persist under `.playbook/logs/` or `docs/`.
+- Run `playbook verify-evidence` (or `playbook verify-evidence --json`) to cryptographically confirm that all recorded evidence files exist and matching SHA-256 hashes are valid.
 - Update deliverable in `.playbook/state.json`: if verification checks pass, transition status to `verified`, set `validation_status: "passed"`, and append proof to `evidence[]` with `result: "passed"`.
 - If an authorized exception waives a requirement, set deliverable status to `waived`, `validation_status: "waived"`, and record `exception_ref`.
 - Deliverable completion requires concrete evidence, not merely an unverified agent claim. **Never treat `completed`, `verified`, and `approved` as interchangeable states.**
@@ -93,9 +96,9 @@ When assigned a task, every AI agent must execute this standardized operational 
 - Update `.playbook/state.json` (Phase 1): set `exit_package.status` to `submitted_for_review`, set `human_approval.status` to `pending_review`, and set `stage_status` to `pending_review`.
 - **The AI agent's authority boundary ends here.** AI agents cannot self-approve stage transitions.
 - Await human approval (Phase 2):
-  - **Solo Developer Mode**: Explicit human confirmation in the development conversation (PR optional).
-  - **Team Mode**: Formal Pull Request review sign-off.
-- Advance to the subsequent stage (`ADVANCE_STAGE` for Stages 0–5, or `CLOSE_LIFECYCLE` for Stage 6) only after explicit human approval is granted. Transitioning to a non-existent Stage 7 is strictly prohibited.
+  - **Solo Developer Mode**: Explicit human confirmation via interactive CLI session (`playbook approve --gate <N>`).
+  - **Team Mode**: Formal Pull Request review sign-off (`playbook approve --gate <N> --mode team --signature <PR_REF>`).
+- Following human approval, run `playbook advance` to advance to the subsequent stage (`ADVANCE_STAGE` for Stages 0–5, or `CLOSE_LIFECYCLE` for Stage 6). Transitioning to a non-existent Stage 7 is strictly prohibited.
 
 ---
 
