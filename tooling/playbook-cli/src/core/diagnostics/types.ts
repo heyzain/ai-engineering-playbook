@@ -84,7 +84,8 @@ export type DiagnosticCode =
   | "PIVOT_ABORTED"
   | "PIVOT_REASON_REQUIRED"
   | "STATE_CONCURRENTLY_MODIFIED"
-  | "PIVOT_TARGET_UNSUPPORTED";
+  | "PIVOT_TARGET_UNSUPPORTED"
+  | "PIVOT_STORAGE_LAYOUT_MISSING";
 
 export interface DiagnosticIssue {
   code: DiagnosticCode;

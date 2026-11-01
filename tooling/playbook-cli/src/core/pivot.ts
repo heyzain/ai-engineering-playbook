@@ -45,6 +45,33 @@ export interface PivotExecutionOptions {
   lockTimeoutMs?: number;
   txManager?: WriteAheadTransactionManager;
   validator?: SchemaValidator;
+  /** Test hook executed immediately after acquiring the lock and performing initial validations */
+  onUnderLockValidation?: () => void | Promise<void>;
+  /** Test hook executed immediately before txManager.prepare is invoked */
+  beforePrepare?: () => void | Promise<void>;
+}
+
+export const REQUIRED_PIVOT_DIRECTORIES = [
+  DEFAULT_PATHS.pivotsDir,
+  DEFAULT_PATHS.docsPivotsDir,
+  DEFAULT_PATHS.prdArchiveDir,
+] as const;
+
+/**
+ * Asserts that all mandatory storage directories required for Stage Pivot exist on disk.
+ * Fails closed with PIVOT_STORAGE_LAYOUT_MISSING if any required directory is absent.
+ */
+export function assertPivotStorageLayout(targetDir: string): void {
+  for (const relDir of REQUIRED_PIVOT_DIRECTORIES) {
+    const absDir = path.resolve(targetDir, relDir);
+    if (!fs.existsSync(absDir)) {
+      throw new TransactionError(
+        "PIVOT_STORAGE_LAYOUT_MISSING",
+        `Required pivot storage directory is missing: "${relDir}". Provision storage layout before executing pivot.`,
+        { missingDirectory: relDir, targetPath: relDir }
+      );
+    }
+  }
 }
 
 export interface PivotResult {
@@ -78,21 +105,8 @@ export function checkPivotEligibility(
     );
   }
 
-  // Preflight storage layout verification
-  const requiredDirs = [
-    path.resolve(targetDir, DEFAULT_PATHS.pivotsDir),
-    path.resolve(targetDir, DEFAULT_PATHS.docsPivotsDir),
-    path.resolve(targetDir, DEFAULT_PATHS.prdArchiveDir),
-  ];
-
-  for (const dir of requiredDirs) {
-    if (!fs.existsSync(dir)) {
-      throw new TransactionError(
-        "PIVOT_STORAGE_LAYOUT_MISSING",
-        `Required pivot storage directory is missing: "${path.relative(targetDir, dir)}". Provision storage layout before executing pivot.`
-      );
-    }
-  }
+  // Advisory preflight storage layout verification
+  assertPivotStorageLayout(targetDir);
 
   const manifestPath = path.resolve(targetDir, DEFAULT_PATHS.manifestFile);
   const statePath = path.resolve(targetDir, DEFAULT_PATHS.stateFile);
@@ -556,6 +570,14 @@ export async function executeStagePivot(
           );
         }
 
+        // Step 2.5: Re-verify mandatory storage layout under lock before sequence discovery
+        assertPivotStorageLayout(targetDir);
+
+        if (options.onUnderLockValidation) {
+          await options.onUnderLockValidation();
+          assertPivotStorageLayout(targetDir);
+        }
+
         // Step 3: Discover unique pivot sequence & event ID
         const { pivotId } = discoverNextPivotId(targetDir, state.milestone_id);
 
@@ -712,7 +734,12 @@ ${rawPrdContent}`;
           },
         ];
 
-        // Step 6: Execute WAL transaction
+        if (options.beforePrepare) {
+          await options.beforePrepare();
+          assertPivotStorageLayout(targetDir);
+        }
+
+        // Step 6: Execute WAL transaction with strict storage directory enforcement
         const journal = await txManager.prepare(
           "PIVOT_TO_STAGE_0",
           fileOperations,
@@ -723,6 +750,9 @@ ${rawPrdContent}`;
             fromStage: 1,
             toStage: 0,
             sourcePrdHash,
+          },
+          {
+            requireParentDirectoriesExist: true,
           }
         );
 

@@ -11,6 +11,7 @@ import {
   type FileOperationSpec,
   type RecoveryResult,
   type TransactionManagerOptions,
+  type TransactionPrepareOptions,
   type TransactionFaultInjectionHooks,
   TransactionError,
 } from "./types.js";
@@ -57,6 +58,7 @@ export class WriteAheadTransactionManager {
   readonly maxRenameRetries: number;
   readonly renameRetryDelayMs: number;
   readonly faultInjection: TransactionFaultInjectionHooks;
+  readonly requireParentDirectoriesExist: boolean;
 
   constructor(options?: TransactionManagerOptions) {
     this.targetDir = path.resolve(options?.targetDir || process.cwd());
@@ -74,6 +76,7 @@ export class WriteAheadTransactionManager {
     this.maxRenameRetries = options?.maxRenameRetries ?? 5;
     this.renameRetryDelayMs = options?.renameRetryDelayMs ?? 50;
     this.faultInjection = options?.faultInjection || {};
+    this.requireParentDirectoriesExist = options?.requireParentDirectoriesExist ?? false;
   }
 
   /**
@@ -83,9 +86,10 @@ export class WriteAheadTransactionManager {
   async executeTransaction<T>(
     action: string,
     fileOperations: (FileWriteSpec | FileOperationSpec)[],
-    metadata?: Record<string, unknown>
+    metadata?: Record<string, unknown>,
+    options?: TransactionPrepareOptions
   ): Promise<{ txId: string; recovery?: RecoveryResult }> {
-    return await this.withTransaction(action, fileOperations, undefined, metadata);
+    return await this.withTransaction(action, fileOperations, undefined, metadata, options);
   }
 
   /**
@@ -95,7 +99,8 @@ export class WriteAheadTransactionManager {
     action: string,
     fileOperations: (FileWriteSpec | FileOperationSpec)[],
     callback?: (journal: TransactionJournal) => Promise<T>,
-    metadata?: Record<string, unknown>
+    metadata?: Record<string, unknown>,
+    options?: TransactionPrepareOptions
   ): Promise<{ txId: string; result?: T; recovery?: RecoveryResult }> {
     return await this.lockManager.withLock(
       async (lockHandle) => {
@@ -104,7 +109,7 @@ export class WriteAheadTransactionManager {
         const recovery = await this.recover(lockHandle);
 
         // Step 1: Prepare transaction
-        const journal = await this.prepare(action, fileOperations, lockHandle, metadata);
+        const journal = await this.prepare(action, fileOperations, lockHandle, metadata, options);
 
         // Optional callback prior to commit
         let result: T | undefined;
@@ -130,7 +135,8 @@ export class WriteAheadTransactionManager {
     action: string,
     fileOperations: (FileWriteSpec | FileOperationSpec)[],
     lockHandle: TransactionLockHandle,
-    metadata?: Record<string, unknown>
+    metadata?: Record<string, unknown>,
+    options?: TransactionPrepareOptions
   ): Promise<TransactionJournal> {
     if (lockHandle.isReleased) {
       throw new TransactionError(
@@ -146,11 +152,21 @@ export class WriteAheadTransactionManager {
       );
     }
 
+    const requireParent =
+      options?.requireParentDirectoriesExist ?? this.requireParentDirectoriesExist;
+
     const txId = `tx-${Date.now()}-${crypto.randomUUID().slice(0, 8)}`;
     const journalFiles: JournalFileEntry[] = [];
 
     // Ensure .playbook directory exists
     if (!fs.existsSync(this.playbookDir)) {
+      if (requireParent) {
+        throw new TransactionError(
+          "PIVOT_STORAGE_LAYOUT_MISSING",
+          `Required storage directory is missing: "${DEFAULT_PATHS.playbookDir}". Directory creation is not permitted as an unjournaled side effect.`,
+          { targetPath: DEFAULT_PATHS.playbookDir, missingDirectory: DEFAULT_PATHS.playbookDir }
+        );
+      }
       fs.mkdirSync(this.playbookDir, { recursive: true });
     }
 
@@ -224,6 +240,19 @@ export class WriteAheadTransactionManager {
         });
       } else {
         const writeSpec = spec as FileWriteSpec;
+        const targetParentDir = path.dirname(absolutePath);
+        const requireParentForSpec =
+          writeSpec.requireParentDirectoryExists ?? requireParent;
+
+        if (requireParentForSpec && !fs.existsSync(targetParentDir)) {
+          const relParent = path.relative(this.targetDir, targetParentDir);
+          throw new TransactionError(
+            "PIVOT_STORAGE_LAYOUT_MISSING",
+            `Required storage directory is missing for "${relativePath}": "${relParent}". Directory creation is not permitted as an unjournaled side effect.`,
+            { targetPath: relativePath, missingDirectory: relParent }
+          );
+        }
+
         if (writeSpec.createOnly && existedBefore) {
           throw new TransactionError(
             "TARGET_ALREADY_EXISTS",
@@ -300,6 +329,14 @@ export class WriteAheadTransactionManager {
         const { absolutePath: absTmp } = validateCanonicalPath(this.targetDir, file.tmp_path);
         const tmpDir = path.dirname(absTmp);
         if (!fs.existsSync(tmpDir)) {
+          if (requireParent) {
+            const relTmp = path.relative(this.targetDir, tmpDir);
+            throw new TransactionError(
+              "PIVOT_STORAGE_LAYOUT_MISSING",
+              `Required storage directory is missing for staging file: "${relTmp}". Directory creation is not permitted as an unjournaled side effect.`,
+              { targetPath: file.target_path, missingDirectory: relTmp }
+            );
+          }
           fs.mkdirSync(tmpDir, { recursive: true });
         }
         safeWriteAndSync(absTmp, file.target_content!);

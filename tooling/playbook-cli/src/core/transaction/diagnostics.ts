@@ -181,6 +181,16 @@ export function createTransactionDiagnostic(
           "Synchronize manifest active_lifecycle_stage with state.current_stage before advancing.",
       };
 
+    case "PIVOT_STORAGE_LAYOUT_MISSING":
+      return {
+        code: "PIVOT_STORAGE_LAYOUT_MISSING",
+        severity: "error",
+        message: error.message,
+        path: (error.details?.missingDirectory as string) || (error.details?.targetPath as string) || targetDir,
+        remediation:
+          "Required pivot storage directory is missing. Ensure .playbook/pivots/, docs/pivots/, and docs/prd/archive/ exist before executing pivot.",
+      };
+
     case "RECOVERY_FAILED":
     case "TRANSACTION_LOCK_FAILED":
     default:

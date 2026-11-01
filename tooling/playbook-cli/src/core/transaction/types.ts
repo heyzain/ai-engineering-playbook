@@ -79,6 +79,8 @@ export interface FileWriteSpec {
   expectedPreviousSha256?: string;
   /** Set read-only permissions (0o444) on successful commit */
   readOnlyOnCommit?: boolean;
+  /** Disallow automatic mkdirSync; fail if parent directory is missing on disk */
+  requireParentDirectoryExists?: boolean;
 }
 
 /**
@@ -216,6 +218,17 @@ export interface TransactionFaultInjectionHooks {
 }
 
 /**
+ * Options for transaction preparation phase.
+ */
+export interface TransactionPrepareOptions {
+  /**
+   * If true, requires that parent directories for all staged write targets exist before prepare.
+   * Disables automatic recursive mkdirSync fallback during temporary file staging.
+   */
+  requireParentDirectoriesExist?: boolean;
+}
+
+/**
  * Configuration options for WriteAheadTransactionManager.
  */
 export interface TransactionManagerOptions {
@@ -226,4 +239,8 @@ export interface TransactionManagerOptions {
   maxRenameRetries?: number;
   renameRetryDelayMs?: number;
   faultInjection?: TransactionFaultInjectionHooks;
+  /**
+   * Default setting for whether parent directories must exist on disk for all operations.
+   */
+  requireParentDirectoriesExist?: boolean;
 }
