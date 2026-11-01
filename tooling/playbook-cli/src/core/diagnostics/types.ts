@@ -74,6 +74,8 @@ export type DiagnosticCode =
   | "SNAPSHOT_MISSING"
   | "REOPEN_BLOCKED"
   | "PRD_CORE_MISSING"
+  | "PRD_ASSESSMENT_MISSING"
+  | "PRD_ASSESSMENT_OUTDATED"
   | "INHERITED_PREREQUISITE_ASSESSMENT";
 
 export interface DiagnosticIssue {

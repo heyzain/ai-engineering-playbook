@@ -2,6 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { TerminalPrompter, type PromptInterface } from "../utils/prompt.js";
 import { checkGateEligibility, approveGate, rejectGate, isForbiddenAgentName } from "../core/approval.js";
+import { evaluatePrdApplicability } from "../core/prd-applicability.js";
 import { TransactionError } from "../core/transaction/index.js";
 import type { ApprovalMode } from "../constants.js";
 
@@ -162,14 +163,24 @@ export async function runApprove(options: ApproveCommandOptions = {}): Promise<A
       }
       console.log("-".repeat(68));
       if (state.lifecycle_status === "reopened_maintenance" && gate === 1) {
-        console.log(" INHERITED PREREQUISITE ASSESSMENT (Stage 0 Problem Formulation):");
         const prdCorePath = path.resolve(targetDir, "docs/prd/PRD-CORE.md");
         const prdCoreExists = fs.existsSync(prdCorePath);
+        const assessment = evaluatePrdApplicability(targetDir, stageDetail);
+
+        console.log(" INHERITED PREREQUISITE ASSESSMENT (Stage 0 Problem Formulation):");
         console.log(`  Foundational Artifact: docs/prd/PRD-CORE.md (exists: ${prdCoreExists ? "YES" : "NO"})`);
-        console.log("  Applicability Notice:  The human reviewer must verify that the original");
-        console.log(`                         problem statement remains valid for milestone ${state.milestone_id}.`);
-        console.log("                         If the problem formulation is invalid or obsolete,");
-        console.log("                         Gate 1 approval MUST BE REJECTED and the project");
+        console.log(`  Assessment Artifact:   ${assessment.path || "NOT RECORDED (BLOCKING)"}`);
+        console.log(`  Author Determination:  ${(assessment.determination || assessment.status).toUpperCase()}`);
+        if (assessment.summary) {
+          console.log(`  Assessment Summary:    ${assessment.summary}`);
+        }
+        if (assessment.reason) {
+          console.log(`  Invalidation Reason:   ${assessment.reason}`);
+        }
+        console.log("  Reviewer Instruction:  The human reviewer must evaluate whether PRD-CORE");
+        console.log(`                         remains applicable to maintenance milestone ${state.milestone_id}.`);
+        console.log("                         If obsolete or invalidated by domain pivot,");
+        console.log("                         Gate 1 approval MUST BE REJECTED and project");
         console.log("                         reopened at Stage 0 (playbook reopen --stage 0).");
         console.log("-".repeat(68));
       }

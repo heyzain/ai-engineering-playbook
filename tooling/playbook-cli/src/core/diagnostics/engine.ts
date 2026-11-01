@@ -2,6 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { SCHEMA_VERSION } from "../../constants.js";
 import { SchemaValidator } from "../validator.js";
+import { evaluatePrdApplicability } from "../prd-applicability.js";
 import type {
   InspectionRawData,
   InspectionReport,
@@ -214,7 +215,9 @@ export class DiagnosticsEngine {
 
         if (state.current_stage === 1) {
           const prdCorePath = path.resolve(raw.targetDir, "docs/prd/PRD-CORE.md");
-          if (!fs.existsSync(prdCorePath)) {
+          const prdCoreExists = fs.existsSync(prdCorePath);
+
+          if (!prdCoreExists) {
             diagnostics.push({
               code: "PRD_CORE_MISSING",
               severity: "error",
@@ -222,11 +225,30 @@ export class DiagnosticsEngine {
               path: "docs/prd/PRD-CORE.md",
               remediation: "Restore PRD-CORE.md or reopen lifecycle at Stage 0 to re-establish the problem baseline.",
             });
-          } else {
+          }
+
+          const assessment = evaluatePrdApplicability(raw.targetDir, state.current_stage_detail);
+          if (assessment.status === "outdated") {
+            diagnostics.push({
+              code: "PRD_ASSESSMENT_OUTDATED",
+              severity: "error",
+              message: `Inherited foundational Problem Statement in 'docs/prd/PRD-CORE.md' was assessed as OUTDATED${assessment.reason ? `: ${assessment.reason}` : ""}. Stage 1 progression is BLOCKED. A fundamental domain pivot requires re-opening at Stage 0.`,
+              path: assessment.path || "docs/prd/PRD-CORE.md",
+              remediation: "Reopen lifecycle at Stage 0 ('playbook reopen --stage 0') to reformulate the core problem statement.",
+            });
+          } else if (assessment.status === "applicable") {
             diagnostics.push({
               code: "INHERITED_PREREQUISITE_ASSESSMENT",
               severity: "info",
-              message: "Stage 1 maintenance milestone requires human assessment of inherited 'docs/prd/PRD-CORE.md' applicability during Gate 1 review.",
+              message: `Inherited foundational Problem Statement 'docs/prd/PRD-CORE.md' assessed as APPLICABLE for milestone '${state.milestone_id}'. Assessment artifact: ${assessment.path}.`,
+              path: assessment.path,
+              remediation: "Review applicability assessment during Gate 1 human approval.",
+            });
+          } else if (prdCoreExists) {
+            diagnostics.push({
+              code: "INHERITED_PREREQUISITE_ASSESSMENT",
+              severity: "info",
+              message: "Stage 1 maintenance milestone requires assessment of inherited 'docs/prd/PRD-CORE.md' applicability before Gate 1 approval.",
               path: "docs/prd/PRD-CORE.md",
               remediation: "Confirm continued validity in REQ-SPEC or reopen at Stage 0 if problem formulation has changed.",
             });

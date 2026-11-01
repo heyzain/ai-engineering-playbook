@@ -4,6 +4,7 @@ import crypto from "node:crypto";
 import { DEFAULT_PATHS, type ApprovalMode, type StageNumber } from "../constants.js";
 import { SchemaValidator } from "./validator.js";
 import { getStageBaselineDeliverables } from "./stage-defaults.js";
+import { evaluatePrdApplicability } from "./prd-applicability.js";
 import {
   WriteAheadTransactionManager,
   TransactionError,
@@ -260,6 +261,36 @@ export function checkGateEligibility(
           "Inherited foundational Problem Statement 'docs/prd/PRD-CORE.md' is missing from disk. Maintenance requirements cannot proceed without a valid problem baseline. Reopen at Stage 0 to re-establish PRD Core.",
         path: "docs/prd/PRD-CORE.md",
         remediation: "Restore docs/prd/PRD-CORE.md or execute 'playbook reopen --stage 0'.",
+      });
+    }
+
+    // Explicit Applicability Assessment Check
+    const assessment = evaluatePrdApplicability(targetDir, state.current_stage_detail);
+    if (assessment.status === "missing") {
+      diagnostics.push({
+        code: "GATE_CRITERIA_UNMET",
+        severity: "error",
+        message:
+          "Inherited PRD applicability assessment is missing. In reopened maintenance mode, Gate 1 requires an explicit assessment confirming whether 'docs/prd/PRD-CORE.md' remains applicable.",
+        path: "docs/prd/REQUIREMENTS-SPEC.md",
+        remediation:
+          "Record an applicability assessment in docs/prd/REQUIREMENTS-SPEC.md or docs/prd/PRD-CORE-ASSESSMENT.md declaring 'Applicability: APPLICABLE' with supporting justification.",
+      });
+    } else if (assessment.status === "outdated") {
+      diagnostics.push({
+        code: "GATE_CRITERIA_UNMET",
+        severity: "error",
+        message: `Inherited foundational Problem Statement in 'docs/prd/PRD-CORE.md' is marked OUTDATED${assessment.reason ? `: ${assessment.reason}` : ""}. Stage 1 progression is BLOCKED. A fundamental domain pivot requires re-opening at Stage 0.`,
+        path: assessment.path || "docs/prd/PRD-CORE.md",
+        remediation: "Reopen lifecycle at Stage 0 ('playbook reopen --stage 0') to reformulate the core problem statement.",
+      });
+    } else if (assessment.status === "ambiguous") {
+      diagnostics.push({
+        code: "GATE_CRITERIA_UNMET",
+        severity: "error",
+        message: `Inherited PRD applicability assessment at '${assessment.path}' lacks an explicit determination (must declare 'Applicability: APPLICABLE' or 'Applicability: OUTDATED').`,
+        path: assessment.path || "docs/prd/REQUIREMENTS-SPEC.md",
+        remediation: "Update the assessment document with an explicit 'Applicability: APPLICABLE' or 'Applicability: OUTDATED' determination.",
       });
     }
   }

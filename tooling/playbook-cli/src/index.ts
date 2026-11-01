@@ -25,6 +25,7 @@ export * from "./core/fingerprint.js";
 export * from "./core/stage-defaults.js";
 export * from "./core/approval.js";
 export * from "./core/advancement.js";
+export * from "./core/prd-applicability.js";
 export * from "./core/reopen.js";
 export * from "./commands/approve.js";
 export * from "./commands/advance.js";
