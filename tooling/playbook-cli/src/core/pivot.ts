@@ -418,8 +418,13 @@ export async function executeStagePivot(
     );
   }
 
-  // Interactive session requirement
-  if (options.isTTY === false) {
+  // Interactive session requirement (C5)
+  const isInteractive =
+    options.isTTY !== undefined
+      ? options.isTTY
+      : Boolean(process.stdin.isTTY) && Boolean(process.stdout.isTTY);
+
+  if (!isInteractive) {
     throw new TransactionError(
       "TTY_REQUIRED",
       "Stage pivot requires an interactive terminal session with human attestation. Automated, headless, or scripted execution claiming human authorization is strictly prohibited."

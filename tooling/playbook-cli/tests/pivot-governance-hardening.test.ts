@@ -7,9 +7,14 @@ import os from "node:os";
 import { DEFAULT_PATHS, STAGE_NAMES, type ProjectState, type ProjectManifest } from "../src/index.js";
 import {
   checkPivotEligibility,
-  executeStagePivot,
+  executeStagePivot as coreExecuteStagePivot,
   type PrePromptBaseline,
+  type PivotExecutionOptions,
 } from "../src/core/pivot.js";
+
+function executeStagePivot(targetDir: string, options: PivotExecutionOptions) {
+  return coreExecuteStagePivot(targetDir, { isTTY: true, ...options });
+}
 import { runPivot } from "../src/commands/pivot.js";
 import { isForbiddenAgentName } from "../src/core/approval.js";
 import { WriteAheadTransactionManager } from "../src/core/transaction/transaction-manager.js";

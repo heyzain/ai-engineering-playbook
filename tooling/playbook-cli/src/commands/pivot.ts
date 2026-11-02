@@ -175,6 +175,7 @@ export async function runPivot(options: PivotCommandOptions = {}): Promise<Pivot
       reason,
       confirmationPhrase,
       baseline,
+      isTTY: true,
     });
 
     const successMessage =

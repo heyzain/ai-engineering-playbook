@@ -7,10 +7,15 @@ import os from "node:os";
 import { DEFAULT_PATHS, type ProjectState, type ProjectManifest } from "../src/index.js";
 import {
   checkPivotEligibility,
-  executeStagePivot,
+  executeStagePivot as coreExecuteStagePivot,
   assertPivotStorageLayout,
   REQUIRED_PIVOT_DIRECTORIES,
+  type PivotExecutionOptions,
 } from "../src/core/pivot.js";
+
+function executeStagePivot(targetDir: string, options: PivotExecutionOptions) {
+  return coreExecuteStagePivot(targetDir, { isTTY: true, ...options });
+}
 import { runPivot } from "../src/commands/pivot.js";
 import { WriteAheadTransactionManager } from "../src/core/transaction/transaction-manager.js";
 import { TransactionError } from "../src/core/transaction/types.js";

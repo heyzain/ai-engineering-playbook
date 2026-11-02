@@ -3,7 +3,16 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { executeStagePivot, checkPivotEligibility, discoverNextPivotId } from "../src/core/pivot.js";
+import {
+  executeStagePivot as coreExecuteStagePivot,
+  checkPivotEligibility,
+  discoverNextPivotId,
+  type PivotExecutionOptions,
+} from "../src/core/pivot.js";
+
+function executeStagePivot(targetDir: string, options: PivotExecutionOptions) {
+  return coreExecuteStagePivot(targetDir, { isTTY: true, ...options });
+}
 import { runPivot } from "../src/commands/pivot.js";
 import { checkGateEligibility } from "../src/core/approval.js";
 import { advanceStage } from "../src/core/advancement.js";
