@@ -13,6 +13,7 @@
 - **Evidence Verification Engine (`playbook verify-evidence`)**: Read-only verification of evidence files against `.playbook/state.json`, checking file existence, path safety, and SHA-256 cryptographic integrity without modifying disk or state.
 - **Project Bootstrapping (`playbook init`)**: Scaffolds standard downstream repository directories (`.playbook/`, `docs/prd/`, `docs/adr/`, `docs/rfcs/`, `docs/gates/`, `docs/exceptions/`, `.playbook/logs/`) and generates schema-conforming `manifest.json` and Stage 0 `state.json`.
 - **Controlled Lifecycle Reopening (`playbook reopen`)**: Safely transitions a previously closed milestone (`completed_terminal`) into a new maintenance milestone (`reopened_maintenance`) under mandatory interactive human authorization, preserving prior milestone snapshots and archived history.
+- **Maintenance Stage Pivot (`playbook pivot`)**: Safely pivots an active maintenance milestone (`reopened_maintenance`) from Stage 1 back to Stage 0 when the foundational problem formulation (`PRD-CORE.md`) is determined to be `OUTDATED`, capturing a pre-pivot state snapshot in `.playbook/pivots/`, archiving the outdated PRD in `docs/prd/archive/`, and writing a markdown audit document in `docs/pivots/` under mandatory interactive human authorization.
 - **Accidental State Overwrite Protection**: Refuses to overwrite existing governance manifests or lifecycle state files without explicit human confirmation or the `--force` flag.
 - **Real JSON Schema Validation**: Compiles and verifies JSON Schema Draft 2020-12 specifications (`schemas/project-manifest.schema.json` and `schemas/project-state.schema.json`) with detailed JSON-pointer diagnostics.
 - **Cross-Platform Path Normalization**: Enforces canonical POSIX forward slashes (`/`) for relative paths across Windows, macOS, and Linux, preventing git diff churn.
@@ -424,6 +425,71 @@ playbook reopen --cwd /path/to/project
 
 ---
 
+### `playbook pivot`
+Interactively pivots an active maintenance milestone from Stage 1 (Requirements & Specification) back to Stage 0 (Discovery & Problem Formulation) under an authorized human decision when the foundational problem statement (`PRD-CORE.md`) is determined to be outdated.
+
+```bash
+# Interactive terminal pivot prompt
+playbook pivot
+
+# Specify target stage explicitly (must be 0)
+playbook pivot --stage 0
+
+# Provide authorizer identity and reason via flags (confirmation phrase prompted in TTY)
+playbook pivot \
+  --stage 0 \
+  --authorized-by "Alice Human" \
+  --role "Lead Architect" \
+  --reason "Core problem statement invalidated by customer feedback"
+
+# Pivot with machine-readable JSON output
+playbook pivot --json
+
+# Pivot in a specific project directory
+playbook pivot --cwd /path/to/project
+```
+
+#### Flags & Options
+| Flag | Short | Description | Default |
+| :--- | :--- | :--- | :--- |
+| `--stage <0>` | | Target stage to pivot to (must be `0`; Stage 0 is the only supported pivot target). | Prompted (`0`) |
+| `--authorized-by <name>` | | Authorizing human engineer full name. Prohibits automated AI agent identifiers. | Prompted |
+| `--role <role>` | | Professional role or title of authorizing human engineer. | Prompted |
+| `--reason <text>` | | Explicit, non-empty business rationale explaining why `PRD-CORE.md` is outdated. | Prompted |
+| `--confirmation-phrase <text>`| | Pre-supplies the exact confirmation phrase (`CONFIRM PIVOT TO STAGE 0 <MILESTONE_ID>`). Does not bypass the mandatory TTY check. | Prompted |
+| `--cwd <path>` | | Target project directory path. | `process.cwd()` |
+| `--json` | | Output machine-readable JSON summary. | `false` |
+| `--non-interactive` | | Explicitly fails closed with `TTY_REQUIRED` (stage pivot strictly requires an interactive terminal session). | `false` |
+
+#### Prerequisites & Guardrails
+- **Lifecycle Mode Precondition (`LIFECYCLE_NOT_MAINTENANCE`)**: Only permitted for active milestones in `reopened_maintenance` mode. Initial lifecycles or paused projects cannot execute a pivot.
+- **Stage Boundary Precondition (`PIVOT_INVALID_STAGE`)**: Current stage must be Stage 1 (Requirements & Specification). Pivoting from other stages is strictly prohibited.
+- **Unapproved Stage Guard (`STAGE_ALREADY_APPROVED`)**: Stage 1 must not have received formal human gate approval (`stage_status !== "approved"` and `human_approval.decision !== "GATE_APPROVED"`). Approved stages cannot be reversed via pivot.
+- **Target Stage Boundary (`PIVOT_TARGET_UNSUPPORTED`)**: Target stage must be `0`. Pivoting to any other stage is rejected before any mutations.
+- **PRD Applicability Precondition (`PIVOT_PRD_NOT_OUTDATED`)**:
+  - Foundational `docs/prd/PRD-CORE.md` must physically exist on disk.
+  - A PRD applicability assessment artifact (`docs/prd/PRD-CORE-ASSESSMENT.md` or deliverable evidence) bound to the active milestone must have determination `OUTDATED`.
+- **Mandatory Storage Layout (`PIVOT_STORAGE_LAYOUT_MISSING`)**: Required parent directories `.playbook/pivots/`, `docs/pivots/`, and `docs/prd/archive/` must exist on disk prior to pivot execution.
+- **Mandatory Interactive Human Confirmation (`TTY_REQUIRED`)**:
+  - Requires an interactive terminal session (TTY) on both stdin and stdout. Headless, piped, or scripted invocations reject fail-closed with `TTY_REQUIRED` (`exit code 1`).
+  - Prohibits automated AI agent identifiers via `AGENT_APPROVAL_PROHIBITED`.
+  - Requires typing the exact confirmation phrase: `CONFIRM PIVOT TO STAGE 0 <MILESTONE_ID>`.
+
+#### Pivot Execution Behavior & Atomic WAL Artifacts
+- **Monotonic Event ID**: Scans `.playbook/pivots/`, `docs/pivots/`, and `docs/prd/archive/` to assign the next unique, collision-free event ID: `PVT-<milestoneId>-<seq>` (e.g. `PVT-M-1.1.0-001`).
+- **Pre-Pivot State Snapshot**: Serializes full Stage 1 state to `.playbook/pivots/state-<PVT_ID>.json` with read-only permissions (`chmod 0o444`, best-effort on supported platforms; collision-protected via `TARGET_ALREADY_EXISTS`).
+- **Outdated PRD Archival**: Moves `docs/prd/PRD-CORE.md` to `docs/prd/archive/PRD-CORE.<PVT_ID>.outdated.md`, preserving historical requirements context.
+- **Audit Document Generation**: Writes a comprehensive governance audit report to `docs/pivots/<PVT_ID>.md` capturing authorizer identity, rationale, preserved deliverables, and Stage 0 remediation directives.
+- **In-Place Stage Reset**: Sets `current_stage: 0`, re-initializes Stage 0 baseline deliverables (`PRD-CORE`), updates `manifest.json` (`active_lifecycle_stage: 0`), and unlinks lingering approval sidecars.
+- **Atomic Two-Phase Commit**: Committed atomically under Write-Ahead Logging (`.playbook/tx-journal.json`) and transaction mutex locking (`.playbook/transaction.lock`).
+
+#### Documented Limitations
+- **Unauthenticated Attestation**: Authorizer name and role are captured via interactive terminal prompts without cryptographic identity verification (GPG/OIDC).
+- **Programmatic Boundary Limitation**: In-process programmatic callers importing `executeStagePivot()` can supply `{ isTTY: true }` without physical terminal validation, acting as an unauthenticated attestation assertion (consistent with B.3.5 and Stage Reopen).
+- **Working Tree Git Boundary**: State snapshots and audit markdown files are generated in the local working directory and require explicit Git commits (`git add` and `git commit`).
+
+---
+
 ## 4. Downstream Directory Layout Created
 
 Running `playbook init` creates the canonical downstream layout defined in [governance/downstream-storage-convention.md](../../governance/downstream-storage-convention.md):
@@ -433,16 +499,24 @@ Running `playbook init` creates the canonical downstream layout defined in [gove
 ├── .playbook/
 │   ├── manifest.json       # Project identity, tech stack, governance profile & paths
 │   ├── state.json          # Active lifecycle stage (Stage 0: not_started), deliverables & audit log
+│   ├── milestones/         # Governance-frozen milestone snapshots (0o444 on supported platforms)
+│   │   └── .gitkeep
+│   ├── pivots/             # Pre-pivot Stage 1 machine-readable state snapshots (0o444 on supported platforms)
+│   │   └── .gitkeep
 │   └── logs/               # Verifiable test runner and static analysis proof outputs
 │       └── .gitkeep
 └── docs/
     ├── prd/                # Product Requirements Documents (Stage 0 & 1)
-    │   └── .gitkeep
+    │   ├── .gitkeep
+    │   └── archive/        # Archived outdated PRDs from stage pivots
+    │       └── .gitkeep
     ├── adr/                # Architecture Decision Records (Stage 2)
     │   └── .gitkeep
     ├── rfcs/               # Clarification Requests (Gap analysis halts)
     │   └── .gitkeep
     ├── gates/              # Stage Gate Exit Packages (Gates 0–6)
+    │   └── .gitkeep
+    ├── pivots/             # Human-readable stage pivot audit documents
     │   └── .gitkeep
     └── exceptions/         # Authorized Gate Exceptions (EXC-YYYYMMDD-###.md)
         └── .gitkeep
@@ -537,10 +611,14 @@ The CLI includes comprehensive tests running on Node's native test runner (`node
   - Tests CLI executable output formatting and machine-readable JSON.
 - **CLI Executable Integration Tests (`tests/cli.test.ts`)**:
   - Tests command dispatch, exit codes, version flags, and end-to-end `init` and `validate` executions.
-- **Gate Approval Engine Tests (`tests/approve.test.ts`)**:
+- **Gate Approval Engine Tests (`tests/approval.test.ts`)**:
   - Tests TTY enforcement, confirmation phrase validation, agent anti-self-approval rejection, gate eligibility checks, and WAL-backed sidecar generation.
-- **Advancement Engine Tests (`tests/advance.test.ts`)**:
+- **Advancement Engine Tests (`tests/advancement.test.ts`)**:
   - Tests stage progression, manifest synchronization, stale approval invalidation, Stage 6 terminal closure, milestone snapshots, crash recovery, and lock cleanup.
+- **Stage Reopening Engine Tests (`tests/reopen.test.ts`, `tests/reopen-tty-alignment.test.ts`)**:
+  - Tests lifecycle status preconditions, milestone snapshots, collision defense, inherited PRD checks, lock recovery, fail-closed TTY enforcement, and zero-mutation guarantees.
+- **Stage Pivot Engine Tests (`tests/pivot.test.ts`, `tests/programmatic-tty-alignment.test.ts`)**:
+  - Tests preflight eligibility, prerequisite invariants (C1–C6), storage layout enforcement, monotonic sequence discovery, collision avoidance, PRD archival, audit document generation, atomic WAL rollforward/rollback, and programmatic TTY alignment.
 - **End-to-End Lifecycle Integration Tests (`tests/lifecycle-e2e.test.ts`)**:
   - Validates full end-to-end downstream projects across Scenarios A through F (init, Stage 0, approval & advancement, multi-stage progressions, rejections, blocking RFCs, active/expired waivers, and Stage 6 terminal closure).
 
