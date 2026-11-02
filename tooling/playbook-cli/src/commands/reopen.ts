@@ -302,6 +302,7 @@ export async function runReopen(options: ReopenCommandOptions = {}): Promise<Reo
       reason,
       authorizedBy,
       role,
+      isTTY: true,
     });
 
     const successMessage =

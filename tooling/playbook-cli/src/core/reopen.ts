@@ -19,6 +19,7 @@ export interface ReopenLifecycleOptions {
   reason: string;
   authorizedBy: string;
   role: string;
+  isTTY?: boolean;
   now?: Date;
   lockTimeoutMs?: number;
   txManager?: WriteAheadTransactionManager;
@@ -43,6 +44,18 @@ export async function reopenLifecycle(
   targetDir: string,
   options: ReopenLifecycleOptions
 ): Promise<ReopenLifecycleResult> {
+  const isInteractive =
+    options.isTTY !== undefined
+      ? options.isTTY
+      : Boolean(process.stdin.isTTY) && Boolean(process.stdout.isTTY);
+
+  if (!isInteractive) {
+    throw new TransactionError(
+      "TTY_REQUIRED",
+      "Lifecycle reopening requires an interactive terminal session with human attestation. Automated, headless, or scripted execution claiming human authorization is strictly prohibited."
+    );
+  }
+
   const validator = options.validator || new SchemaValidator();
   const manifestPath = path.resolve(targetDir, DEFAULT_PATHS.manifestFile);
   const statePath = path.resolve(targetDir, DEFAULT_PATHS.stateFile);

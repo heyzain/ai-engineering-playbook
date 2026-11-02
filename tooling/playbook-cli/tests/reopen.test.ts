@@ -6,7 +6,14 @@ import path from "node:path";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { fileURLToPath } from "node:url";
-import { reopenLifecycle } from "../src/core/reopen.js";
+import {
+  reopenLifecycle as coreReopenLifecycle,
+  type ReopenLifecycleOptions,
+} from "../src/core/reopen.js";
+
+function reopenLifecycle(targetDir: string, options: ReopenLifecycleOptions) {
+  return coreReopenLifecycle(targetDir, { isTTY: true, ...options });
+}
 import { checkGateEligibility } from "../src/core/approval.js";
 import { DiagnosticsEngine } from "../src/core/diagnostics/engine.js";
 import { inspectRawProject } from "../src/core/diagnostics/inspector.js";

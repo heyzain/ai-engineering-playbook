@@ -297,6 +297,7 @@ describe("Stage 1 Inherited Prerequisite Applicability & Reopening Audit", () =>
           reason: "Attempt second reopen",
           authorizedBy: "Alice Human",
           role: "Architect",
+          isTTY: true,
         });
       },
       (err: { code?: string }) => {
