@@ -23,7 +23,7 @@
     "exceptions_dir": "docs/exceptions",
     "state_file": ".playbook/state.json"
   },
-  "active_lifecycle_stage": 0,
+  "active_lifecycle_stage": 2,
   "capabilities": [
     "automated_testing",
     "contract_testing",

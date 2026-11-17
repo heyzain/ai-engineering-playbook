@@ -6,49 +6,34 @@
   "milestone_id": "M-1.0.0",
   "milestone_name": "M-1.0.0 Initial Release",
   "lifecycle_status": "active",
-  "current_stage": 0,
-  "stage_status": "pending_review",
+  "current_stage": 2,
+  "stage_status": "not_started",
   "current_stage_detail": {
-    "stage": 0,
-    "stage_name": "Discovery & Problem Formulation",
-    "started_at": "2026-11-17T12:45:27.426Z",
+    "stage": 2,
+    "stage_name": "Architecture & System Design",
+    "started_at": "2026-11-17T13:09:46.543Z",
     "deliverables": [
       {
-        "id": "PRD-CORE",
-        "name": "Problem Statement Document (PRD Core)",
-        "description": "Core problem formulation, user goals, non-goals, and measurable success metrics.",
-        "artifact_path": "docs/prd/PRD-CORE.md",
-        "status": "verified",
-        "validation_status": "passed",
+        "id": "ARCH-SPEC",
+        "name": "System Architecture Specification",
+        "description": "Technical structure, component decomposition, data models, contracts, and architectural decisions.",
+        "artifact_path": "docs/adr/ARCHITECTURE-SPEC.md",
+        "status": "not_started",
+        "validation_status": "unvalidated",
         "exception_ref": null,
-        "evidence": [
-          {
-            "requirement_id": null,
-            "type": "manual_functional",
-            "procedure": "Manual discovery document review plus content/link/schema/AST checks.",
-            "result": "passed",
-            "summary": "Discovery review passed; no human approval or full-suite claim.",
-            "exit_code": 0,
-            "commit_sha": "bc5c4d3ce463f323f3649da038e98cc5ee2c8c1e",
-            "evidence_hash": "sha256:ef0d492e710f71e3d8081f375a81f76872e06f1feba06965f01a54f2ad4a8d09",
-            "evidence_ref": ".playbook/logs/phase-1-validation.json",
-            "verified_at": "2026-11-17T12:46:12.817Z",
-            "verified_by": "agent:codex",
-            "actor_type": "agent"
-          }
-        ]
+        "evidence": []
       }
     ],
     "rfcs": [],
     "adrs": [],
     "exceptions": [],
     "exit_package": {
-      "status": "submitted_for_review",
-      "path": "docs/gates/GATE-0-EXIT-PACKAGE.md",
-      "submitted_at": "2026-11-17T12:46:12.946Z"
+      "status": "not_drafted",
+      "path": "docs/gates/GATE-2-EXIT-PACKAGE.md",
+      "submitted_at": null
     },
     "human_approval": {
-      "status": "pending_review",
+      "status": "not_requested",
       "approved_by": null,
       "role": null,
       "approval_mode": "solo",
@@ -58,12 +43,43 @@
       "conditions": null
     }
   },
-  "stage_history": [],
+  "stage_history": [
+    {
+      "stage": 0,
+      "stage_name": "Discovery & Problem Formulation",
+      "status": "approved",
+      "started_at": "2026-11-17T12:45:27.426Z",
+      "completed_at": "2026-11-17T12:56:21.531Z",
+      "approved_at": "2026-11-17T12:56:20.706Z",
+      "exit_package_ref": "docs/gates/GATE-0-EXIT-PACKAGE.md",
+      "human_approval": {
+        "approved_by": "Zain Ali",
+        "role": "FullStack Devloper",
+        "approval_mode": "solo",
+        "signature_reference": "zain"
+      }
+    },
+    {
+      "stage": 1,
+      "stage_name": "Requirements & Specification",
+      "status": "approved",
+      "started_at": "2026-11-17T13:00:18.053Z",
+      "completed_at": "2026-11-17T13:09:46.543Z",
+      "approved_at": "2026-11-17T13:09:45.600Z",
+      "exit_package_ref": "docs/gates/GATE-1-EXIT-PACKAGE.md",
+      "human_approval": {
+        "approved_by": "Zain Ali",
+        "role": "Fullstack Developer",
+        "approval_mode": "solo",
+        "signature_reference": "Zain"
+      }
+    }
+  ],
   "archived_milestones": [],
   "last_updated": {
-    "timestamp": "2026-11-17T12:46:12.946Z",
-    "updated_by": "agent:codex",
-    "actor_type": "agent",
-    "reason": "Submitted Stage 0 (Discovery & Problem Formulation) Exit Package for human review. Phase 1 Handover complete."
+    "timestamp": "2026-11-17T13:09:46.543Z",
+    "updated_by": "playbook:orchestrator",
+    "actor_type": "human",
+    "reason": "Advanced lifecycle from Stage 1 to Stage 2 following human approval."
   }
 }
