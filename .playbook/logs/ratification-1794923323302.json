@@ -1,0 +1,23 @@
+{
+  "amendment": "AMEND-20261110-001",
+  "commit": "4eea89fd1942b67dad6f74d0f061114639ef927f",
+  "tree": "2499f2c65d37b7e63656b1ee5fce11b7d60646df",
+  "inventorySha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+  "blobs": {
+    "docs/adr/amendment-grandfathered-inventory.json": "fe51488c7066f6687ef680d6bfaa4f7768ef205c",
+    "docs/adr/ADR-20261110-001-two-phase-exception-lifecycle.md": "abf59b1857e6de81162606f7a67c1703bb9d5fba",
+    "docs/adr/ARCHITECTURE-SPEC.md": "848a84fa7551ed8e0f0d10871f85d53b7ff0ad38",
+    "docs/adr/ADR-20261117-001-release-closure.md": "d7fd5c777aedcc757e868050152546bc1e1ba699",
+    "docs/architecture/operational-controller/design.md": "77bba67da197e70084aacbcd2dd16ce3cbd90392",
+    "governance/state-machine.md": "4d0f6e17e8bf9be19522b88d88baf7224082f958",
+    "governance/ENGINEERING_CONTROLLER.md": "5a556f9615435533e1ade31580f4bd6f075b6307",
+    "templates/exception-record-template.md": "c500fb4911db1861b29945e18b6576ac66db46ed",
+    ".playbook/state.json": "f7959b99c8e2a03a312822768b9fb0d410317c3e",
+    ".playbook/manifest.json": "359e596951e6be91e35c3f47a2e0a6272dc0aed9"
+  },
+  "ratifier": "Zain Ali",
+  "role": "Lead Architect",
+  "ratifiedAt": "2026-11-17T13:48:43.301Z",
+  "recordSha256": "d9e4b9ba9017da030e453d9c5ea9248de2be94a15812c3e14a7682fae8a00f93",
+  "assurance": "operator-attested Level A"
+}
