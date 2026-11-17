@@ -7,33 +7,48 @@
   "milestone_name": "M-1.0.0 Initial Release",
   "lifecycle_status": "active",
   "current_stage": 0,
-  "stage_status": "not_started",
+  "stage_status": "pending_review",
   "current_stage_detail": {
     "stage": 0,
     "stage_name": "Discovery & Problem Formulation",
-    "started_at": "2026-11-06T11:48:27.554Z",
+    "started_at": "2026-11-17T12:45:27.426Z",
     "deliverables": [
       {
         "id": "PRD-CORE",
         "name": "Problem Statement Document (PRD Core)",
         "description": "Core problem formulation, user goals, non-goals, and measurable success metrics.",
         "artifact_path": "docs/prd/PRD-CORE.md",
-        "status": "not_started",
-        "validation_status": "unvalidated",
+        "status": "verified",
+        "validation_status": "passed",
         "exception_ref": null,
-        "evidence": []
+        "evidence": [
+          {
+            "requirement_id": null,
+            "type": "manual_functional",
+            "procedure": "Manual discovery document review plus content/link/schema/AST checks.",
+            "result": "passed",
+            "summary": "Discovery review passed; no human approval or full-suite claim.",
+            "exit_code": 0,
+            "commit_sha": "bc5c4d3ce463f323f3649da038e98cc5ee2c8c1e",
+            "evidence_hash": "sha256:ef0d492e710f71e3d8081f375a81f76872e06f1feba06965f01a54f2ad4a8d09",
+            "evidence_ref": ".playbook/logs/phase-1-validation.json",
+            "verified_at": "2026-11-17T12:46:12.817Z",
+            "verified_by": "agent:codex",
+            "actor_type": "agent"
+          }
+        ]
       }
     ],
     "rfcs": [],
     "adrs": [],
     "exceptions": [],
     "exit_package": {
-      "status": "not_drafted",
+      "status": "submitted_for_review",
       "path": "docs/gates/GATE-0-EXIT-PACKAGE.md",
-      "submitted_at": null
+      "submitted_at": "2026-11-17T12:46:12.946Z"
     },
     "human_approval": {
-      "status": "not_requested",
+      "status": "pending_review",
       "approved_by": null,
       "role": null,
       "approval_mode": "solo",
@@ -46,9 +61,9 @@
   "stage_history": [],
   "archived_milestones": [],
   "last_updated": {
-    "timestamp": "2026-11-06T11:48:27.554Z",
-    "updated_by": "playbook-cli",
-    "actor_type": "human",
-    "reason": "Project initialized at Stage 0 (Discovery & Problem Formulation)"
+    "timestamp": "2026-11-17T12:46:12.946Z",
+    "updated_by": "agent:codex",
+    "actor_type": "agent",
+    "reason": "Submitted Stage 0 (Discovery & Problem Formulation) Exit Package for human review. Phase 1 Handover complete."
   }
 }

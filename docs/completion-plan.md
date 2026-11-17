@@ -1,7 +1,7 @@
 # AI Engineering Playbook — Completion Plan
 
 Date: 2026-11-17  
-Status: Proposed execution roadmap; phase implementation has not started.  
+Status: Phase 1 discovery work submitted for review; Gate 0 approval and Phase 1 commit pending.
 Working agreement: Complete one phase, verify its exit criteria, review the changes, commit that phase, and only then begin the next.
 
 ## 1. Outcome
@@ -171,7 +171,7 @@ Exit: Final installation, smoke checks, observation, and rollback requirements p
 | Item | Status | Evidence / next action |
 | --- | --- | --- |
 | Completion roadmap | Drafted for review | This document; not a lifecycle gate approval. |
-| Phase 1 | Not started | Next execution batch after roadmap review. |
+| Phase 1 | Submitted for review | PRD core and inventory authored; transactional Gate 0 submission recorded; human approval and commit pending. |
 | Phase 2 | Not started | Requires Phase 1 checkpoint and Gate 0 approval. |
 | Phase 3 | Not started | Requires Phase 2 checkpoint and Gate 1 approval. |
 | Phase 4 | Not started | Requires Phase 3 checkpoint and Gate 2 approval. |
@@ -180,4 +180,4 @@ Exit: Final installation, smoke checks, observation, and rollback requirements p
 | Phase 7 | Not started | Requires Phase 6 checkpoint and Gate 4 approval. |
 | Phase 8 | Not started | Requires Phase 7 checkpoint and Gate 5 approval. |
 
-The roadmap itself may be committed separately as a documentation-only checkpoint after review. Planning does not change `.playbook/state.json` or imply that the release phases are already underway.
+The roadmap was preserved in baseline checkpoint `bc5c4d3`. Phase 1 execution now updates `.playbook/state.json` through the existing transactional core APIs; no stage has been approved or advanced by the agent.
