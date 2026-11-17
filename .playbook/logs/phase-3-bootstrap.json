@@ -1,0 +1,126 @@
+{
+  "start": {
+    "success": true,
+    "stage": 2,
+    "stageName": "Architecture & System Design",
+    "startedAt": "2026-11-17T13:17:10.313Z",
+    "deliverablesCount": 1,
+    "txId": "tx-1794921430339-abb96386",
+    "recovery": {
+      "recovered": false,
+      "actionTaken": "none",
+      "filesAffected": []
+    }
+  },
+  "record": {
+    "success": true,
+    "deliverable": {
+      "id": "ARCH-SPEC",
+      "name": "System Architecture Specification",
+      "description": "Technical structure, component decomposition, data models, contracts, and architectural decisions.",
+      "artifact_path": "docs/adr/ARCHITECTURE-SPEC.md",
+      "status": "completed",
+      "validation_status": "unvalidated",
+      "exception_ref": null,
+      "evidence": []
+    },
+    "txId": "tx-1794921470958-17b49d14",
+    "recovery": {
+      "recovered": false,
+      "actionTaken": "none",
+      "filesAffected": []
+    }
+  },
+  "evidence": {
+    "success": true,
+    "deliverable": {
+      "id": "ARCH-SPEC",
+      "name": "System Architecture Specification",
+      "description": "Technical structure, component decomposition, data models, contracts, and architectural decisions.",
+      "artifact_path": "docs/adr/ARCHITECTURE-SPEC.md",
+      "status": "verified",
+      "validation_status": "passed",
+      "exception_ref": null,
+      "evidence": [
+        {
+          "requirement_id": null,
+          "type": "architecture_review",
+          "procedure": "Review requirements-to-design allocation, contracts, schema/migration, threat model and authority; validate links/hashes/strict AST.",
+          "result": "passed",
+          "summary": "Architecture document review passed; decisions proposed, no ratification asserted.",
+          "exit_code": 0,
+          "commit_sha": null,
+          "evidence_hash": "sha256:cd0c40cc4f2a5c51a6cf416bde9a2fd7747a24d1da385d7d3af2b7e113eaba3c",
+          "evidence_ref": ".playbook/logs/phase-3-validation.json",
+          "verified_at": "2026-11-17T13:17:51.094Z",
+          "verified_by": "agent:codex",
+          "actor_type": "agent"
+        }
+      ]
+    },
+    "evidenceRecord": {
+      "requirement_id": null,
+      "type": "architecture_review",
+      "procedure": "Review requirements-to-design allocation, contracts, schema/migration, threat model and authority; validate links/hashes/strict AST.",
+      "result": "passed",
+      "summary": "Architecture document review passed; decisions proposed, no ratification asserted.",
+      "exit_code": 0,
+      "commit_sha": null,
+      "evidence_hash": "sha256:cd0c40cc4f2a5c51a6cf416bde9a2fd7747a24d1da385d7d3af2b7e113eaba3c",
+      "evidence_ref": ".playbook/logs/phase-3-validation.json",
+      "verified_at": "2026-11-17T13:17:51.094Z",
+      "verified_by": "agent:codex",
+      "actor_type": "agent"
+    },
+    "promotedToVerified": true,
+    "demoted": false,
+    "authoritativeResolution": {
+      "authoritativeResult": "passed",
+      "missingRequiredDisciplines": [],
+      "failingDisciplines": [],
+      "evaluatedDisciplines": {
+        "architecture_review": {
+          "latestResult": "passed",
+          "verifiedAt": "2026-11-17T13:17:51.094Z",
+          "evidenceRef": ".playbook/logs/phase-3-validation.json",
+          "evidenceHash": "sha256:cd0c40cc4f2a5c51a6cf416bde9a2fd7747a24d1da385d7d3af2b7e113eaba3c"
+        }
+      },
+      "isContended": false,
+      "blockingReasons": []
+    },
+    "txId": "tx-1794921471114-c53b851b",
+    "recovery": {
+      "recovered": false,
+      "actionTaken": "none",
+      "filesAffected": []
+    }
+  },
+  "submit": {
+    "success": true,
+    "stage": 2,
+    "stageName": "Architecture & System Design",
+    "stageStatus": "pending_review",
+    "exitPackage": {
+      "status": "submitted_for_review",
+      "path": "docs/gates/GATE-2-EXIT-PACKAGE.md",
+      "submitted_at": "2026-11-17T13:17:51.228Z"
+    },
+    "humanApproval": {
+      "status": "pending_review",
+      "approved_by": null,
+      "role": null,
+      "approval_mode": "solo",
+      "decision": null,
+      "signature_reference": null,
+      "approved_at": null,
+      "conditions": null
+    },
+    "txId": "tx-1794921471249-fe3b6fc5",
+    "recovery": {
+      "recovered": false,
+      "actionTaken": "none",
+      "filesAffected": []
+    }
+  }
+}

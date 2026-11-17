@@ -1,0 +1,22 @@
+{
+  "timestamp": "2026-11-17T13:17:27.726Z",
+  "result": "passed",
+  "scope": "Architecture document verification only; decisions remain proposed",
+  "checks": [
+    "docs/adr/ARCHITECTURE-SPEC.md: exists, hashed, links resolve",
+    "docs/adr/ADR-20261117-001-release-closure.md: exists, hashed, links resolve",
+    "docs/gates/GATE-2-EXIT-PACKAGE.md: exists, hashed, links resolve",
+    "REQ: all 21 requirement IDs covered by design allocation",
+    "NFR: all 9 requirement IDs covered by design allocation",
+    "NEG: all 9 requirement IDs covered by design allocation",
+    "P: all 8 requirement IDs covered by design allocation",
+    "Gate 2 strict AST passed",
+    "Manual architecture review: command/API/data/migration contracts, threat boundaries, profiles/check binding, installed assets, verification allocations and explicit exception fence examined",
+    "No ratification or runtime implementation claimed; local-only waiver boundary is proposed for human acceptance"
+  ],
+  "hashes": {
+    "docs/adr/ARCHITECTURE-SPEC.md": "ee6b88614b9d0051a948e2292ecf007864cf94f7fdbd7c5741483e8fa53c4461",
+    "docs/adr/ADR-20261117-001-release-closure.md": "bece9aa40a9d1616b4a98a3c90b574e25b709a2f1be538afd7e88b92a16ee1c8",
+    "docs/gates/GATE-2-EXIT-PACKAGE.md": "fbc06cc8b75905668ca8b4a17412c18e568a1d83246a5f52ee47ead8c2116257"
+  }
+}

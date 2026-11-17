@@ -1,0 +1,45 @@
+{
+  "schema_version": "1.0.0",
+  "timestamp": "2026-11-17T13:17:52.963Z",
+  "target_dir": "F:\\workspace\\ai-engineering-playbook",
+  "milestone_id": "M-1.0.0",
+  "current_stage": 2,
+  "stage_name": "Architecture & System Design",
+  "summary": {
+    "total": 1,
+    "integrity_passed": 1,
+    "integrity_failed": 0,
+    "existence_verified": 0,
+    "unreadable": 0,
+    "missing": 0,
+    "invalid_reference": 0,
+    "unsupported": 0,
+    "not_checked": 0
+  },
+  "items": [
+    {
+      "deliverable_id": "ARCH-SPEC",
+      "deliverable_name": "System Architecture Specification",
+      "requirement_id": null,
+      "type": "architecture_review",
+      "procedure": "Review requirements-to-design allocation, contracts, schema/migration, threat model and authority; validate links/hashes/strict AST.",
+      "recorded_result": "passed",
+      "evidence_ref": ".playbook/logs/phase-3-validation.json",
+      "recorded_hash": "sha256:cd0c40cc4f2a5c51a6cf416bde9a2fd7747a24d1da385d7d3af2b7e113eaba3c",
+      "status": "integrity_passed",
+      "resolved_path": ".playbook/logs/phase-3-validation.json",
+      "calculated_hash": "sha256:cd0c40cc4f2a5c51a6cf416bde9a2fd7747a24d1da385d7d3af2b7e113eaba3c",
+      "hash_matched": true,
+      "details": "File exists and calculated SHA-256 matches recorded hash."
+    }
+  ],
+  "diagnostics": [],
+  "all_passed": true,
+  "limitations": [
+    "A matching SHA-256 hash verifies integrity against the recorded hash in state.json, but does NOT prove the authenticity of the verification actor or test runner.",
+    "A matching SHA-256 hash does NOT establish the engineering correctness, validity, or semantic completeness of the evidence contents.",
+    "State and evidence files stored within the same mutable repository do NOT establish an independent trust boundary; an actor with write access to evidence files typically has write access to state.json.",
+    "Existence verification confirms only that a referenced file exists on disk; it does NOT establish that requirements were satisfied.",
+    "External URLs and network references are unsupported and are not fetched to preserve hermetic, offline-first execution."
+  ]
+}

@@ -1,7 +1,7 @@
 # AI Engineering Playbook — Completion Plan
 
 Date: 2026-11-17  
-Status: Phase 1 committed and Gate 0 approved; Phase 2 requirements submitted for Gate 1 review.
+Status: Phases 1–2 committed with Gates 0–1 approved; Phase 3 architecture submitted for Gate 2 review.
 Working agreement: Complete one phase, verify its exit criteria, review the changes, commit that phase, and only then begin the next.
 
 ## 1. Outcome
@@ -172,12 +172,12 @@ Exit: Final installation, smoke checks, observation, and rollback requirements p
 | --- | --- | --- |
 | Completion roadmap | Drafted for review | This document; not a lifecycle gate approval. |
 | Phase 1 | Approved and committed | Checkpoint `9afbfd1`; operator approved Gate 0 and advanced to Stage 1 on 2026-11-17. |
-| Phase 2 | Submitted for review | Release/pilot requirements authored and verified as documents; Gate 1 pending human review; phase commit pending. |
-| Phase 3 | Not started | Requires Phase 2 checkpoint and Gate 1 approval. |
+| Phase 2 | Approved and committed | Checkpoint `1b4fb79`; operator approved Gate 1 and advanced to Stage 2 on 2026-11-17. |
+| Phase 3 | Submitted for review | Architecture/contracts and release ADR authored; Gate 2 review and phase commit pending. Special exception ratification remains a separate implementation prerequisite. |
 | Phase 4 | Not started | Requires Phase 3 checkpoint and Gate 2 approval. |
 | Phase 5 | Not started | Requires verified Phase 4 commit. |
 | Phase 6 | Not started | Requires Phase 5 checkpoint and Gate 3 approval. |
 | Phase 7 | Not started | Requires Phase 6 checkpoint and Gate 4 approval. |
 | Phase 8 | Not started | Requires Phase 7 checkpoint and Gate 5 approval. |
 
-The roadmap was preserved in baseline checkpoint `bc5c4d3`. Phases 1–2 update `.playbook/state.json` through existing transactional core APIs. Gate 0 approval/advancement were executed by the human operator; no gate has been approved by the agent.
+The roadmap was preserved in baseline checkpoint `bc5c4d3`. Phases 1–3 update `.playbook/state.json` through existing transactional core APIs. Gates 0–1 approval/advancement were executed by the human operator; no gate has been approved by the agent.
