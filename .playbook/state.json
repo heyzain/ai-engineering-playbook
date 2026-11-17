@@ -7,21 +7,36 @@
   "milestone_name": "M-1.0.0 Initial Release",
   "lifecycle_status": "active",
   "current_stage": 3,
-  "stage_status": "not_started",
+  "stage_status": "in_progress",
   "current_stage_detail": {
     "stage": 3,
     "stage_name": "Implementation & Unit Verification",
-    "started_at": "2026-11-17T13:23:11.443Z",
+    "started_at": "2026-11-17T13:29:19.654Z",
     "deliverables": [
       {
         "id": "CODE-IMPL",
         "name": "Production Source Code Implementation",
         "description": "Clean, modular production source code satisfying architectural design and specifications.",
-        "artifact_path": "src/",
-        "status": "not_started",
+        "artifact_path": "tooling/playbook-cli/src",
+        "status": "in_progress",
         "validation_status": "unvalidated",
         "exception_ref": null,
-        "evidence": []
+        "evidence": [
+          {
+            "requirement_id": null,
+            "type": "automated_test",
+            "procedure": "npm test fresh baseline; worker processes prevented from launching.",
+            "result": "inconclusive",
+            "summary": "Full suite could not verify implementation due spawn EPERM; only 23 limited tests passed separately.",
+            "exit_code": 1,
+            "commit_sha": null,
+            "evidence_hash": "sha256:20fd088ad555c0ba27948ef172432efff9b7d6764b7c1a87c71b51faeb2747aa",
+            "evidence_ref": ".playbook/logs/phase-4-baseline-tests.txt",
+            "verified_at": "2026-11-17T13:34:01.123Z",
+            "verified_by": "agent:codex",
+            "actor_type": "agent"
+          }
+        ]
       }
     ],
     "rfcs": [],
@@ -92,9 +107,9 @@
   ],
   "archived_milestones": [],
   "last_updated": {
-    "timestamp": "2026-11-17T13:23:11.443Z",
-    "updated_by": "playbook:orchestrator",
-    "actor_type": "human",
-    "reason": "Advanced lifecycle from Stage 2 to Stage 3 following human approval."
+    "timestamp": "2026-11-17T13:34:01.123Z",
+    "updated_by": "agent:codex",
+    "actor_type": "agent",
+    "reason": "Recorded automated_test verification evidence for \"CODE-IMPL\" (result: inconclusive)."
   }
 }

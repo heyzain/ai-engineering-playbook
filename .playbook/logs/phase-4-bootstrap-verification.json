@@ -1,0 +1,31 @@
+{
+  "timestamp": "2026-11-17T13:34:00.922Z",
+  "scope": "ratification prerequisite only; Phase 4 incomplete",
+  "build": {
+    "command": "npm run build",
+    "exit": 0
+  },
+  "limitedTests": {
+    "command": "node --test --test-isolation=none dist/tests/ratification.test.js dist/tests/validator.test.js dist/tests/paths.test.js",
+    "passed": 23,
+    "failed": 0,
+    "skipped": 0
+  },
+  "headless": {
+    "exit": 1,
+    "code": "TTY_REQUIRED",
+    "recordCreated": false
+  },
+  "fullSuite": {
+    "exit": 1,
+    "result": "inconclusive",
+    "reason": "test worker spawn EPERM"
+  },
+  "interactiveSuccess": "not performed; requires real operator after checkpoint commit",
+  "hashes": {
+    "tooling/playbook-cli/src/core/ratification.ts": "edcb2f818a16c4bb0280f1353c000c91d24145128de7f9457fdfcdbef3dec1f9",
+    "tooling/playbook-cli/src/bin/ratify-exception-amendment.ts": "ec2e8a0648ff7fc640b95658d1c9abbb9e97a5d51a479206d536bdf0a1bd66f4",
+    "tooling/playbook-cli/tests/ratification.test.ts": "1384806ffbadb8184e31a3b443c21da4a44f06ccba5d8bc062ee7fd57995822d",
+    "docs/adr/amendment-grandfathered-inventory.json": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570"
+  }
+}
