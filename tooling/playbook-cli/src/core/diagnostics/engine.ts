@@ -3,6 +3,7 @@ import path from "node:path";
 import { SCHEMA_VERSION } from "../../constants.js";
 import { SchemaValidator } from "../validator.js";
 import { evaluatePrdApplicability } from "../prd-applicability.js";
+import { classifyMobileWorkflow } from "../mobile/workflow-classifier.js";
 import type {
   InspectionRawData,
   InspectionReport,
@@ -130,6 +131,20 @@ export class DiagnosticsEngine {
           message: `Manifest schema validation failed (${manifestVal.errors.length} errors):\n${manifestVal.formattedErrors}`,
           path: ".playbook/manifest.json",
           remediation: "Correct the invalid fields in .playbook/manifest.json according to schemas/project-manifest.schema.json.",
+        });
+      }
+    }
+
+    // 3b. Mobile Workflow Alignment Evaluation
+    if (raw.manifestParsed) {
+      const workflowResult = classifyMobileWorkflow(raw.targetDir, raw.manifestParsed);
+      if (workflowResult.status === "INCOMPLETE" && workflowResult.errorCode === "AMBIGUOUS_WORKFLOW_CONFIGURATION") {
+        diagnostics.push({
+          code: "AMBIGUOUS_WORKFLOW_CONFIGURATION",
+          severity: "error",
+          message: workflowResult.message || "Ambiguous mobile workflow configuration detected.",
+          path: ".playbook/manifest.json",
+          remediation: "Resolve conflicting configuration between .playbook/manifest.json, package.json, and native project folders.",
         });
       }
     }

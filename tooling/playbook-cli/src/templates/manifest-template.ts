@@ -24,6 +24,7 @@ export interface CreateManifestOptions {
   frameworks?: string[];
   packageManager?: string;
   capabilities?: Capability[];
+  technologyStacks?: string[];
   metadata?: Record<string, unknown>;
 }
 
@@ -67,6 +68,7 @@ export function createInitialManifest(options: CreateManifestOptions): ProjectMa
     },
     active_lifecycle_stage: 0,
     capabilities: options.capabilities || defaultCapabilities,
+    ...(options.technologyStacks ? { technology_stacks: options.technologyStacks } : {}),
     metadata: options.metadata,
   };
 }

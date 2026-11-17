@@ -1,0 +1,109 @@
+{
+  "stack": "expo",
+  "version": "1.0.0",
+  "gates": [
+    {
+      "stage": 4,
+      "stage_name": "Implementation & Local Verification",
+      "checks": [
+        {
+          "id": "expo-config-validate",
+          "name": "Expo Application Manifest & Config Validation",
+          "type": "static_analysis",
+          "deliverable_id": "CODE-IMPL",
+          "command": "node",
+          "args": ["scripts/audit-expo-config.mjs"],
+          "inputs": [
+            "app.json",
+            "app.config.{js,ts,mjs}",
+            "eas.json",
+            "scripts/audit-expo-config.mjs"
+          ],
+          "exclude": ["node_modules/**", "dist/**", ".expo/**", "android/**", "ios/**"],
+          "severity": "blocking"
+        },
+        {
+          "id": "expo-doctor",
+          "name": "Expo SDK & Dependency Compatibility Audit",
+          "type": "static_analysis",
+          "deliverable_id": "CODE-IMPL",
+          "command": "node",
+          "args": ["scripts/audit-expo-doctor.mjs"],
+          "inputs": [
+            "package.json",
+            "package-lock.json",
+            "scripts/audit-expo-doctor.mjs"
+          ],
+          "exclude": ["node_modules/**", "dist/**", ".expo/**"],
+          "severity": "blocking"
+        },
+        {
+          "id": "expo-route-structure",
+          "name": "Expo Router Route Structure & Default Export Audit",
+          "type": "static_analysis",
+          "deliverable_id": "CODE-IMPL",
+          "command": "node",
+          "args": ["scripts/audit-routes.mjs"],
+          "inputs": [
+            "app/**/*.{ts,tsx,js,jsx}",
+            "scripts/audit-routes.mjs"
+          ],
+          "exclude": ["node_modules/**", "dist/**", ".expo/**"],
+          "severity": "blocking"
+        },
+        {
+          "id": "expo-plugin-validate",
+          "name": "Expo Config Plugins Integrity Audit",
+          "type": "static_analysis",
+          "deliverable_id": "CODE-IMPL",
+          "command": "node",
+          "args": ["scripts/audit-expo-plugins.mjs"],
+          "inputs": [
+            "app.json",
+            "plugins/**/*.{js,mjs,ts}",
+            "scripts/audit-expo-plugins.mjs"
+          ],
+          "exclude": ["node_modules/**", "dist/**", ".expo/**"],
+          "severity": "blocking"
+        },
+        {
+          "id": "expo-secret-audit",
+          "name": "Expo Public Env & Public Secret Leak Audit",
+          "type": "security_audit",
+          "deliverable_id": "CODE-IMPL",
+          "command": "node",
+          "args": ["scripts/audit-expo-secrets.mjs"],
+          "inputs": [
+            ".env*",
+            "app/**/*.{ts,tsx,js,jsx}",
+            "src/**/*.{ts,tsx,js,jsx}",
+            "scripts/audit-expo-secrets.mjs"
+          ],
+          "exclude": ["node_modules/**", "dist/**", ".expo/**", "android/**", "ios/**"],
+          "severity": "blocking"
+        }
+      ]
+    },
+    {
+      "stage": 5,
+      "stage_name": "Integration & System Verification",
+      "checks": [
+        {
+          "id": "expo-test",
+          "name": "Expo Headless Route & Component Tests",
+          "type": "automated_test",
+          "deliverable_id": "INTEG-TEST",
+          "command": "node",
+          "args": ["--test", "__tests__/**/*.test.js"],
+          "inputs": [
+            "app/**/*.{ts,tsx,js,jsx}",
+            "src/**/*.{ts,tsx,js,jsx}",
+            "__tests__/**/*.{ts,tsx,js,jsx}"
+          ],
+          "exclude": ["node_modules/**", "dist/**", ".expo/**", "android/**", "ios/**"],
+          "severity": "blocking"
+        }
+      ]
+    }
+  ]
+}

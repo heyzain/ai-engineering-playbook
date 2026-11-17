@@ -1,0 +1,82 @@
+{
+  "stack": "nextjs",
+  "version": "1.0.0",
+  "gates": [
+    {
+      "stage": 4,
+      "stage_name": "Implementation & Local Verification",
+      "checks": [
+        {
+          "id": "nextjs-typecheck",
+          "name": "Next.js TypeScript Strict Typecheck",
+          "type": "build_typecheck",
+          "deliverable_id": "CODE-IMPL",
+          "command": "npx",
+          "args": ["tsc", "--noEmit"],
+          "inputs": ["src/**/*.{ts,tsx}", "tsconfig.json"],
+          "exclude": [".next/**", "node_modules/**", "dist/**"],
+          "severity": "blocking"
+        },
+        {
+          "id": "nextjs-lint",
+          "name": "Next.js & Accessibility Linting",
+          "type": "static_analysis",
+          "deliverable_id": "CODE-IMPL",
+          "command": "npx",
+          "args": ["next", "lint", "--strict"],
+          "inputs": ["src/**/*.{ts,tsx,js,jsx}", "eslint.config.{js,mjs}"],
+          "exclude": [".next/**", "node_modules/**", "dist/**"],
+          "severity": "blocking"
+        },
+        {
+          "id": "nextjs-build",
+          "name": "Next.js Production Build Validation",
+          "type": "build_typecheck",
+          "deliverable_id": "CODE-IMPL",
+          "command": "npx",
+          "args": ["next", "build"],
+          "inputs": [
+            "src/**/*",
+            "public/**/*",
+            "next.config.mjs",
+            "tsconfig.json",
+            "package.json"
+          ],
+          "exclude": [".next/**", "node_modules/**", "dist/**"],
+          "severity": "blocking"
+        },
+        {
+          "id": "nextjs-secret-audit",
+          "name": "Client Bundle Secret Leakage Audit",
+          "type": "security_audit",
+          "deliverable_id": "CODE-IMPL",
+          "command": "node",
+          "args": ["scripts/audit-secrets.mjs"],
+          "inputs": [".env*", "src/**/*.{ts,tsx,js,jsx}", "scripts/audit-secrets.mjs"],
+          "exclude": [".next/**", "node_modules/**", "dist/**"],
+          "severity": "blocking"
+        }
+      ]
+    },
+    {
+      "stage": 5,
+      "stage_name": "Integration & System Verification",
+      "checks": [
+        {
+          "id": "nextjs-test",
+          "name": "Hermetic Unit & Component Tests",
+          "type": "automated_test",
+          "deliverable_id": "INTEG-TEST",
+          "command": "npm",
+          "args": ["test"],
+          "inputs": [
+            "src/**/*.{ts,tsx,js,jsx}",
+            "tests/**/*.{ts,tsx,js,jsx}"
+          ],
+          "exclude": [".next/**", "node_modules/**", "dist/**"],
+          "severity": "blocking"
+        }
+      ]
+    }
+  ]
+}

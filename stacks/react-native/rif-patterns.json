@@ -1,0 +1,38 @@
+{
+  "stack": "react-native",
+  "version": "1.0.0",
+  "rules": [
+    "RULE-RN-COMPANION",
+    "RULE-RN-ACCESSIBILITY",
+    "RULE-MOB-SEC-STORAGE"
+  ],
+  "text_patterns": [
+    "src/**/*.{ts,tsx,js,jsx,json}",
+    "App.{tsx,js}",
+    "index.{js,ts}",
+    "metro.config.{js,mjs,cjs}",
+    "babel.config.{js,mjs,cjs}",
+    "tsconfig.json",
+    "package.json",
+    "package-lock.json",
+    "eslint.config.{js,mjs}",
+    "scripts/**/*.{js,mjs}"
+  ],
+  "binary_patterns": [
+    "src/assets/**/*.{png,jpg,jpeg,webp,ico,ttf,otf}"
+  ],
+  "exclude_patterns": [
+    "node_modules/**",
+    ".metro/**",
+    "metro-cache/**",
+    "android/app/build/**",
+    "android/.gradle/**",
+    "android/build/**",
+    "ios/build/**",
+    "ios/Pods/**",
+    "coverage/**",
+    ".playbook/.tmp/**",
+    "*.log",
+    "*.tsbuildinfo"
+  ]
+}

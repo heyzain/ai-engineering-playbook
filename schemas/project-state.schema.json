@@ -276,6 +276,52 @@
                         "human"
                       ],
                       "description": "Actor class performing verification."
+                    },
+                    "rif": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "pattern": "^sha256:[a-f0-9]{64}$",
+                      "description": "Reproducible Input Fingerprint (RIF) computed over verified inputs and environment."
+                    },
+                    "working_tree_clean": {
+                      "type": [
+                        "boolean",
+                        "null"
+                      ],
+                      "description": "Whether the working tree was clean at the time evidence was recorded."
+                    },
+                    "inputs_hash": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "pattern": "^sha256:[a-f0-9]{64}$",
+                      "description": "Hash of input file manifests at the time of check execution."
+                    },
+                    "quality_gate": {
+                      "type": [
+                        "object",
+                        "null"
+                      ],
+                      "additionalProperties": false,
+                      "properties": {
+                        "gate_id": {
+                          "type": "string",
+                          "description": "Identifier of the quality gate or stage."
+                        },
+                        "check_id": {
+                          "type": "string",
+                          "description": "Identifier of the check within the quality gate."
+                        },
+                        "duration_ms": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "description": "Execution duration in milliseconds."
+                        }
+                      },
+                      "description": "Structured quality gate execution telemetry."
                     }
                   }
                 }

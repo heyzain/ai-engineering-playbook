@@ -17,43 +17,13 @@ import type { ProjectState, Deliverable } from "../types/state.js";
 import type { ProjectManifest } from "../types/manifest.js";
 import type { DiagnosticIssue } from "./diagnostics/types.js";
 
-const FORBIDDEN_SUBSTRINGS = [
-  "agent",
-  "bot",
-  "controller",
-  "playbook",
-  "orchestrator",
-  "copilot",
-  "chatgpt",
-  "gemini",
-  "antigravity",
-  "cursor",
-  "deepseek",
-  "llama",
-  "mistral",
-  "grok",
-  "qwen",
-  "assistant",
-  "subagent",
-  "synthetic",
-  "openai",
-  "anthropic",
-];
+import {
+  isForbiddenAgentName,
+  FORBIDDEN_SUBSTRINGS,
+} from "./controller/markdown-ast.js";
+import { validateExitPackageAst } from "./controller/ast-validators.js";
 
-/**
- * Checks whether an actor name contains forbidden agent keywords or patterns.
- */
-export function isForbiddenAgentName(name: string): boolean {
-  if (!name || typeof name !== "string" || name.trim().length === 0) return true;
-  const lower = name.toLowerCase();
-  for (const sub of FORBIDDEN_SUBSTRINGS) {
-    if (lower.includes(sub)) return true;
-  }
-  if (/\b(ai|llm|gpt|claude)\b/i.test(lower)) {
-    return true;
-  }
-  return false;
-}
+export { isForbiddenAgentName, FORBIDDEN_SUBSTRINGS };
 
 export interface ExitPackageValidationResult {
   valid: boolean;
@@ -63,69 +33,16 @@ export interface ExitPackageValidationResult {
 /**
  * Validates the markdown structural completeness of a Stage Gate Exit Package
  * against canonical template requirements (sections, headings, placeholder absence).
+ * Backed by AST ExitPackageValidator.
  */
 export function validateExitPackageStructure(
   content: string,
   gate: number
 ): ExitPackageValidationResult {
-  const errors: string[] = [];
-
-  // Minimum size check (must be at least 200 bytes)
-  if (Buffer.byteLength(content, "utf-8") < 200) {
-    errors.push(`Exit package is too short (${Buffer.byteLength(content, "utf-8")} bytes; minimum 200 bytes required).`);
-  }
-
-  // 1. Top-level Title (# Stage Gate Exit Package or # Stage Gate [0-6] Exit Package)
-  if (!/^#\s+.*(?:Stage\s+Gate.*Exit\s+Package|Exit\s+Package)/im.test(content)) {
-    errors.push("Missing top-level header: '# Stage Gate Exit Package' (or equivalent).");
-  }
-
-  // 2. Identification or Summary section
-  if (
-    !/^##\s+(?:\d+\.\s+)?(?:Package\s+&\s+Stage\s+Identification|Stage\s+Objectives|Executive\s+Summary)/im.test(
-      content
-    )
-  ) {
-    errors.push("Missing required section: '## 1. Package & Stage Identification' (or 'Executive Summary').");
-  }
-
-  // 3. Deliverables Manifest section
-  if (
-    !/^##\s+(?:\d+\.\s+)?(?:Deliverables\s+Manifest|Stage\s+Deliverables|Deliverables(?:\s+and\s+Traceability|\s+Manifest\s+&\s+Status)?)/im.test(
-      content
-    )
-  ) {
-    errors.push("Missing required section: '## 2. Deliverables Manifest & Status' (or 'Deliverables').");
-  }
-
-  // 4. Validation Evidence section
-  if (
-    !/^##\s+(?:\d+\.\s+)?(?:Verifiable\s+Validation\s+Evidence|Validation\s+Evidence|Evidence)/im.test(
-      content
-    )
-  ) {
-    errors.push("Missing required section: '## 3. Verifiable Validation Evidence' (or 'Evidence').");
-  }
-
-  // 5. Traceability Matrix or Sign-off section
-  if (
-    !/^##\s+(?:\d+\.\s+)?(?:Traceability(?:\s+Matrix)?|Human\s+Gate\s+Sign-Off|Sign-Off|Residual\s+Risk)/im.test(
-      content
-    )
-  ) {
-    errors.push("Missing required section: '## 4. Traceability & Sign-Off Record' (or 'Sign-Off').");
-  }
-
-  // 6. Check for unresolved template placeholders
-  // Matches <!-- TODO ..., [TODO..., [INSERT..., [PLACEHOLDER...
-  const placeholderRegex = /(?:<!--\s*TODO\b|\[TODO\b|\[INSERT\s+|\[PLACEHOLDER\b|<!--\s*REPLACE\b)/i;
-  if (placeholderRegex.test(content)) {
-    errors.push("Exit package contains unresolved template placeholders (e.g. 'TODO', 'INSERT', 'PLACEHOLDER').");
-  }
-
+  const result = validateExitPackageAst(content, gate);
   return {
-    valid: errors.length === 0,
-    errors,
+    valid: result.valid,
+    errors: result.errors,
   };
 }
 

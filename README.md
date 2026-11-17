@@ -50,8 +50,13 @@ ai-engineering-playbook/
 │   └── engineering-constitution.md     # 10 fundamental engineering principles and non-negotiables
 │
 ├── docs/                               # Repository documentation & decisions
-│   └── adr/                            # Architecture Decision Records
-│       └── ADR-20261031-001-state-model-refinements.md # State model refinements & two-phase handshake
+│   ├── adr/                            # Architecture Decision Records
+│   │   ├── ADR-20261031-001-state-model-refinements.md # State model refinements & two-phase handshake
+│   │   ├── ADR-20261102-002-quality-gate-atomicity-and-concurrency.md # Quality gate execution, WAL & RIF
+│   │   └── ADR-20261103-001-git-hooks-and-ci-enforcement.md # Native hooks, shadow staging & read-only CI
+│   └── architecture/                   # In-depth architectural specifications
+│       ├── quality-gates/              # Quality gate runner, process harness & RIF specification
+│       └── ci-integration/             # Git hooks, shadow staging, CI adapters & threat model
 │
 ├── governance/
 │   ├── ENGINEERING_CONTROLLER.md       # AI Controller architecture, halt mechanisms, and RFC protocol
@@ -104,6 +109,10 @@ ai-engineering-playbook/
 | [governance/downstream-storage-convention.md](governance/downstream-storage-convention.md) | Downstream directory layout, state storage, and log retention | Humans & Agents |
 | [schemas/README.md](schemas/README.md) | Machine-readable JSON Schema specifications and validation rules | Humans, Agents & Tools |
 | [docs/adr/ADR-20261031-001-state-model-refinements.md](docs/adr/ADR-20261031-001-state-model-refinements.md) | Architectural decision record for state model taxonomy and two-phase handshake | Humans & Agents |
+| [docs/adr/ADR-20261102-002-quality-gate-atomicity-and-concurrency.md](docs/adr/ADR-20261102-002-quality-gate-atomicity-and-concurrency.md) | Architectural decision record for quality gate execution, atomic WAL & RIF | Humans & Agents |
+| [docs/adr/ADR-20261103-001-git-hooks-and-ci-enforcement.md](docs/adr/ADR-20261103-001-git-hooks-and-ci-enforcement.md) | Architectural decision record for native Git hooks, shadow staging & read-only CI | Humans & Agents |
+| [docs/architecture/quality-gates/README.md](docs/architecture/quality-gates/README.md) | Quality gate execution engine, RIF canonicalization & process harness specification | Humans & Agents |
+| [docs/architecture/ci-integration/README.md](docs/architecture/ci-integration/README.md) | CI/CD pipeline automation, native Git hook lifecycle & threat model specification | Humans & Agents |
 | [templates/README.md](templates/README.md) | Standardized artifact templates (PRD, ADR, RFC, Exit Package, Exception) | Humans & Agents |
 | [tooling/playbook-cli/README.md](tooling/playbook-cli/README.md) | Cross-platform governance CLI for project initialization, state inspection, and schema validation | Humans, Agents & Tools |
 

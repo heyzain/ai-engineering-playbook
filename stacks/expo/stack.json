@@ -1,0 +1,29 @@
+{
+  "$schema": "https://ai-engineering-playbook.org/schemas/stack-metadata.schema.json",
+  "id": "expo",
+  "name": "Expo",
+  "version": "1.1.0",
+  "description": "Expo managed and continuous native generation extension stack for React Native with Expo Router and Config Plugins",
+  "frameworkTarget": "Expo SDK 58 (React Native 0.88 / React 19.3.0 / Node.js >= 22.13.x)",
+  "dependencies": [
+    "react-native"
+  ],
+  "compatibility": {
+    "react-native": ">= 0.88.0 < 0.89.0",
+    "react": "19.3.0",
+    "node": ">= 22.13.0"
+  },
+  "packageOverrides": {
+    "dependencies": {
+      "react": "19.3.0",
+      "react-native": "0.88.1"
+    },
+    "devDependencies": {
+      "@types/react": "19.3.0",
+      "typescript": "~6.0.3"
+    },
+    "removeDevDependencies": [
+      "@types/react-native"
+    ]
+  }
+}

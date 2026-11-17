@@ -193,6 +193,15 @@
       },
       "description": "Optional engineering capabilities and verification checks active for this project."
     },
+    "technology_stacks": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$"
+      },
+      "description": "Registered technology stack modules (e.g. ['nextjs']) extending governance with stack-specific templates, partial quality gates, and RIF patterns."
+    },
     "metadata": {
       "type": "object",
       "description": "Arbitrary project-specific non-governance metadata.",

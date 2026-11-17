@@ -490,6 +490,134 @@ playbook pivot --cwd /path/to/project
 
 ---
 
+### `playbook gate run`
+Executes quality-gate checks configured for the active lifecycle stage according to `quality-gates.schema.json`. Evaluates DAG dependencies, computes Reproducible Input Fingerprints (RIF), executes commands with process-tree isolation and timeouts, middle-truncates logs, and registers verifiable evidence atomically.
+
+```bash
+# Run quality gates for active stage
+playbook gate run
+
+# Run with fail-fast (stops on first failure without halting the stage)
+playbook gate run --fail-fast
+
+# Run with halt-on-failure (triggers TRIGGER_HALT and freezes stage_status to blocked on failure)
+playbook gate run --halt-on-failure
+
+# Run in a specific project directory with machine-readable JSON output
+playbook gate run --cwd /path/to/project --json
+```
+
+---
+
+### `playbook gate verify`
+Performs read-only cryptographic verification of existing quality-gate evidence, input fingerprints, and schema integrity for the active stage. Never mutates disk, executes check commands, or updates state files.
+
+```bash
+# Verify quality gates read-only
+playbook gate verify
+
+# Output machine-readable JSON
+playbook gate verify --json
+```
+
+---
+
+### `playbook gate recover` / `playbook recover`
+Controlled operator-attested recovery command to unblock a project whose stage was frozen in `stage_status: "blocked"` (e.g. following a `--halt-on-failure` quality-gate check failure or unresolved RFC). Transitions `stage_status` strictly to `in_progress` under operator-attested terminal execution.
+
+```bash
+# Interactive recovery prompt
+playbook gate recover
+
+# Using top-level alias
+playbook recover
+
+# Specify parameters with CLI options (confirmation phrase prompted in TTY)
+playbook gate recover \
+  --stage 1 \
+  --operator "Alice Human" \
+  --role "Staff Engineer" \
+  --reason "Resolved build configuration defect and verified fix"
+
+# Machine-readable output (still requires TTY confirmation)
+playbook gate recover --json
+```
+
+#### Guardrails, Invariants & Trust Boundary
+- **Interactive TTY Enforcement (`TTY_REQUIRED`)**: Strictly enforces an interactive terminal session (`isatty`). Automated tools, scripts, or non-interactive pipes are rejected fail-closed. *Boundary Note*: This establishes an interactive terminal session, not physical user authentication.
+- **Rejection of Recognized Agent Labels (`AGENT_RECOVERY_FORBIDDEN`)**: Rejects recognized automated agent identity strings (e.g. `copilot`, `agent:`, `bot`, etc.). *Boundary Note*: This filters known agent signatures, but cannot independently prove human presence or prevent an agent with terminal access from declaring a human name.
+- **Mandatory Substantive Reason (`RECOVERY_REASON_REQUIRED`)**: Requires a substantive explanation (`--reason`, minimum 10 characters) explaining the defect resolution.
+- **Mandatory Typed Confirmation**: Requires typing `CONFIRM RECOVER STAGE <N>`.
+- **State Transition Guard**: Requires `stage_status === "blocked"` (`STAGE_NOT_BLOCKED`). Transitions strictly to `in_progress`. Never approves the stage or marks deliverables verified.
+- **Evidence Preservation**: All prior failed evidence entries in `deliverable.evidence[]` remain intact for auditable traceability.
+- **Atomic WAL Audit Logging**: Both the state file update and the append-only recovery audit log (`.playbook/logs/recovery-stage-<stage>-<timestamp>.log`) are committed together within the same Write-Ahead Logging transaction (`WriteAheadTransactionManager`) under exclusive file locking. A crash during commit cannot leave an unrecorded state transition.
+- **Operator-Attested Identity Model**: Identity is operator-attested; local CLI execution does not provide cryptographic authentication (GPG/Sigstore).
+
+---
+
+### `playbook hook install` / `playbook hook status` / `playbook hook uninstall` / `playbook hook run`
+Production-grade native Git lifecycle hook management subsystem (`pre-commit` and `pre-push`). Safely wraps existing user-defined Git hooks with Playbook quality-gate enforcers without silent data destruction, bypasses, or recursive loops.
+
+```bash
+# Inspect status of managed Git hooks (read-only)
+playbook hook status
+
+# Output machine-readable JSON status
+playbook hook status --json
+
+# Install managed wrappers with transitional pass-through flag
+playbook hook install --allow-inert
+
+# Dry-run installation to preview disk actions without modifying hooks
+playbook hook install --dry-run --allow-inert
+
+# Force installation to archive conflicting unmanaged files into user backups
+playbook hook install --force --allow-inert
+
+# Safely uninstall wrappers and restore original user hooks byte-for-byte
+playbook hook uninstall
+
+# Execute internal hook dispatcher (fail-fast gatekeeper)
+playbook hook run pre-commit
+playbook hook run pre-push
+```
+
+#### Git Validation Engines Architecture (Task 006C.2)
+
+The hook dispatcher executes real, isolated validation engines:
+
+##### 1. `pre-commit`: Staged Git Index Validation (`PreCommitEngine`)
+- **Staged Snapshot Isolation**: Reads exclusively from the Git index tree via `git diff-index --cached -z --name-status` and `git checkout-index`, completely decoupled from uncommitted or unstaged changes in the working tree.
+- **Partial Staging Fidelity**: Accurately respects `git add -p` by evaluating staged blobs rather than physical filesystem files.
+- **Governance Schema Guard**: In-memory validation of staged `.playbook/manifest.json`, `state.json`, and `quality-gates.json` against canonical JSON schemas via `git show :<path>`. Schema violations abort the commit immediately.
+- **Symlink Capability Probe**: Inspects staged file modes (`120000`). If true symlink creation is not permitted on the host (e.g. Windows without Developer Mode), fails closed with `[UNSUPPORTED_PLATFORM_CAPABILITY]` to prevent silent textual representation substitution.
+- **Index Stability Invariant**: Captures `git write-tree` before and after checks. Any check attempting to mutate the index fails with `[INDEX_MODIFIED_DURING_VALIDATION]`.
+- **Zero Working Tree Mutation**: Never calls `git add`, `git reset`, or `git stash`. The user's active index and working tree are never modified.
+
+##### 2. `pre-push`: Pushed Git Object Validation (`PrePushEngine`)
+- **Working Tree Decoupling**: Operates strictly against pushed commits and trees parsed from standard input (`<local_ref> <local_oid> <remote_ref> <remote_oid>`). Uncommitted local changes or checked-out branches have zero impact on push validation.
+- **Detached Worktree Snapshot**: Executes Quality Gates in ephemeral detached worktrees at `.playbook/.tmp/worktrees/push-<oid>-<nonce>` via `git worktree add --detach`.
+- **Target Tree Deduplication**: Peels tags to commit OIDs (`<oid>^{commit}`) and deduplicates multiple pushed refs pointing to identical root trees (`<oid>^{tree}`), evaluating each unique pushed tree state exactly once.
+- **Branch Deletion Fast-Path**: Zero OIDs (`local_oid == ZERO_OID`) representing branch deletions (`git push origin --delete`) skip evaluation immediately.
+- **Worktree Lifecycle & Crash-Safe GC**: Every ephemeral worktree contains an ownership manifest (`.playbook-worktree.json`). Signal trap handlers ensure cleanup on termination. Orphaned worktrees with dead PIDs or age >30 minutes are safely reaped via `reapOrphanedPushWorktrees`.
+
+#### Transitional Mode & `--allow-inert` Safety Boundary
+- **Fail-Closed Default**: In milestone Task 006C.1, hook management infrastructure is deployed before staged validation (Task 006C.2) and pushed-commit validation (Task 006C.3) engines are active. Installing inert wrappers by default would create a **fail-open hazard**, where developers and CI falsely believe their commits and pushes are verified by Playbook quality gates.
+- **Mandatory Opt-In**: `playbook hook install` strictly **refuses** installation without `--allow-inert` (or environment variable `PLAYBOOK_HOOK_ALLOW_INERT=1`), failing closed with error `[HOOK_VALIDATION_INERT]`.
+- **Dispatcher Fail-Closed**: `playbook hook run <type>` returns non-zero exit status (`exitCode: 1`) unless `--allow-inert` or `PLAYBOOK_HOOK_ALLOW_INERT=1` is provided. When allowed, it prints an explicit diagnostic warning to stderr and permits transitional pass-through execution.
+- **Process-Local Scope**: The `PLAYBOOK_HOOK_ALLOW_INERT` environment variable affects only the executing process and child subprocesses; it is never written to disk, manifest files, or project state.
+- **Status Transparency**: `playbook hook status` surfaces `validationStatus: "inert_transitional"` and `isInert: true` with prominent warnings, ensuring users are aware that quality check engines are in transitional mode.
+
+#### Re-entrancy Invariants & Separation of Responsibilities
+- **Playbook Validation Recursion Prevention**: If Playbook validation executes Git commands during check evaluation, `PLAYBOOK_HOOK_ACTIVE=1` ensures nested hook invocations skip re-running Playbook checks, preventing infinite validation recursion.
+- **Preserved Companion Hook Delegation**: Nested execution under `PLAYBOOK_HOOK_ACTIVE=1` does **not** exit early or skip user hooks; it proceeds to Step 2 to execute the original companion hook (`.playbook-orig`) with exact arguments and stdin.
+- **Companion Hook Recursion Defense**: If an original companion hook internally invokes `git commit` or `git push`, `PLAYBOOK_ORIG_HOOK_ACTIVE=1` detects the self-recursion and halts explicitly with exit code `1` (`[playbook hook] Error: Recursive hook invocation detected: original companion hook is already active`), preventing infinite subprocess loops.
+- **Missing Companion Integrity Guard**: When a wrapper was installed around an original hook (`hasCompanion: true`), deletion or loss of the original companion file (`.playbook-orig`) is flagged as an integrity error (`backupIntegrity: "missing"`, `recoveryRequired: true`) in status inspections and fails runtime execution with exit code `1` rather than silently succeeding.
+
+---
+
+---
+
 ## 4. Downstream Directory Layout Created
 
 Running `playbook init` creates the canonical downstream layout defined in [governance/downstream-storage-convention.md](../../governance/downstream-storage-convention.md):

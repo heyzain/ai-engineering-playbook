@@ -1,0 +1,7 @@
+governance/state-machine.md:146: trailing whitespace.
++> **Architecture Amendment Notice (AMEND-20261110-001 ΓÇö Pending Formal Human Ratification)**:  
+governance/state-machine.md:147: trailing whitespace.
++> Historical Transition ┬º3.5 specified a single-phase waiver model wherein AST parsing of an exception document's documentary metadata (`Status: Approved`, human authorizer name, and sign-off string) directly mutated deliverable state to `waived`.  
+governance/state-machine.md:148: trailing whitespace.
++> Per Task 009B.2.4 and ADR-20261110-001, documentary metadata alone is not independently verified authorization evidence. The human-selected direction (**Option B: Two-Phase Exception Lifecycle**) partitions ┬º3.5 into **┬º3.5a (`PROPOSE_EXCEPTION`)** and **┬º3.5b (`AUTHORIZE_EXCEPTION`)**.  
+tooling/playbook-cli/src/index.ts:71: new blank line at EOF.

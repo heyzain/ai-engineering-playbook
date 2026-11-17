@@ -1,0 +1,35 @@
+{
+  "expo": {
+    "name": "{{PROJECT_ID}}",
+    "slug": "{{PROJECT_ID}}",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "scheme": "{{PROJECT_ID}}",
+    "userInterfaceStyle": "automatic",
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#ffffff"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.playbook.{{PROJECT_ID}}"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#ffffff"
+      },
+      "package": "com.playbook.{{PROJECT_ID_NORMALIZED}}"
+    },
+    "plugins": [
+      "expo-router",
+      "expo-secure-store",
+      "./plugins/with-security-headers.js"
+    ],
+    "runtimeVersion": {
+      "policy": "appVersion"
+    }
+  }
+}

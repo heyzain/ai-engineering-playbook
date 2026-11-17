@@ -12,6 +12,7 @@ import { ProjectScaffolder, OverwriteProtectionError } from "../core/scaffold.js
 import { createInitialManifest } from "../templates/manifest-template.js";
 import { createInitialState } from "../templates/state-template.js";
 import { TerminalPrompter, type PromptInterface } from "../utils/prompt.js";
+import { StackManager } from "../core/stacks/stack-manager.js";
 
 export interface InitCommandOptions {
   cwd?: string;
@@ -24,6 +25,7 @@ export interface InitCommandOptions {
   approvalMode?: ApprovalMode;
   milestone?: string;
   capabilities?: Capability[];
+  stack?: string;
   force?: boolean;
   nonInteractive?: boolean;
   prompter?: PromptInterface;
@@ -161,6 +163,22 @@ export async function runInit(options: InitCommandOptions): Promise<{ success: b
       milestone = milestone || "M-1.0.0";
     }
 
+    const stackManager = new StackManager();
+    let validatedStack: string | undefined;
+    let resolvedStacks: string[] | undefined;
+    if (options.stack) {
+      validatedStack = stackManager.validateStackId(options.stack);
+      resolvedStacks = stackManager.resolveDependencies([validatedStack]);
+      if (
+        validatedStack === "nextjs" ||
+        validatedStack === "react-native" ||
+        validatedStack === "expo"
+      ) {
+        if (!options.ecosystem) ecosystem = "node";
+        if (!options.language) language = "typescript";
+      }
+    }
+
     // 3. Generate Manifest & State
     const manifest = createInitialManifest({
       projectId,
@@ -172,6 +190,7 @@ export async function runInit(options: InitCommandOptions): Promise<{ success: b
       approvalMode,
       activeMilestoneId: milestone,
       capabilities: options.capabilities,
+      technologyStacks: resolvedStacks || (validatedStack ? [validatedStack] : undefined),
     });
 
     const state = createInitialState({
@@ -192,6 +211,23 @@ export async function runInit(options: InitCommandOptions): Promise<{ success: b
       createGitkeeps: true,
     });
 
+    // 4b. Apply technology stack template if specified
+    let stackFilesCount = 0;
+    if (validatedStack) {
+      const stackResult = stackManager.scaffoldStack({
+        stackName: validatedStack,
+        targetDir,
+        force: allowForce,
+        projectId,
+      });
+      stackFilesCount = stackResult.createdFiles.length;
+
+      stackManager.composeQualityGates({
+        targetDir,
+        stackNames: stackResult.appliedStacks || [validatedStack],
+      });
+    }
+
     prompter.close();
 
     // 5. Output summary
@@ -206,7 +242,7 @@ export async function runInit(options: InitCommandOptions): Promise<{ success: b
       ` Milestone:       ${milestone}`,
       ` Active Stage:    Stage 0 (Discovery & Problem Formulation)`,
       ` Governance:      ${profile} profile, ${approvalMode} approval mode`,
-      ` Tech Stack:      ${ecosystem} / ${language}`,
+      ` Tech Stack:      ${ecosystem} / ${language}${validatedStack ? ` (Stack: ${validatedStack}, ${stackFilesCount} files scaffolded)` : ""}`,
       "",
       " Governed Artifacts Created:",
       `   ${path.relative(targetDir, result.manifestPath)} (Project Manifest)`,

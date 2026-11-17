@@ -1,0 +1,242 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ai-engineering-playbook.org/schemas/quality-gates.schema.json",
+  "title": "AI Engineering Playbook - Quality Gates Configuration Schema",
+  "description": "Declarative, stack-agnostic configuration specifying quality-gate checks, execution commands, input patterns, timeout policies, severity levels, and deliverable bindings across Stages 0 through 6.",
+  "type": "object",
+  "required": [
+    "$schema",
+    "schema_version",
+    "project_id",
+    "default_profile",
+    "global_settings",
+    "gates"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "$schema": {
+      "type": "string",
+      "description": "URI reference to this JSON Schema."
+    },
+    "schema_version": {
+      "type": "string",
+      "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$",
+      "description": "SemVer version of the quality gates schema (e.g. 1.0.0)."
+    },
+    "project_id": {
+      "type": "string",
+      "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$",
+      "description": "Kebab-case project identifier matching manifest.json."
+    },
+    "default_profile": {
+      "type": "string",
+      "enum": ["strict", "standard", "lightweight"],
+      "description": "Default governance profile to evaluate if not specified."
+    },
+    "global_settings": {
+      "type": "object",
+      "required": [
+        "default_timeout_ms",
+        "max_concurrency",
+        "mask_secrets",
+        "log_retention_runs",
+        "max_journaled_log_bytes",
+        "env_allowlist"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "default_timeout_ms": {
+          "type": "integer",
+          "minimum": 1000,
+          "maximum": 600000,
+          "default": 120000,
+          "description": "Default timeout in milliseconds per check (1s to 10m)."
+        },
+        "max_concurrency": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 32,
+          "default": 4,
+          "description": "Maximum number of parallel check executions permitted."
+        },
+        "mask_secrets": {
+          "type": "boolean",
+          "default": true,
+          "description": "Whether to apply best-effort secret scrubbing on log output streams."
+        },
+        "log_retention_runs": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 50,
+          "default": 10,
+          "description": "Number of prior execution logs to retain per check."
+        },
+        "max_journaled_log_bytes": {
+          "type": "integer",
+          "minimum": 1024,
+          "maximum": 10485760,
+          "default": 2097152,
+          "description": "Maximum log bytes serialized into WAL journal before middle-truncation (default 2 MB)."
+        },
+        "env_allowlist": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Base environment variables permitted into subprocess environments."
+        },
+        "sensitive_patterns": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Additional custom regex patterns to scrub from log streams."
+        }
+      }
+    },
+    "gates": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["stage", "stage_name", "checks"],
+        "additionalProperties": false,
+        "properties": {
+          "stage": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 6,
+            "description": "Lifecycle stage number (0 to 6)."
+          },
+          "stage_name": {
+            "type": "string",
+            "description": "Stage title matching Playbook stage taxonomy."
+          },
+          "checks": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "id",
+                "name",
+                "type",
+                "deliverable_id",
+                "command",
+                "args"
+              ],
+              "additionalProperties": false,
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$",
+                  "description": "Unique identifier for this check."
+                },
+                "name": {
+                  "type": "string",
+                  "description": "Human-readable check title."
+                },
+                "type": {
+                  "type": "string",
+                  "enum": [
+                    "automated_test",
+                    "build_typecheck",
+                    "static_analysis",
+                    "schema_validation",
+                    "security_audit",
+                    "manual_functional",
+                    "visual_review",
+                    "accessibility_audit",
+                    "architecture_review"
+                  ],
+                  "description": "Verification method or discipline."
+                },
+                "deliverable_id": {
+                  "type": "string",
+                  "description": "Associated deliverable ID in active stage."
+                },
+                "requirement_ids": {
+                  "type": "array",
+                  "items": { "type": "string" },
+                  "description": "Traceable requirement IDs validated by this check."
+                },
+                "inputs": {
+                  "type": "array",
+                  "items": { "type": "string" },
+                  "description": "Glob patterns defining input files that affect this check (used for RIF freshness)."
+                },
+                "exclude": {
+                  "type": "array",
+                  "items": { "type": "string" },
+                  "description": "Glob patterns to exclude from RIF computation (e.g. dist/**, coverage/**)."
+                },
+                "text_patterns": {
+                  "type": "array",
+                  "items": { "type": "string" },
+                  "description": "Glob patterns explicitly classified as text for LF normalization."
+                },
+                "binary_patterns": {
+                  "type": "array",
+                  "items": { "type": "string" },
+                  "description": "Glob patterns explicitly classified as binary (hashed as raw bytes)."
+                },
+                "lockfiles": {
+                  "type": "array",
+                  "items": { "type": "string" },
+                  "description": "Dependency lockfiles tracked for this check (e.g. package-lock.json, Cargo.lock)."
+                },
+                "tool_version_command": {
+                  "type": "string",
+                  "description": "Command to determine tool version (e.g. 'node --version', 'tsc --version')."
+                },
+                "command": {
+                  "type": "string",
+                  "description": "Executable or binary to run."
+                },
+                "args": {
+                  "type": "array",
+                  "items": { "type": "string" },
+                  "description": "Arguments array passed to command without subshell."
+                },
+                "working_dir": {
+                  "type": "string",
+                  "description": "Working directory relative to project root."
+                },
+                "env": {
+                  "type": "object",
+                  "additionalProperties": { "type": "string" },
+                  "description": "Explicit environment variables passed to child process."
+                },
+                "timeout_ms": {
+                  "type": "integer",
+                  "minimum": 1000,
+                  "maximum": 600000,
+                  "description": "Per-check timeout override in milliseconds."
+                },
+                "severity": {
+                  "type": "string",
+                  "enum": ["blocking", "warning", "advisory"],
+                  "default": "blocking",
+                  "description": "Failure severity: 'blocking' fails gate run, 'warning'/'advisory' records warning."
+                },
+                "depends_on": {
+                  "type": "array",
+                  "items": { "type": "string" },
+                  "description": "Check IDs that must complete successfully before this check runs."
+                },
+                "retry": {
+                  "type": "object",
+                  "required": ["count", "delay_ms"],
+                  "additionalProperties": false,
+                  "properties": {
+                    "count": { "type": "integer", "minimum": 1, "maximum": 5 },
+                    "delay_ms": { "type": "integer", "minimum": 100, "maximum": 30000 }
+                  }
+                },
+                "profiles": {
+                  "type": "array",
+                  "items": { "type": "string", "enum": ["strict", "standard", "lightweight"] },
+                  "description": "Governance profiles in which this check is enabled. If omitted, runs in all profiles."
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

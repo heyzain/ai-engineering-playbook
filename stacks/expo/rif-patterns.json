@@ -1,0 +1,24 @@
+{
+  "stack": "expo",
+  "version": "1.0.0",
+  "rules": [
+    "RULE-EXPO-PLUGINS",
+    "RULE-EXPO-ROUTER"
+  ],
+  "text_patterns": [
+    "app/**/*.{ts,tsx,js,jsx,json}",
+    "plugins/**/*.{js,mjs,ts}",
+    "app.json",
+    "app.config.{js,ts,mjs}",
+    "eas.json"
+  ],
+  "binary_patterns": [
+    "assets/**/*.{png,jpg,jpeg,webp,ico,ttf,otf}"
+  ],
+  "exclude_patterns": [
+    ".expo/**",
+    ".expo-shared/**",
+    "web-build/**",
+    "dist/**"
+  ]
+}

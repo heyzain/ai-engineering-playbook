@@ -8,7 +8,7 @@ export interface ValidationIssue {
 
 export interface ValidationResult {
   valid: boolean;
-  target: "manifest" | "state";
+  target: "manifest" | "state" | "quality-gates";
   errors: ValidationIssue[];
   formattedErrors: string;
 }

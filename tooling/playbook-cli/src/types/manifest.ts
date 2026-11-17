@@ -31,5 +31,6 @@ export interface ProjectManifest {
   };
   active_lifecycle_stage: number;
   capabilities: Capability[];
+  technology_stacks?: string[];
   metadata?: Record<string, unknown>;
 }

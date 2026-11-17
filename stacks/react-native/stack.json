@@ -1,0 +1,9 @@
+{
+  "$schema": "https://ai-engineering-playbook.org/schemas/stack-metadata.schema.json",
+  "id": "react-native",
+  "name": "React-native",
+  "version": "1.0.0",
+  "description": "React Native bare CLI foundation stack with New Architecture support and platform companion guards",
+  "frameworkTarget": "React Native >= 0.74.0 < 0.78.0 (Recommended: React Native 0.76 LTS)",
+  "dependencies": []
+}

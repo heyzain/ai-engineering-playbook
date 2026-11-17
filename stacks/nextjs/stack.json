@@ -1,0 +1,9 @@
+{
+  "$schema": "https://ai-engineering-playbook.org/schemas/stack-metadata.schema.json",
+  "id": "nextjs",
+  "name": "Nextjs",
+  "version": "1.0.0",
+  "description": "Next.js 15 App Router reference stack",
+  "frameworkTarget": "Next.js >= 14.2.0 < 16.0.0 (Recommended: Next.js 15 LTS)",
+  "dependencies": []
+}

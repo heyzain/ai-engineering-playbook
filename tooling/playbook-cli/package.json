@@ -14,8 +14,8 @@
     "README.md"
   ],
   "scripts": {
-    "sync-schemas": "node -e \"const fs = require('fs'); const path = require('path'); const src = path.resolve('../../schemas'); if (fs.existsSync(src)) { fs.copyFileSync(path.join(src, 'project-manifest.schema.json'), 'src/schemas/project-manifest.schema.json'); fs.copyFileSync(path.join(src, 'project-state.schema.json'), 'src/schemas/project-state.schema.json'); }\"",
-    "build": "npm run sync-schemas && tsc && node -e \"const fs = require('fs'); fs.cpSync('src/schemas', 'dist/src/schemas', {recursive: true});\"",
+    "sync-schemas": "node -e \"const fs = require('fs'); const path = require('path'); const src = path.resolve('../../schemas'); if (fs.existsSync(src)) { fs.copyFileSync(path.join(src, 'project-manifest.schema.json'), 'src/schemas/project-manifest.schema.json'); fs.copyFileSync(path.join(src, 'project-state.schema.json'), 'src/schemas/project-state.schema.json'); fs.copyFileSync(path.join(src, 'quality-gates.schema.json'), 'src/schemas/quality-gates.schema.json'); }\"",
+    "build": "npm run sync-schemas && tsc && node -e \"const fs = require('fs'); fs.cpSync('src/schemas', 'dist/src/schemas', {recursive: true}); if (fs.existsSync('src/core/ci/templates')) fs.cpSync('src/core/ci/templates', 'dist/src/core/ci/templates', {recursive: true});\"",
     "watch": "tsc --watch",
     "test": "node --test dist/tests/**/*.test.js",
     "pretest": "npm run build",
@@ -23,7 +23,8 @@
   },
   "dependencies": {
     "ajv": "^8.17.1",
-    "ajv-formats": "^3.0.1"
+    "ajv-formats": "^3.0.1",
+    "yaml": "^2.9.1"
   },
   "devDependencies": {
     "@types/node": "^24.10.1",

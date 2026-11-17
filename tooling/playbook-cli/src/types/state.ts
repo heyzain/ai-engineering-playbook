@@ -28,6 +28,14 @@ export interface EvidenceRecord {
   verified_at: string;
   verified_by: string;
   actor_type: "agent" | "human";
+  rif?: string | null;
+  working_tree_clean?: boolean | null;
+  inputs_hash?: string | null;
+  quality_gate?: {
+    gate_id?: string;
+    check_id?: string;
+    duration_ms?: number;
+  } | null;
 }
 
 export interface Deliverable {

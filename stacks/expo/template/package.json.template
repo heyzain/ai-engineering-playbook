@@ -1,0 +1,40 @@
+{
+  "name": "{{PROJECT_ID}}",
+  "version": "0.1.0",
+  "main": "expo-router/entry",
+  "scripts": {
+    "start": "expo start",
+    "android": "expo start --android",
+    "ios": "expo start --ios",
+    "web": "expo start --web",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint .",
+    "test": "node --test",
+    "audit:secrets": "node scripts/audit-secrets.mjs",
+    "audit:companions": "node scripts/audit-companions.mjs",
+    "audit:accessibility": "node scripts/audit-accessibility.mjs",
+    "audit:expo-config": "node scripts/audit-expo-config.mjs",
+    "audit:expo-doctor": "node scripts/audit-expo-doctor.mjs",
+    "audit:routes": "node scripts/audit-routes.mjs",
+    "audit:expo-plugins": "node scripts/audit-expo-plugins.mjs",
+    "audit:expo-secrets": "node scripts/audit-expo-secrets.mjs"
+  },
+  "dependencies": {
+    "expo": "~58.0.23",
+    "expo-constants": "~58.0.15",
+    "expo-linking": "~58.0.16",
+    "expo-router": "~58.0.30",
+    "expo-secure-store": "~58.0.2",
+    "expo-status-bar": "~58.0.4",
+    "react": "19.3.0",
+    "react-dom": "19.3.0",
+    "react-native": "0.88.1",
+    "react-native-safe-area-context": "~5.11.1",
+    "react-native-screens": "~4.30.1"
+  },
+  "devDependencies": {
+    "@types/react": "19.3.0",
+    "eslint": "9.14.0",
+    "typescript": "~6.0.3"
+  }
+}

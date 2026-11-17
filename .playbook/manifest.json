@@ -1,0 +1,33 @@
+{
+  "$schema": "https://ai-engineering-playbook.org/schemas/project-manifest.schema.json",
+  "schema_version": "1.0.0",
+  "project_id": "ai-engineering-playbook",
+  "project_name": "Ai Engineering Playbook",
+  "active_milestone_id": "M-1.0.0",
+  "description": "Ai Engineering Playbook - governed by AI Engineering Playbook",
+  "playbook": {
+    "version": "1.0.0",
+    "governance_profile": "standard",
+    "approval_mode": "solo"
+  },
+  "tech_stack": {
+    "ecosystem": "agnostic",
+    "primary_language": "agnostic"
+  },
+  "paths": {
+    "docs_root": "docs",
+    "prd_dir": "docs/prd",
+    "adr_dir": "docs/adr",
+    "rfc_dir": "docs/rfcs",
+    "gates_dir": "docs/gates",
+    "exceptions_dir": "docs/exceptions",
+    "state_file": ".playbook/state.json"
+  },
+  "active_lifecycle_stage": 0,
+  "capabilities": [
+    "automated_testing",
+    "contract_testing",
+    "static_type_checking",
+    "ast_linting"
+  ]
+}

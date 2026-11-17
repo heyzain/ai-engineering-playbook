@@ -12,14 +12,17 @@ export class SchemaValidator {
   private ajv: Ajv2020;
   private validateManifestFn: ValidateFunction;
   private validateStateFn: ValidateFunction;
+  private validateQualityGatesFn?: ValidateFunction;
   private manifestSchema: Record<string, unknown>;
   private stateSchema: Record<string, unknown>;
+  private qualityGatesSchema?: Record<string, unknown>;
 
   constructor(customSchemaDir?: string) {
     const schemaDir = customSchemaDir || this.resolveSchemaDir();
 
     const manifestSchemaPath = path.join(schemaDir, "project-manifest.schema.json");
     const stateSchemaPath = path.join(schemaDir, "project-state.schema.json");
+    const qualityGatesSchemaPath = path.join(schemaDir, "quality-gates.schema.json");
 
     if (!fs.existsSync(manifestSchemaPath)) {
       throw new Error(`Manifest schema not found at: ${manifestSchemaPath}`);
@@ -30,6 +33,10 @@ export class SchemaValidator {
 
     this.manifestSchema = JSON.parse(fs.readFileSync(manifestSchemaPath, "utf-8"));
     this.stateSchema = JSON.parse(fs.readFileSync(stateSchemaPath, "utf-8"));
+
+    if (fs.existsSync(qualityGatesSchemaPath)) {
+      this.qualityGatesSchema = JSON.parse(fs.readFileSync(qualityGatesSchemaPath, "utf-8"));
+    }
 
     // Handle CJS/ESM interop
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -45,6 +52,9 @@ export class SchemaValidator {
 
     this.validateManifestFn = this.ajv.compile(this.manifestSchema);
     this.validateStateFn = this.ajv.compile(this.stateSchema);
+    if (this.qualityGatesSchema) {
+      this.validateQualityGatesFn = this.ajv.compile(this.qualityGatesSchema);
+    }
   }
 
   private resolveSchemaDir(): string {
@@ -113,7 +123,34 @@ export class SchemaValidator {
     };
   }
 
-  public formatErrors(target: "manifest" | "state", errors: ValidationIssue[]): string {
+  public validateQualityGates(data: unknown): ValidationResult {
+    if (!this.validateQualityGatesFn) {
+      throw new Error("Quality gates schema is not loaded or could not be found.");
+    }
+    const valid = Boolean(this.validateQualityGatesFn(data));
+    const errors: ValidationIssue[] = [];
+
+    if (!valid && this.validateQualityGatesFn.errors) {
+      for (const err of this.validateQualityGatesFn.errors) {
+        errors.push({
+          instancePath: err.instancePath || "/",
+          schemaPath: err.schemaPath || "",
+          keyword: err.keyword || "unknown",
+          message: err.message || "Unknown validation error",
+          params: (err.params as Record<string, unknown>) || {},
+        });
+      }
+    }
+
+    return {
+      valid,
+      target: "quality-gates",
+      errors,
+      formattedErrors: this.formatErrors("quality-gates", errors),
+    };
+  }
+
+  public formatErrors(target: "manifest" | "state" | "quality-gates", errors: ValidationIssue[]): string {
     if (errors.length === 0) {
       return `[${target}] Schema validation passed.`;
     }
@@ -154,5 +191,9 @@ export class SchemaValidator {
 
   public getStateSchema(): Record<string, unknown> {
     return this.stateSchema;
+  }
+
+  public getQualityGatesSchema(): Record<string, unknown> | undefined {
+    return this.qualityGatesSchema;
   }
 }

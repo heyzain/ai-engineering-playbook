@@ -102,6 +102,29 @@ When halted, the agent must:
 - Issue a clear diagnostic report detailing the specific halt condition.
 - Request human clarification or intervention.
 
+### Controlled Operator-Attested Recovery Protocol (`playbook gate recover` / `playbook recover`)
+When a stage is placed into `stage_status: "blocked"` (e.g. by a quality-gate check failure under `--halt-on-failure`, an unresolved blocking RFC, or an expired exception), recovery is an operator-attested governance operation.
+
+> [!CAUTION]
+> **Manual JSON State Editing is Prohibited**: Directly editing `.playbook/state.json` to alter `stage_status` from `blocked` to `in_progress` is strictly unauthorized. Arbitrary JSON file edits do not establish verifiable authorization, bypass transactional safeguards, and fail to generate append-only audit evidence.
+
+To safely recover a blocked stage:
+1. **Remediation**: The operator investigates the root cause, amends specifications, resolves open RFCs, or fixes code defects.
+2. **Explicit Command Invocation**: The operator executes `playbook gate recover --stage <N>` (or `playbook recover --stage <N>`).
+3. **Interactive Attestation Guardrails**:
+   - **Interactive TTY Enforcement**: The recovery command requires an active interactive terminal session (`isatty`). Scripted, piped, or automated executions fail closed with `TTY_REQUIRED`. Note that TTY enforcement establishes an interactive terminal session, not physical user authentication.
+   - **Rejection of Recognized Agent Labels**: The command rejects recognized AI agent identifiers (`AGENT_RECOVERY_FORBIDDEN`). While this filters automated agent signatures, it cannot independently prove human presence or prevent an agent with terminal access from declaring a human name.
+   - **Mandatory Substantive Reason**: Requires a substantive explanation (`--reason`, minimum 10 characters) detailing the root cause resolution.
+   - **Confirmation Phrase**: Requires interactively typing `CONFIRM RECOVER STAGE <N>`.
+4. **State Machine & WAL Transaction Guarantees**:
+   - Transitions `stage_status` strictly to `in_progress`.
+   - Does **not** approve the gate, advance the stage, or mark deliverables as verified.
+   - Preserves historical failed evidence in `deliverable.evidence[]` for full auditability.
+   - Both the state update and the append-only recovery audit log (`.playbook/logs/recovery-stage-<stage>-<timestamp>.log`) are committed atomically within the same Write-Ahead Logging transaction (`WriteAheadTransactionManager`) under exclusive file locking. A crash during recovery cannot leave a committed state transition without its audit log.
+5. **Identity Confidence & Trust Boundary (Operator-Attested Recovery)**:
+   - Local CLI executions record operator-attested identity via an interactive TTY session. This is an explicit attestation by the terminal operator, not cryptographic authentication or guaranteed prevention of impersonation. The audit trail explicitly documents:
+     `Identity Confidence: Operator-attested via interactive TTY session (Non-cryptographic; does not verify physical identity or prevent impersonation)`.
+
 ---
 
 ## 6. Clarification Request Protocol

@@ -1,0 +1,185 @@
+# >>> AI ENGINEERING PLAYBOOK CI (MANAGED WORKFLOW - DO NOT EDIT) >>>
+# Playbook CLI Version: 1.0.0
+# Provider: github
+# Generated At: 2026-11-03T16:00:00.000Z
+# <<< AI ENGINEERING PLAYBOOK CI (MANAGED WORKFLOW - DO NOT EDIT) <<<
+
+name: Playbook Quality Gates & Verification
+
+on:
+  pull_request:
+    branches: [main, master, release/*]
+    types: [opened, synchronize, reopened]
+  push:
+    branches: [main, master, release/*]
+  workflow_dispatch:
+    inputs:
+      stage:
+        description: "Target lifecycle stage to evaluate (leave empty for project state default)"
+        required: false
+        type: string
+
+# Least-privilege permissions: Strictly read-only for repository contents.
+# Zero write scopes. Step summaries write to runner environment without API tokens.
+permissions:
+  contents: read
+
+# Concurrency policy: Cancel redundant in-flight runs on the same PR branch.
+# Push events to main are never cancelled to guarantee complete audit trails.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  quality-gates:
+    name: "Playbook / Quality Gates"
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout Code Snapshot
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2 (Pinned immutable SHA)
+        with:
+          fetch-depth: 0 # Full history required for RIF verification and diff boundary detection
+
+      - name: Setup Node.js Runtime
+        uses: actions/setup-node@39370e3970a6d050c480ffad4ff0ed4d3fdee5af # v4.1.0 (Pinned immutable SHA)
+        with:
+          node-version: 20
+          cache: "npm"
+
+      - name: Install Dependencies & Build CLI
+        run: |
+          if [ -f "tooling/playbook-cli/package.json" ]; then
+            npm --prefix tooling/playbook-cli ci
+            npm --prefix tooling/playbook-cli run build
+            npm --prefix tooling/playbook-cli link
+          elif [ -f "package.json" ]; then
+            npm ci
+          fi
+
+      # Step 1: Governance Schema Conformance
+      - name: Validate Manifest and State Schemas
+        run: npx @ai-engineering-playbook/cli validate
+
+      # Step 2: Governance Static Analysis & Policy Linting
+      - name: Lint Governance Policies & Invariants
+        run: playbook lint --strict --format json > lint-raw-report.json
+
+      # Step 3: Governance Readiness & Blocker Inspection
+      - name: Inspect Governance Readiness
+        run: npx @ai-engineering-playbook/cli inspect --json
+
+      # Step 4: Reproducible Input Fingerprint (RIF) Verification
+      - name: Verify Reproducible Input Fingerprints (RIF)
+        run: npx @ai-engineering-playbook/cli gate verify --json
+
+      # Step 5: Tier 3 Headless Gate Execution (Clean Repo Mandated)
+      - name: Execute Quality Gates (Headless)
+        run: npx @ai-engineering-playbook/cli gate run --headless --json > gate-raw-report.json
+
+      # Step 6: Cryptographic Evidence Byte-Hash Verification
+      - name: Verify Evidence Hashes
+        run: npx @ai-engineering-playbook/cli verify-evidence --json
+
+      # Step 7: Generate CI Evidence Report & Step Summary
+      - name: Publish Playbook Step Summary & Telemetry
+        if: always()
+        env:
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          GITHUB_WORKFLOW: ${{ github.workflow }}
+          GITHUB_RUN_ID: ${{ github.run_id }}
+          GITHUB_RUN_ATTEMPT: ${{ github.run_attempt }}
+          GITHUB_EVENT_NAME: ${{ github.event_name }}
+          GITHUB_SHA: ${{ github.sha }}
+          GITHUB_REF: ${{ github.ref }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          PR_BASE_REF: ${{ github.event.pull_request.base.ref }}
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          JOB_STATUS: ${{ job.status }}
+        run: |
+          if [ ! -f "gate-report.json" ]; then
+            npx @ai-engineering-playbook/cli ci report --output gate-report.json --raw gate-raw-report.json --summary || true
+          fi
+          if [ ! -f "gate-report.json" ]; then
+            node -e '
+              const fs = require("fs");
+              const runId = process.env.GITHUB_RUN_ID || "unknown";
+              const attempt = process.env.GITHUB_RUN_ATTEMPT || "1";
+              const repo = process.env.GITHUB_REPOSITORY || "unknown";
+              const report = {
+                "$schema": "https://ai-engineering-playbook.org/schemas/ci-run-evidence.schema.json",
+                "schema_version": "1.0.0",
+                "report_generation_method": "emergency_fallback",
+                "gate_execution_started": false,
+                "gate_execution_completed": false,
+                "evidence_completeness": "incomplete",
+                "run_identity": {
+                  "provider": "github_actions",
+                  "repository": repo,
+                  "workflow_name": process.env.GITHUB_WORKFLOW || "Playbook Quality Gates & Verification",
+                  "run_id": String(runId),
+                  "run_attempt": Number(attempt),
+                  "run_url": "https://github.com/" + repo + "/actions/runs/" + runId,
+                  "trigger_event": process.env.GITHUB_EVENT_NAME || "push",
+                  "ref": process.env.GITHUB_REF || null,
+                  "pull_request_number": process.env.PR_NUMBER ? parseInt(process.env.PR_NUMBER, 10) : null,
+                  "head_branch": null,
+                  "base_branch": process.env.PR_BASE_REF || null,
+                  "pr_head_sha": process.env.PR_HEAD_SHA || null,
+                  "pr_base_sha": process.env.PR_BASE_SHA || null,
+                  "checked_out_commit_sha": process.env.GITHUB_SHA || "0000000000000000000000000000000000000000",
+                  "checked_out_tree_sha": "0000000000000000000000000000000000000000",
+                  "head_commit_sha": process.env.PR_HEAD_SHA || process.env.GITHUB_SHA || "0000000000000000000000000000000000000000",
+                  "head_tree_sha": "0000000000000000000000000000000000000000",
+                  "is_merge_commit": false,
+                  "commit_verified": false
+                },
+                "runtime_environment": {
+                  "os_platform": process.platform,
+                  "os_release": process.version,
+                  "node_version": process.version,
+                  "cli_version": "unavailable",
+                  "runner_arch": process.arch
+                },
+                "governance_evaluation": {
+                  "stage": 0,
+                  "stage_name": "Discovery",
+                  "profile": "standard",
+                  "working_tree_clean": false,
+                  "overall_outcome": "incomplete",
+                  "started_at": new Date().toISOString(),
+                  "completed_at": new Date().toISOString(),
+                  "duration_ms": 0
+                },
+                "summary": { "total": 0, "passed": 0, "failed": 0, "warning": 0, "skipped": 0 },
+                "checks": [],
+                "artifacts": [{ "name": "playbook-ci-evidence-" + runId + "-" + attempt, "path": "gate-report.json", "retention_days": 30 }],
+                "diagnostics": ["Early CI pipeline failure: CLI was unavailable or failed before report generation."],
+                "limitations": [
+                  "Emergency fallback report generated due to early CI pipeline failure before CLI availability.",
+                  "A matching SHA-256 hash confirms only byte-level artifact integrity; it does NOT establish runner authenticity or cryptographic non-repudiation.",
+                  "Evidence produced within a cloud runner execution environment is subject to provider retention policies (default 30 days on GitHub).",
+                  "Long-term governance immutability is rooted in Git-committed hashes and human approval fingerprints, not ephemeral cloud runner storage.",
+                  "Checked-out tree SHA verifies the state of the filesystem tree evaluated by quality gates; merge commits may differ from the PR branch tip."
+                ]
+              };
+              fs.writeFileSync("gate-report.json", JSON.stringify(report, null, 2));
+              if (process.env.GITHUB_STEP_SUMMARY) {
+                fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, "\\n## AI Engineering Playbook Quality Gates & Verification\\n\\n> [!WARNING]\\n> **Verdict**: :warning: **INCOMPLETE** — Workflow failed before CLI could execute quality gates.\\n");
+              }
+            '
+          fi
+
+      # Step 7: Upload Run-Scoped Hash-Verifiable Evidence
+      - name: Upload CI Execution Evidence
+        if: always()
+        uses: actions/upload-artifact@b4b15b8c7c6ac21ea08fcf65892d2ee8f75cf882 # v4.4.3 (Pinned immutable SHA)
+        with:
+          name: playbook-ci-evidence-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            .playbook/logs/
+            gate-report.json
+            lint-raw-report.json
+          retention-days: 30

@@ -142,6 +142,13 @@ Represents the micro lifecycle of an individual deliverable artifact:
 ---
 
 ### 3.5 `RECORD_EXCEPTION`
+> [!WARNING]
+> **Architecture Amendment Notice (AMEND-20261110-001 — Pending Formal Human Ratification)**:  
+> Historical Transition §3.5 specified a single-phase waiver model wherein AST parsing of an exception document's documentary metadata (`Status: Approved`, human authorizer name, and sign-off string) directly mutated deliverable state to `waived`.  
+> Per Task 009B.2.4 and ADR-20261110-001, documentary metadata alone is not independently verified authorization evidence. The human-selected direction (**Option B: Two-Phase Exception Lifecycle**) partitions §3.5 into **§3.5a (`PROPOSE_EXCEPTION`)** and **§3.5b (`AUTHORIZE_EXCEPTION`)**.  
+> The specifications below document this proposed architecture amendment. Formal policy ratification and implementation authorization remain pending Lead Architect sign-off. (**Architecture review: COMPLETE — READY FOR FORMAL HUMAN RATIFICATION**).
+
+#### Historical Transition §3.5 (Preserved for Historical Baseline Traceability — Superseded)
 - **Purpose**: Records an authorized human waiver of a specific deliverable requirement.
 - **Trigger**: Human authorizes a temporary exception per `exception-record-template.md`.
 - **Preconditions**:
@@ -152,6 +159,147 @@ Represents the micro lifecycle of an individual deliverable artifact:
   - Target deliverable `validation_status` set to `waived`.
   - Target deliverable `status` set to `waived`.
   - Target deliverable `exception_ref` populated with `EXC-YYYYMMDD-###`.
+- **Superseded Rationale**: Single-phase intake prematurely waived deliverables based on Markdown text alone without interactive operator attestation or cryptographic binding.
+
+---
+
+### 3.5a `PROPOSE_EXCEPTION` (Phase 1: Exception Proposal Registration — AMEND-20261110-001 Proposed)
+- **Purpose**: Registers an AST-validated exception proposal against a required deliverable without modifying deliverable lifecycle status or granting waiver authority.
+- **Trigger**: AI agent or engineer authors an exception record and registers it via `recordException()` / `playbook exception propose`.
+- **Preconditions**:
+  - Active stage status must be `in_progress`.
+  - Target deliverable `<DELIV-ID>` exists in `current_stage_detail.deliverables[]`.
+  - Exception markdown file physically exists within repository bounds.
+  - Conforms to canonical AST template requirements (valid filename `EXC-YYYYMMDD-###.md`, matching H1, metadata table, non-empty justification, compensating controls, strict UTC expiration boundary in future, non-agent authorizer string).
+  - Scope: `waived_requirement` matches `<DELIV-ID>` or active stage scope.
+  - No existing exception in `current_stage_detail.exceptions[]` with identical ID is already in `active` status.
+- **State Mutation**:
+  - Exception record appended to (or updated in) `current_stage_detail.exceptions[]` with `status: "proposed"`.
+  - Records real-time document digest (`document_sha256`).
+  - **NON-NEGOTIABLE INVARIANT**: Target deliverable status is **NOT** modified (`status` remains `not_started`, `in_progress`, or `completed`; `validation_status` unchanged; `exception_ref` remains `null`).
+  - Appends audit event `EXCEPTION_PROPOSED`.
+- **Postconditions**:
+  - Deliverable remains un-waived and subject to normal verification rules.
+  - Proposed exception provides **zero** waiver authority and cannot satisfy any deliverable or gate rule.
+- **Failure Behavior**:
+  - If AST validation fails, path escapes repo, ID is duplicate of an active exception, or expiration check fails, transaction aborts fail-closed with zero state mutation.
+
+---
+
+### 3.5b `AUTHORIZE_EXCEPTION` (Phase 2: Operator-Attested Waiver Authorization — AMEND-20261110-001 Proposed)
+- **Purpose**: Authorizes a previously proposed exception through interactive operator attestation, role declaration, and cryptographic fingerprint binding, transitioning the exception to `active` and mutates the target deliverable to `waived`.
+- **Trigger**: Human operator executes `playbook exception approve --id <EXC-ID>`.
+- **Preconditions**:
+  - Active stage status is `in_progress`.
+  - Target exception exists in `current_stage_detail.exceptions[]` with `status: "proposed"`.
+  - Interactive Terminal Attestation: Evaluates `process.stdin.isTTY === true` and `process.stdout.isTTY === true`. Automated/scripted execution rejected (`TTY_REQUIRED`).
+  - Agent Prohibition: Operator identity rejects recognized AI agent patterns (`isForbiddenAgentName`).
+  - Exact Confirmation Phrase: Operator enters `CONFIRM EXCEPTION <EXC-ID>`.
+  - AST & Integrity Re-validation: Exception file on disk re-evaluated; must match recorded `document_sha256` and pass all structural checks.
+  - Deterministic Expiry Check: Current UTC timestamp strictly $<$ exclusive boundary `expires_at_utc` (where date `YYYY-MM-DD` expires at midnight UTC beginning the following day: `(D + 1)T00:00:00.000Z`). If `current_utc_time >= expires_at_utc`, approval is rejected (`EXCEPTION_EXPIRED`).
+  - Declared Role: Operator declares an engineering governance role (e.g. `Lead Architect`, `Engineering Manager`). *(Trust Boundary: Declared role is documentary attribution and operator attestation; independent role validation is un-implemented in CLI).*
+- **State Mutation**:
+  - Target exception in `current_stage_detail.exceptions[]` transitions to `status: "active"`, with `authorized_by`, `authorized_at`, and `signature_reference`.
+  - Target deliverable `status` transitions to `"waived"`.
+  - Target deliverable `validation_status` transitions to `"waived"`.
+  - Target deliverable `exception_ref` set to `<EXC-ID>`.
+  - Cryptographic sidecar generated at `.playbook/exceptions/<EXC-ID>.fingerprint.json` sealing the approval decision, document hash, deliverable scope, and state hash.
+  - Appends audit event `EXCEPTION_AUTHORIZED`.
+- **Postconditions**:
+  - Target deliverable is waived under an active, fingerprint-bound exception.
+  - Deliverable satisfies stage gate waiver rules while active and unexpired.
+- **Failure Behavior**:
+  - Non-TTY execution, agent identifier, phrase mismatch, document modification, or expiration aborts fail-closed via WAL with zero state mutations.
+
+---
+
+### 3.5c Exception Lifecycle Events: Expiry, Revocation, Remediation, and Migration (AMEND-20261110-001 Proposed)
+
+1. **Deterministic Derived Expiry (Exclusive Midnight UTC Boundary)**:
+   - For an exception with expiration date `YYYY-MM-DD`, the exclusive expiry instant `expires_at_utc` is calculated as midnight UTC at the beginning of the following calendar day:
+     $$\text{expires\_at\_utc} = \text{Date}(\text{YYYY-MM-DD}) + 1\text{ calendar day at }00:00:00.000\text{Z}$$
+   - **Effective Expiry Condition**:
+     $$\text{current\_utc\_time} \ge \text{expires\_at\_utc}$$
+   - **Parsing & Normalization**: Expiration dates must strictly conform to `YYYY-MM-DD`. Sub-day times or offsets are rejected. Invalid calendar dates (e.g. `2026-02-30`) fail closed with `EXCEPTION_DATE_INVALID`. Missing or malformed expiration fields fail closed with `EXCEPTION_METADATA_INVALID`.
+   - **Clock Responsibilities**:
+     - **UTC Wall Clock** (`Date.now()`, `toISOString()`): Responsible for calendar date parsing, ISO 8601 formatting, and expiry comparison ($\text{current\_utc\_time} \ge \text{expires\_at\_utc}$).
+     - **Monotonic Clock** (`process.hrtime.bigint()`, `performance.now()`): Responsible strictly for elapsed-time measurements, runtime timeouts, and transaction mutex lock duration (`lockTimeoutMs`). Monotonic clocks cannot be converted to UTC wall-clock time.
+   - **Temporal Anomaly Handling & Backward-Clock Detection Technical Scope**:
+     - Non-parseable or malformed timestamp strings fail closed with `TIME_INVALID`.
+     - *Backward-Clock Detection Scope*: During a single active, continuously running controller process execution session, the controller can sample a monotonic clock alongside UTC wall-clock checks to detect if the local system wall clock moved backwards between sequential operations during that session, aborting fail-closed with `TEMPORAL_DRIFT_DETECTED`. However, monotonic time cannot independently authenticate UTC, determine real-world calendar time, or detect clock tampering that occurred prior to process startup or across separate CLI invocations.
+     - *Clock-Skew Normative Clarification*: There is no normative governance rule or schema requirement establishing a 60,000 ms threshold for exceptions or general state transitions. (The 60,000 ms threshold exists strictly as a local implementation heuristic in `resolver.ts` for filtering deliverable evidence during resolver evaluation). Future timestamps violating specific validity invariants fail closed without asserting an arbitrary normative skew threshold.
+   - **Daemon-Free Enforcement**: The authoritative resolver derives effective status `expired` dynamically across `submitStage`, `checkGateEligibility`, and `inspect`, voiding waiver eligibility immediately without requiring background processes or daemons. Persisted status in `state.json` may be lazily updated.
+   - **Documented Clock Limitation**: Reliable expiry cannot be guaranteed against an administrator or local actor who manipulates the operating system's real-time clock without an external authenticated time source (NTP) or RFC 3161 cryptographic timestamping.
+
+2. **Controlled Revocation & Audit Linkage**:
+   - **Trigger**: Operator executes `playbook exception revoke --id <EXC-ID>`.
+   - **Effect on Exception**: Exception in `current_stage_detail.exceptions[]` transitions to `status: "revoked"`, with `revoked_at: <ISO_UTC>`, `revoked_by: <actor>`, and `revocation_reason: <reason>`. Target deliverable ID remains permanently documented in `waived_requirement`.
+   - **Effect on Deliverable**: Target deliverable `exception_ref` is cleared to `null`; `status` reverts to `"in_progress"`.
+   - **Validation Status Safety**: `validation_status` is **not** blindly hardcoded to `"failed"`. The authoritative evidence resolver re-evaluates actual `evidence[]`: if no evidence exists, it becomes `"unvalidated"`; if failing evidence exists, `"failed"`. Historical evidence in `evidence[]` and exception files on disk are never erased.
+   - **Audit Linkage & Trust Qualification**:
+     - An audit event `EXCEPTION_REVOKED` is appended to `state.audit_trail[]` recording: `{ action: "EXCEPTION_REVOKED", exception_id, deliverable_id, timestamp, actor, actor_type, reason, prior_authorization_ref }`.
+     - **Audit Trail Guarantees & Tamper-Evidence Qualification**:
+       - *Application-Enforced Append-Only*: The controller code only appends entries and exposes no deletion or truncation commands.
+       - *Local Integrity Checking vs. Independently Trustworthy Tamper Evidence*: Comparing `state.json` against local fingerprints or local sealed milestone snapshots (`.playbook/milestones/M-*/state.json`) provides **local integrity checking** (detecting accidental disk corruption, partial writes, or uncoordinated out-of-band edits). However, because an actor with local write access to the filesystem can modify both `state.json` and local milestone snapshots/sidecars simultaneously, local snapshots provide independently trustworthy tamper evidence **only relative to an independently anchored verifiable reference** (e.g., pushed to a protected remote VCS, signed Git tag, or external append-only log) beyond the reach of the local writer. If no independent anchor exists, it represents local integrity checking, not independently trustworthy tamper evidence.
+       - *Zero WORM Storage*: Standard local filesystems provide no hardware or kernel-level Write Once Read Many protection.
+       - *Documentary Attribution*: Declared actor attribution (`operator:<name>`) is documentary attribution, not authenticated identity.
+     - Downstream tools query `exceptions[]` and `audit_trail[]` to discover historical waiver linkage even after `deliverable.exception_ref` is `null`.
+   - Stage progression remains blocked until fresh passing evidence satisfies all required disciplines.
+
+3. **Remediation Initiation & Evidence Freshness Rule**:
+   - Remediation does **not** directly assign `status: "verified"` or `validation_status: "passed"`.
+   - An active exception transitions to `status: "remediated"` **only after** fresh passing evidence satisfying all canonical required verification disciplines has been recorded and verified by the authoritative evidence resolver.
+   - **Remediation Initiation Boundary**:
+     - Remediation must be explicitly initiated via an operational event (`INITIATE_REMEDIATION`), establishing a distinct boundary timestamp $T_{\text{remediation\_initiated}}$ recorded on the exception (`remediation_started_at`).
+     - **Freshness Precondition**:
+       $$\text{verified\_at}_{\text{evidence}} > T_{\text{remediation\_initiated}}$$
+     - Evidence recorded prior to remediation initiation (including evidence recorded between authorization and remediation start) cannot independently satisfy remediation.
+   - **Discipline Coverage**: All required disciplines from the canonical governance profile (`standard`, `strict`, `lightweight`) must pass. Advisory or warning-only checks do not become mandatory.
+   - **Failure Modes**: Missing, stale, malformed, or contradictory evidence fails closed.
+   - **Chronology & Schema Limitations**: Freshness relies on ISO 8601 UTC timestamps; array index in `evidence[]` is strictly an algorithmic tie-breaker for deterministic evaluation, **not** proof of real-world chronology. Because current schemas lack `remediation_started_at` in exceptions and transaction counters in evidence, this boundary is **not enforceable in the current implementation** and represents a minimum future schema extension requirement.
+
+4. **Grandfathering Baseline Integrity (Authoritative Ratification Sequence & Assurance Levels)**:
+   - **Rejection of Mutable Timestamps**: User-editable timestamps (`authorized_at`) in `state.json` or Markdown alone are **insufficient** proof of historical existence.
+   - **Authoritative 5-Step Non-Circular Ratification Sequence**:
+     1. *Define Canonical Inventory*: An explicit inventory of grandfathered exception IDs (e.g. `["EXC-20261109-001", ...]`) is declared as a canonical sorted string array.
+     2. *Compute Inventory Digest*: Compute its RFC 8785 JCS SHA-256 digest:
+        $$\text{inventory\_sha256} = \text{SHA-256}(\text{RFC 8785 JCS}(\text{grandfathered\_exceptions}))$$
+        This content digest is computed strictly over the inventory array, independent of any Git commit metadata.
+     3. *Commit Inventory & Content*: Commit the inventory and amendment specifications to Git, producing commit $C$ with repository root tree $T$. Tree $T$ deterministically seals the exact files on disk. (Commit $C$ does not and cannot contain its own commit SHA).
+     4. *Create Ratification Record*: Create the separate ratification record (e.g. `RATIFY-20261110-001.md` or formal approval record) referencing strictly forward:
+        - `ratified_commit_sha`: Git commit hash $C$.
+        - `ratified_tree_sha`: Repository tree hash $T$.
+        - `inventory_sha256`: Canonical JCS SHA-256 digest of the grandfathered inventory.
+        - `ratified_at`: ISO 8601 UTC timestamp of ratification.
+        - `ratifier`: Human Lead Architect declared identity and role.
+        *(Direction of reference is strictly forward: Ratification Record $\rightarrow$ Commit $C$ $\rightarrow$ Tree $T$ $\rightarrow$ Inventory $\rightarrow$ `inventory_sha256`; commit $C$ never contains its own commit SHA, and the ratification record never precedes the commit it references).*
+     5. *Independently Anchor / Verify Record*: Independently anchor or verify the ratification record if Level B assurance is required.
+   - **Verification & Subsequent Change Detection**:
+     - Verification reads the ratification record, confirms commit $C$ exists in Git history with tree $T$, extracts the inventory from that tree, computes its RFC 8785 JCS SHA-256 digest, and asserts $\text{computed\_digest} == \text{inventory\_sha256}$. Divergent trees, modified inventories, or rewritten history fail closed.
+     - *Fail-Closed on Unavailable Ratification Evidence*: If the ratification record or binding Git objects are missing, unreadable, or corrupted, grandfathering is completely rejected. All active exceptions in state fail closed with `EXCEPTION_MIGRATION_UNVERIFIED` and require Phase 2 human TTY authorization (`playbook exception approve`). Zero exceptions receive grandfathered waiver authority without verifiable binding evidence.
+   - **Ratification Assurance Levels**:
+     - *Level A — Documentary Ratification*:
+       - *Required Observable Human Approval Action*:
+         1. **Interactive TTY Session**: Execution must occur within an interactive terminal session (`process.stdin.isTTY === true` and `process.stdout.isTTY === true`). Scripted, headless, piped, or automated executions are rejected fail-closed (`TTY_REQUIRED`).
+         2. **Clear Presentation**: The interactive session presents the amendment ID (`AMEND-20261110-001`), the formal ratification decision, and the exact cryptographic references being approved: commit SHA $C$, repository tree SHA $T$, and canonical RFC 8785 JCS SHA-256 inventory digest `inventory_sha256`.
+         3. **Explicit Confirmation Phrase**: The human operator must type an explicit confirmation phrase bound directly to the amendment ID and referenced content: `CONFIRM RATIFICATION AMEND-20261110-001`. Partial, approximate, or automated inputs are rejected.
+         4. **Resulting Documentary Ratification Record**: Upon successful confirmation, a documentary ratification record (e.g. `RATIFY-20261110-001.md`) is written referencing commit SHA $C$, tree SHA $T$, and `inventory_sha256`, and containing the formal approval decision, declared ratifier name and role (`Lead Architect`), and ISO 8601 UTC timestamp.
+       - *Trust Limitations & Non-Guarantees*:
+         - `process.stdin.isTTY` and `process.stdout.isTTY` establish terminal availability only; they do **not** prove human identity or physical presence. Human operator attestation remains a governance requirement rather than cryptographic identity verification.
+         - Declared actor name and governance role constitute documentary attribution only.
+         - Creating, editing, or committing a Markdown ratification file or state metadata without the prescribed interactive human interaction is strictly invalid and does **not** constitute Level A ratification.
+         - An AI agent must not simulate, infer, generate out-of-band, or claim human approval.
+         - This specification is documentation-only; the interactive TTY ratification workflow is not implemented in code in this task.
+     - *Level B — Independently Verifiable Ratification*: Requires an acceptable external trust anchor, such as a verified cryptographic signature with a trusted public-key identity (e.g. GPG/SSH commit signature verified against `.git/allowed_signers` or organizational keyring) or a protected remote approval record (e.g. GitHub/GitLab signed PR review API attestation). Signature verification establishes that a particular private key signed the exact content. Identity attribution depends on a trusted and current binding between that key and the designated Lead Architect. Key custody, compromise, expiration, revocation, and trust-store integrity remain relevant operational factors. A remote VCS approval is useful only when reviewer identity, approval event, referenced commit, and branch/reference protection policies can be independently verified. Any verification failure, key revocation, missing verification material, or altered remote reference fails closed immediately (`RATIFICATION_SIGNATURE_INVALID`, `RATIFICATION_ANCHOR_UNAVAILABLE`). A signed Git tag alone is not assumed sufficient without independent identity verification and reference protection.
+   - **Operational Policy & Current Infrastructure Limitation**:
+     - *Operational Policy*:
+       - Formal Level A documentary ratification is sufficient to activate the proposed governance amendment strictly for isolated local single-developer use.
+       - Level B (Independently Verifiable Ratification) is mandatory before the amendment can be activated in distributed/team or remote-CI governance environments.
+       - The current repository has completed **neither Level A nor Level B ratification**.
+       - No existing or future implementation may use the proposed two-phase exception lifecycle or candidate transitions before the relevant formal human approval is completed. The existence of a proposed specification, ADR, or local draft document does not constitute ratification.
+     - *Current Project Limitation*: Because `playbook-cli` currently possesses no external PKI, GPG/SSH signature verification, or remote IdP trust infrastructure, Level B is explicitly classified as a **future capability**. The proposed amendment `AMEND-20261110-001` remains in status **`Proposed Architecture Amendment (Pending Formal Human Ratification)`** and all new lifecycle behavior remains unauthorized.
+   - **Non-Waiver of Invariants**: Grandfathered exceptions do **not** bypass expiry, revocation, scope matching, or document-integrity checks.
+   - **Future Schema Governance**: Storing migration baseline inventory in `project-manifest.json` (e.g. `manifest.playbook.migration_baseline`) represents a **future schema requirement** and is not present in `schemas/project-manifest.schema.json`. Current schemas remain unchanged.
 
 ---
 
@@ -167,15 +315,25 @@ Represents the micro lifecycle of an individual deliverable artifact:
 
 ---
 
-### 3.7 `RESOLVE_HALT`
-- **Purpose**: Unblocks a blocked stage upon RFC resolution or prerequisite fix.
-- **Trigger**: Human provides decision on open RFC.
+### 3.7 `RESOLVE_HALT` (Controlled Operator-Attested Recovery)
+- **Purpose**: Unblocks a blocked stage upon RFC resolution, defect remediation, or prerequisite fix under operator-attested human recovery.
+- **Trigger**: Human operator executes `playbook gate recover --stage <N>` (or `playbook recover --stage <N>`).
 - **Preconditions**:
-  - RFC markdown artifact updated with human decision and signed off.
+  - `stage_status` is `blocked`.
+  - Target stage matches `current_stage`.
+  - Executed within an interactive terminal session (`isatty`). Non-interactive/automated execution is rejected (`TTY_REQUIRED`).
+  - Operator full name and role provided; recognized AI agent identifiers are rejected (`AGENT_RECOVERY_FORBIDDEN`).
+  - **Trust Boundary & Identity Model**: TTY enforcement establishes an interactive terminal, not authenticated human identity. Recognized automated agent labels are rejected, but this does not cryptographically authenticate identity or guarantee prevention of agent impersonation. This is strictly an operator-attested recovery.
+  - Substantive recovery reason provided (minimum 10 characters).
+  - Explicit confirmation phrase entered (`CONFIRM RECOVER STAGE <N>`).
+  - Preceding stage requirements remain intact.
 - **State Mutation**:
-  - RFC in `current_stage_detail.rfcs[]` updated: `status: "resolved"`, `resolved_at: timestamp`.
-  - If zero blocking RFCs remain in `pending_decision` and zero deliverables are `blocked`:
-    - `stage_status` transitions back to `in_progress`.
+  - `stage_status` transitions strictly to `in_progress`.
+  - Stage is **never** approved and deliverables are **not** marked verified by recovery.
+  - Historical failed check evidence in `deliverable.evidence[]` is preserved for full auditability.
+  - Append-only recovery audit record written to `.playbook/logs/recovery-stage-<stage>-<timestamp>.log` capturing stage, failed gate identifiers, operator name and role, declared identity confidence level, and recovery reason.
+  - Transaction committed atomically under Write-Ahead Logging (`WriteAheadTransactionManager`) and transaction mutex locking. Both state update and audit log are protected in the same transaction.
+  - Re-execution of required quality gates (`playbook gate run`) is permitted and required before stage advancement.
 
 ---
 

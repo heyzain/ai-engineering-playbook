@@ -1,0 +1,28 @@
+{
+  "stack": "nextjs",
+  "version": "1.0.0",
+  "text_patterns": [
+    "src/**/*.{ts,tsx,js,jsx,css,scss,mjs}",
+    "public/**/*.{svg,json,txt}",
+    "next.config.{js,mjs,ts}",
+    "tsconfig.json",
+    "package.json",
+    "package-lock.json",
+    "eslint.config.{js,mjs}",
+    "postcss.config.{js,mjs}",
+    "tailwind.config.{js,ts,mjs}"
+  ],
+  "binary_patterns": [
+    "public/**/*.{png,jpg,jpeg,webp,ico,woff,woff2,ttf,eot}"
+  ],
+  "exclude_patterns": [
+    ".next/**",
+    "out/**",
+    "coverage/**",
+    "node_modules/**",
+    ".playbook/.tmp/**",
+    "*.log",
+    "next-env.d.ts",
+    "*.tsbuildinfo"
+  ]
+}
