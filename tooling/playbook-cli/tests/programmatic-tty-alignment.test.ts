@@ -520,6 +520,8 @@ All gate criteria for Stage 0 have been satisfied in full compliance with the co
 - Review status: Ready for formal human gate approval.
 `;
     fs.writeFileSync(exitPackagePath, exitPackageContent, "utf-8");
+    state.stage_status = "pending_review";
+    state.current_stage_detail.human_approval.status = "pending_review";
     state.current_stage_detail.exit_package = {
       status: "submitted_for_review",
       path: "docs/gates/GATE-0-EXIT.md",

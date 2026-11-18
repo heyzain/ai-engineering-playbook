@@ -31,10 +31,15 @@ export interface EvidenceRecord {
   rif?: string | null;
   working_tree_clean?: boolean | null;
   inputs_hash?: string | null;
+  remediation_ref?: string;
+  sequence?: number;
   quality_gate?: {
     gate_id?: string;
     check_id?: string;
     duration_ms?: number;
+    config_hash?: string;
+    tool_version?: string;
+    tool_fingerprint?: string;
   } | null;
 }
 
@@ -72,10 +77,22 @@ export interface ExceptionRecord {
   title: string;
   path: string;
   waived_requirement: string;
-  authorized_by: string;
-  authorized_at: string;
+  authorized_by: string | null;
+  authorized_at: string | null;
   expiration_date: string;
-  status: "active" | "remediated" | "expired" | "revoked";
+  status: "proposed" | "active" | "remediated" | "expired" | "revoked";
+  proposal_hash?: string;
+  proposed_at?: string;
+  proposal_actor?: string;
+  ratification_commit?: string;
+  authorization_ref?: string;
+  authorization_path?: string;
+  revoked_at?: string;
+  revoked_by?: string;
+  revocation_reason?: string;
+  remediation_id?: string;
+  remediation_started_at?: string;
+  remediation_sequence?: number;
 }
 
 export interface ExitPackage {
@@ -170,4 +187,18 @@ export interface ProjectState {
   archived_milestones: ArchivedMilestone[];
   last_updated: StateLastUpdated;
   pivots?: PivotRecord[];
+  transaction_sequence?: number;
+  audit_trail?: ExceptionAuditEvent[];
+}
+
+export interface ExceptionAuditEvent {
+  action: string;
+  sequence: number;
+  timestamp: string;
+  actor: string;
+  actor_type: "agent" | "human_interactive";
+  reason: string;
+  exception_id?: string;
+  deliverable_id?: string;
+  prior_authorization_ref?: string | null;
 }

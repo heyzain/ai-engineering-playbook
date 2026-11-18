@@ -232,6 +232,12 @@ export function computeRif(options: ComputeRifOptions): RifResult {
     ".git/**",
     ".playbook/logs/**",
     ".playbook/.tmp/**",
+    ".playbook/state.json",
+    ".playbook/approval-fingerprint.json",
+    ".playbook/transaction.lock",
+    ".playbook/tx-journal.json",
+    ".playbook/exception-approvals/**",
+    ".playbook/migrations/**",
     "*.tsbuildinfo",
   ];
 

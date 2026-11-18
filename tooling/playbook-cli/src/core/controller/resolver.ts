@@ -16,6 +16,17 @@ import {
   QualityGateConfigError,
 } from "../quality-gates/config.js";
 import { ControllerError, type AuthoritativeResolutionResult } from "./types.js";
+import {inspectAndHashEvidenceFile} from "./fs-security.js";
+import {configurationFingerprint,toolFingerprint} from "../quality-gates/evidence-binding.js";
+import {computeRif} from "../quality-gates/rif.js";
+import {inspectWorkingTree} from "../quality-gates/policy.js";
+
+function baselineDisciplines(stage:StageNumber,deliverable:Deliverable):string[] {
+  if (!getStageBaselineDeliverables(stage).some(d=>d.id===deliverable.id)) {
+    throw new ControllerError("REQUIRED_DISCIPLINES_INDETERMINATE","Custom deliverables need explicit blocking checks for the selected profile.");
+  }
+  return stage===3 || stage===4 ? ["automated_test"] : [];
+}
 
 /**
  * Resolves authoritative governance profile using the accepted 3-tier precedence:
@@ -112,7 +123,7 @@ export function getRequiredDisciplinesForDeliverable(
     const stageGate = getStageQualityGate(qgConfig, stage);
     if (!stageGate) {
       // Stage has no checks defined in config
-      return [];
+      return baselineDisciplines(stage,deliverable);
     }
 
     // Verify consistency: check if any check references undeclared deliverables
@@ -142,7 +153,7 @@ export function getRequiredDisciplinesForDeliverable(
       requiredTypes.add(c.type);
     }
 
-    return Array.from(requiredTypes);
+    return requiredTypes.size ? Array.from(requiredTypes) : baselineDisciplines(stage,deliverable);
   }
 
   // Fallback Baseline: quality-gates.json does NOT exist
@@ -292,11 +303,55 @@ export function resolveAuthoritativeVerification(
   const failingDisciplines: string[] = [];
   let hasInconclusive = false;
   const blockingReasons: string[] = [];
+  const issues:NonNullable<AuthoritativeResolutionResult["issues"]>=[];
+
+  // Every applicable blocking check must have its own exact, fresh proof.
+  const configPath=path.join(targetDir,".playbook/quality-gates.json");
+  if (fs.existsSync(configPath)) {
+    const config=loadQualityGatesConfig(targetDir);
+    const profile=resolveGovernanceProfile(targetDir,manifest);
+    const checks=filterChecksForProfile(getStageQualityGate(config,stage)?.checks || [],profile)
+      .filter(c=>c.deliverable_id===deliverable.id && c.severity!=="warning" && c.severity!=="advisory");
+    const actualManifest=manifest || JSON.parse(fs.readFileSync(path.join(targetDir,".playbook/manifest.json"),"utf8")) as ProjectManifest;
+    for (const check of checks) {
+      const candidates=eligibleEvidenceWithIndex.filter(item=>item.ev.type===check.type && item.ev.quality_gate?.check_id===check.id && item.ev.quality_gate?.gate_id===`gate-stage-${stage}`)
+        .sort((a,b)=>b.time-a.time || b.index-a.index);
+      const latest=candidates[0]?.ev;
+      const key=`check:${check.id}`;
+      if (!latest) {missingRequiredDisciplines.push(key);continue;}
+      if (latest.result==="failed") {failingDisciplines.push(key);continue;}
+      if (latest.result!=="passed") {hasInconclusive=true;continue;}
+      try {
+        if (!latest.evidence_hash || inspectAndHashEvidenceFile(targetDir,latest.evidence_ref).fileHash!==latest.evidence_hash) throw new Error("Evidence hash changed.");
+        if (latest.quality_gate?.config_hash!==configurationFingerprint(targetDir,actualManifest)) throw new Error("Effective check/profile configuration changed.");
+        if (latest.quality_gate?.tool_fingerprint!==toolFingerprint(targetDir,check)) throw new Error("Tool executable or entry script changed.");
+        const current=computeRif({projectDir:targetDir,check,toolVersion:latest.quality_gate?.tool_version,
+          workingTreeClean:inspectWorkingTree(targetDir,"local").isClean,ambientEnv:process.env,sensitivePatterns:config.global_settings.sensitive_patterns});
+        if (!latest.rif || current.rif!==latest.rif || current.secret_freshness_unbounded) throw new Error("Input/environment fingerprint is stale or unbounded.");
+      } catch (error) {failingDisciplines.push(key);blockingReasons.push(`${key}: ${error instanceof Error?error.message:String(error)}`);}
+    }
+  }
+
+  // Latest authoritative evidence is rehashed even without a declarative gate.
+  if (!fs.existsSync(configPath)) for (const [discipline,info] of Object.entries(evaluatedDisciplines)) {
+    if (requiredDisciplines.length && !requiredDisciplines.includes(discipline)) continue;
+    try {
+      const automated=["automated_test","build_typecheck","static_analysis","schema_validation","security_audit"].includes(discipline);
+      if (!info.evidenceHash && automated) throw new ControllerError("EVIDENCE_HASH_MISMATCH","Automated evidence requires a recorded SHA-256 hash.");
+      const actual=inspectAndHashEvidenceFile(targetDir,info.evidenceRef).fileHash;
+      if (info.evidenceHash && actual!==info.evidenceHash) throw new ControllerError("EVIDENCE_HASH_MISMATCH","Evidence bytes no longer match.");
+    } catch (error) {
+      failingDisciplines.push(discipline);blockingReasons.push(error instanceof Error?error.message:String(error));
+      const rawCode=error instanceof ControllerError?error.code:"EVIDENCE_HASH_MISMATCH";
+      issues.push({code:rawCode==="EVIDENCE_FILE_NOT_FOUND"?"EVIDENCE_FILE_MISSING":rawCode,message:error instanceof Error?error.message:String(error),ref:info.evidenceRef});
+    }
+  }
 
   for (const [disc, info] of Object.entries(evaluatedDisciplines)) {
     const isRequiredOrBaseline = requiredDisciplines.includes(disc) || requiredDisciplines.length === 0;
     if (info.latestResult === "failed") {
       if (isRequiredOrBaseline) {
+        issues.push({code:"EVIDENCE_RESULT_FAILED",message:`Latest ${disc} proof failed.`,ref:info.evidenceRef});
         failingDisciplines.push(disc);
         blockingReasons.push(
           `Discipline "${disc}" authoritative verification result is "failed" (recorded at ${info.verifiedAt}, ref: "${info.evidenceRef}").`
@@ -304,6 +359,7 @@ export function resolveAuthoritativeVerification(
       }
     } else if (info.latestResult === "inconclusive") {
       if (isRequiredOrBaseline) {
+        issues.push({code:"EVIDENCE_RESULT_FAILED",message:`Latest ${disc} proof is inconclusive.`,ref:info.evidenceRef});
         hasInconclusive = true;
         blockingReasons.push(
           `Discipline "${disc}" authoritative verification result is "inconclusive" (recorded at ${info.verifiedAt}).`
@@ -333,6 +389,7 @@ export function resolveAuthoritativeVerification(
 
   return {
     authoritativeResult,
+    issues,
     missingRequiredDisciplines,
     failingDisciplines,
     evaluatedDisciplines,

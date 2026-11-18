@@ -2,6 +2,16 @@
 
 Date: 2026-11-17. Status: Proposed for Gate 2 review. Author: Codex. No human acceptance or ratification recorded here.
 
+## Recorded disposition (2026-11-18)
+
+Original proposal text below is preserved as history. The operator approved Gate 2
+and advanced to Stage 3; see `.playbook/state.json` stage history and
+`docs/gates/GATE-2-EXIT-PACKAGE.md`. Separate amendment ratification was recorded
+in `docs/adr/RATIFY-20261110-001.md` (commit `ad0ff39`), binding prerequisite
+commit `4eea89f`. Local affected implementation is no longer blocked on
+ratification. Level B distributed authority remains unimplemented. This note
+grants no new approval and does not certify Stage 3.
+
 ## Context
 
 Approved requirements call for a complete usable CLI, safety of exception authorization, installed-package proof, and remote CI evidence. Existing controllers are reusable, while exception amendment AMEND-20261110-001 remains fenced and requires different assurance for local and distributed use. The runtime package currently relies on source-tree stack discovery. Duplicating core machinery or treating a documentary human name as authorization would violate the constitution.

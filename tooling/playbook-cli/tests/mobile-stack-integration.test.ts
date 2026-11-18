@@ -11,6 +11,8 @@ import { runStackList, runStackApply, runStackCompose } from "../src/commands/st
 import { QualityGateRunner } from "../src/core/quality-gates/runner.js";
 import { evaluateMobileRifRules } from "../src/core/mobile/rif-rules.js";
 import { classifyMobileWorkflow } from "../src/core/mobile/workflow-classifier.js";
+import { STAGE_NAMES } from "../src/constants.js";
+import { getRequiredDisciplinesForDeliverable } from "../src/core/controller/resolver.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const repoStacksDir = path.resolve(__dirname, "../../../../stacks");
@@ -204,6 +206,21 @@ describe("Task 007D.5 — Mobile Stack Integration and Final Regression", () => 
   // 2. Quality Gate Runner Execution (React Native & Expo)
   // ───────────────────────────────────────────────────────────────────────────
   describe("2. Quality Gate Execution via QualityGateRunner", () => {
+    test("composed core checks reference the same declared code target as mobile checks", async () => {
+      for (const stack of ["react-native", "expo"]) {
+        const targetDir = path.join(tmpDir, `declared-target-${stack}`);
+        await runInit({ projectId: `target-${stack}`, name: "Declared Target", cwd: targetDir, stack, nonInteractive: true, force: true });
+        const config = JSON.parse(fs.readFileSync(path.join(targetDir, ".playbook/quality-gates.json"), "utf8"));
+        const stage = config.gates.find((gate: any) => gate.stage === 4);
+        assert.equal(stage.checks.find((check: any) => check.id === "core-typecheck").deliverable_id, "CODE-IMPL");
+        assert.ok(stage.checks.every((check: any) => check.deliverable_id === "CODE-IMPL"));
+        const state = JSON.parse(fs.readFileSync(path.join(targetDir, ".playbook/state.json"), "utf8"));
+        const code = { ...state.current_stage_detail.deliverables[0], id: "CODE-IMPL", artifact_path: "src" };
+        const manifest = JSON.parse(fs.readFileSync(path.join(targetDir, ".playbook/manifest.json"), "utf8"));
+        assert.ok(getRequiredDisciplinesForDeliverable(targetDir, 4, code, manifest, [code]).includes("build_typecheck"));
+      }
+    });
+
     test("executes React Native Stage 4 quality gates cleanly", async () => {
       const targetDir = path.join(tmpDir, "rn-gates");
       await runInit({
@@ -225,7 +242,7 @@ describe("Task 007D.5 — Mobile Stack Integration and Final Regression", () => 
       const state = JSON.parse(fs.readFileSync(statePath, "utf-8"));
       state.current_stage = 4;
       state.current_stage_detail.stage = 4;
-      state.current_stage_detail.stage_name = "Implementation & Unit Verification";
+      state.current_stage_detail.stage_name = STAGE_NAMES[4];
       if (!state.current_stage_detail.deliverables.some((d: any) => d.id === "CODE-IMPL")) {
         state.current_stage_detail.deliverables.push({
           id: "CODE-IMPL",
@@ -271,7 +288,7 @@ describe("Task 007D.5 — Mobile Stack Integration and Final Regression", () => 
       const state = JSON.parse(fs.readFileSync(statePath, "utf-8"));
       state.current_stage = 4;
       state.current_stage_detail.stage = 4;
-      state.current_stage_detail.stage_name = "Implementation & Unit Verification";
+      state.current_stage_detail.stage_name = STAGE_NAMES[4];
       if (!state.current_stage_detail.deliverables.some((d: any) => d.id === "CODE-IMPL")) {
         state.current_stage_detail.deliverables.push({
           id: "CODE-IMPL",

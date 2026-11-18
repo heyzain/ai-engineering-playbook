@@ -195,3 +195,13 @@ To maintain intellectual honesty, automated tools evaluate evidence across four 
 - Local CLI interactive TTY is an **authorization guardrail** preventing headless agent loop self-approval.
 - It is **not** biometric or cryptographic identity verification.
 - In Team Mode, server-side Git branch protection, signed commits, and PR reviews enforce cryptographic identity.
+
+## Retired exception references
+
+Schema structure alone cannot compare dynamic exception IDs across arrays.
+`SchemaValidator.validateState` additionally checks pending-review and approved
+states: a waived deliverable referencing an expired or revoked exception is
+rejected. Retired history with no waived target reference remains valid. Gate
+readers additionally verify actual expiry time, authorization scope and sealed
+proof. Direct JSON Schema consumers must not treat structural validity as gate
+eligibility; use `playbook validate`, `inspect` and the guarded gate operations.

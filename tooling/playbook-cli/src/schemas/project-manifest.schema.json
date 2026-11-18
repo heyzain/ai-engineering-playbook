@@ -24,8 +24,10 @@
     },
     "schema_version": {
       "type": "string",
-      "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$",
-      "description": "Semantic version of the manifest schema (e.g. 1.0.0)."
+      "enum": [
+        "1.0.0",
+        "1.1.0"
+      ]
     },
     "project_id": {
       "type": "string",
@@ -84,6 +86,11 @@
             "team"
           ],
           "description": "Approval workflow: solo (in-chat human sign-off) vs team (formal PR reviews)."
+        },
+        "ratification_root": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Explicit local canonical governance proof repository; defaults to this project. Not remote waiver authority."
         }
       }
     },

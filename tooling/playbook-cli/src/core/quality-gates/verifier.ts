@@ -1,4 +1,7 @@
 import fs from "node:fs";
+import {configurationFingerprint,toolFingerprint} from "./evidence-binding.js";
+import {inspectAndHashEvidenceFile} from "../controller/fs-security.js";
+import {resolveAuthoritativeVerification,resolveGovernanceProfile} from "../controller/resolver.js";
 import path from "node:path";
 import crypto from "node:crypto";
 import { DEFAULT_PATHS, type GovernanceProfile } from "../../constants.js";
@@ -48,7 +51,7 @@ export class QualityGateVerifier {
     const state = JSON.parse(fs.readFileSync(statePath, "utf-8")) as ProjectState;
 
     const targetStage = stageOverride !== undefined ? stageOverride : state.current_stage;
-    const profile: GovernanceProfile = manifest.playbook?.governance_profile || "standard";
+    const profile: GovernanceProfile = resolveGovernanceProfile(this.targetDir, manifest);
 
     const config = loadQualityGatesConfig(this.targetDir, { validator: this.validator });
     const stageGate = getStageQualityGate(config, targetStage);
@@ -58,7 +61,7 @@ export class QualityGateVerifier {
         timestamp,
         stage: targetStage,
         stage_name: `Stage ${targetStage}`,
-        all_fresh: true,
+        all_fresh: state.current_stage_detail.deliverables.length>0 && state.current_stage_detail.deliverables.every(d=>resolveAuthoritativeVerification(this.targetDir,state.current_stage,d,manifest,state.current_stage_detail.deliverables).authoritativeResult==="passed"),
         checks: [],
       };
     }
@@ -72,9 +75,13 @@ export class QualityGateVerifier {
     const deliverables = state.current_stage_detail?.deliverables || [];
 
     for (const check of checks) {
+      const candidates=(deliverables.find(d=>d.id===check.deliverable_id)?.evidence || [])
+        .map((e,index)=>({e,index})).filter(({e})=>e.type===check.type && e.quality_gate?.check_id===check.id && e.quality_gate?.gate_id===`gate-stage-${targetStage}`)
+        .sort((a,b)=>Date.parse(b.e.verified_at)-Date.parse(a.e.verified_at) || b.index-a.index);
       const rifResult = computeRif({
         projectDir: this.targetDir,
         check,
+        toolVersion:candidates[0]?.e.quality_gate?.tool_version,
         workingTreeClean: treeStatus.isClean,
         ambientEnv: process.env,
         sensitivePatterns: config.global_settings.sensitive_patterns,
@@ -83,7 +90,7 @@ export class QualityGateVerifier {
 
       const deliverable = deliverables.find((d) => d.id === check.deliverable_id);
       if (!deliverable) {
-        allFresh = false;
+        if (check.severity !== "advisory" && check.severity !== "warning") allFresh = false;
         checkReports.push({
           check_id: check.id,
           deliverable_id: check.deliverable_id,
@@ -98,18 +105,10 @@ export class QualityGateVerifier {
         continue;
       }
 
-      // Find evidence matching check
-      const evidence = (deliverable.evidence || []).filter(
-        (e) =>
-          e.quality_gate?.check_id === check.id ||
-          e.procedure.startsWith(check.command) ||
-          e.summary.includes(`'${check.id}'`)
-      );
-
-      const latestEvidence = evidence[evidence.length - 1];
+      const latestEvidence = candidates[0]?.e;
 
       if (!latestEvidence) {
-        allFresh = false;
+        if (check.severity !== "advisory" && check.severity !== "warning") allFresh = false;
         checkReports.push({
           check_id: check.id,
           deliverable_id: check.deliverable_id,
@@ -126,8 +125,8 @@ export class QualityGateVerifier {
 
       // Check log existence and hash
       const logRelative = latestEvidence.evidence_ref;
-      const logAbsolute = path.join(this.targetDir, logRelative);
-      const logExists = fs.existsSync(logAbsolute);
+      let logAbsolute="",logExists=false;
+      try {logAbsolute=inspectAndHashEvidenceFile(this.targetDir,logRelative).absolutePath;logExists=true;}catch{ /* invalid/missing proof stays unverified */ }
 
       let logHashMatched = false;
       let recordedRif = latestEvidence.rif || null;
@@ -149,14 +148,16 @@ export class QualityGateVerifier {
 
       const isRifFresh = recordedRif !== null && recordedRif === currentRif;
       const isPassed = latestEvidence.result === "passed";
-      const isCheckFresh = isRifFresh && logExists && logHashMatched && isPassed;
+      const bound=latestEvidence.quality_gate?.config_hash===configurationFingerprint(this.targetDir,manifest) && latestEvidence.quality_gate?.tool_fingerprint===toolFingerprint(this.targetDir,check);
+      const isCheckFresh = isRifFresh && logExists && logHashMatched && isPassed && bound && !rifResult.secret_freshness_unbounded;
 
-      if (!isCheckFresh) {
+      if (!isCheckFresh && check.severity!=="advisory" && check.severity!=="warning") {
         allFresh = false;
       }
 
       let reason: string | undefined;
-      if (!logExists) {
+      if (!bound) reason="Check configuration/profile or resolved tool binding is missing or stale.";
+      else if (!logExists) {
         reason = `Evidence log file '${logRelative}' is missing from disk.`;
       } else if (!logHashMatched) {
         reason = `Evidence log file hash does not match recorded state hash.`;

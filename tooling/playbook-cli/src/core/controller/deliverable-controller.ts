@@ -13,7 +13,13 @@ import {
   TransactionError,
 } from "../transaction/index.js";
 import { inspectAndHashEvidenceFile } from "./fs-security.js";
-import { resolveAuthoritativeVerification } from "./resolver.js";
+import { resolveAuthoritativeVerification,resolveGovernanceProfile } from "./resolver.js";
+import {loadQualityGatesConfig,getStageQualityGate,filterChecksForProfile} from "../quality-gates/config.js";
+import {configurationFingerprint,toolFingerprint} from "../quality-gates/evidence-binding.js";
+import {computeRif} from "../quality-gates/rif.js";
+import {inspectWorkingTree} from "../quality-gates/policy.js";
+import {assertEffectiveWaiver} from "./exception-lifecycle.js";
+import {verifyExceptionAuthority} from "./exception-service.js";
 import {
   ControllerError,
   type RecordDeliverableOptions,
@@ -205,6 +211,7 @@ export async function recordDeliverable(
 
   if (existingIndex >= 0) {
     const existing = deliverables[existingIndex];
+    if (existing.status === "waived") throw new ControllerError("DELIVERABLE_WAIVED", "Use bound remediation evidence rather than overwriting an active waiver.");
     updatedDeliverable = {
       ...existing,
       name: options.name || existing.name,
@@ -328,12 +335,22 @@ export async function recordEvidence(
   const targetDeliverable = deliverables[delivIndex];
 
   // A waived deliverable cannot receive evidence (waivers take precedence)
-  if (targetDeliverable.status === "waived") {
+  const remediation = nextState.current_stage_detail.exceptions.find(e => e.exception_id === targetDeliverable.exception_ref);
+  const isRemediation = targetDeliverable.status === "waived" && options.remediationRef && remediation?.remediation_id === options.remediationRef;
+  if (targetDeliverable.status === "waived" && !isRemediation) {
     throw new ControllerError(
       "DELIVERABLE_WAIVED",
       `Cannot record evidence for waived deliverable "${id}". Waived deliverables must be un-waived before verification.`,
       { deliverable_id: id }
     );
+  }
+
+  if (options.remediationRef && !isRemediation) throw new ControllerError("REMEDIATION_SCOPE_MISMATCH", "Evidence must bind the current target's active remediation marker.");
+  if (isRemediation) {
+    assertEffectiveWaiver(state,targetDeliverable,e=>verifyExceptionAuthority(targetDir,state,manifest,e),now);
+    if (!remediation?.remediation_started_at || now.getTime() <= Date.parse(remediation.remediation_started_at) || now.getTime() <= Date.parse(remediation.authorized_at!)) {
+      throw new ControllerError("REMEDIATION_EVIDENCE_NOT_FRESH", "Evidence must be strictly newer than initiation and authorization.");
+    }
   }
 
   // Inspect and hash evidence file
@@ -356,6 +373,29 @@ export async function recordEvidence(
     verified_by: actor,
     actor_type: actorType,
   };
+  if (evidenceRecord.result === "passed" && ["automated_test","build_typecheck","static_analysis","schema_validation","security_audit"].includes(evidenceRecord.type) && evidenceRecord.exit_code !== 0) {
+    throw new ControllerError("EVIDENCE_RESULT_EXIT_MISMATCH","Passing automated proof must report exit code zero.");
+  }
+  if (options.toolVersion && !options.checkId) throw new ControllerError("EVIDENCE_CHECK_REQUIRED","Tool-version binding requires an explicit declared check ID.");
+  if (options.checkId) {
+    const config=loadQualityGatesConfig(targetDir);
+    const check=filterChecksForProfile(getStageQualityGate(config,state.current_stage)?.checks || [],resolveGovernanceProfile(targetDir,manifest))
+      .find(c=>c.id===options.checkId && c.deliverable_id===id && c.type===options.type);
+    if (!check) throw new ControllerError("EVIDENCE_CHECK_MISMATCH","Check ID, target, type and selected profile must match the declared check.");
+    if (check.tool_version_command && !options.toolVersion) throw new ControllerError("EVIDENCE_TOOL_VERSION_REQUIRED","Record the observed declared tool version or run the quality gate directly.");
+    const clean=inspectWorkingTree(targetDir,"local").isClean;
+    const version=options.toolVersion || "v1.0.0";
+    const rif=computeRif({projectDir:targetDir,check,workingTreeClean:clean,toolVersion:version,ambientEnv:process.env,sensitivePatterns:config.global_settings.sensitive_patterns});
+    evidenceRecord.rif=rif.rif;evidenceRecord.inputs_hash=rif.inputs_hash;evidenceRecord.working_tree_clean=clean;
+    evidenceRecord.quality_gate={gate_id:`gate-stage-${state.current_stage}`,check_id:check.id,config_hash:configurationFingerprint(targetDir,manifest),tool_fingerprint:toolFingerprint(targetDir,check),tool_version:version};
+  }
+  if (nextState.schema_version === "1.1.0") {
+    nextState.transaction_sequence = (nextState.transaction_sequence || 0) + 1;
+    evidenceRecord.sequence = nextState.transaction_sequence;
+    if (isRemediation) evidenceRecord.remediation_ref = options.remediationRef;
+    nextState.audit_trail ||= [];
+    nextState.audit_trail.push({action:"EVIDENCE_RECORDED",sequence:nextState.transaction_sequence,timestamp:nowIso,actor,actor_type:"agent",reason:"Verification evidence appended",deliverable_id:id,prior_authorization_ref:remediation?.authorization_ref || null});
+  }
 
   // Append evidence (Strictly append-only at application level)
   const existingEvidence = targetDeliverable.evidence || [];
@@ -376,7 +416,11 @@ export async function recordEvidence(
   let promotedToVerified = false;
   let demoted = false;
 
-  if (resolution.authoritativeResult === "passed") {
+  if (isRemediation) {
+    // Recording proof never retires a waiver; explicit remediation retirement owns that transition.
+    targetDeliverable.status = "waived";
+    targetDeliverable.validation_status = "waived";
+  } else if (resolution.authoritativeResult === "passed") {
     if (targetDeliverable.status !== "verified") {
       targetDeliverable.status = "verified";
       targetDeliverable.validation_status = "passed";
@@ -460,170 +504,6 @@ export async function recordEvidence(
  * Implements Transition §3.5 (`RECORD_EXCEPTION`).
  * Records an authorized human exception waiver against a deliverable.
  */
-export async function recordException(
-  options: RecordExceptionOptions
-): Promise<RecordExceptionResult> {
-  const targetDir = path.resolve(options.targetDir);
-  const validator = new SchemaValidator();
-  const now = options.now || new Date();
-  const nowIso = now.toISOString();
-
-  // Clock skew guard
-  if (now.getTime() > Date.now() + 60_000) {
-    throw new ControllerError(
-      "EVIDENCE_CLOCK_SKEW",
-      `Evidence timestamp "${nowIso}" exceeds 60s future clock skew tolerance.`,
-      { timestamp: nowIso }
-    );
-  }
-
-  const { state, manifest } = loadAndValidateState(targetDir, validator);
-
-  if (state.stage_status !== "in_progress") {
-    throw new ControllerError(
-      "STAGE_NOT_IN_PROGRESS",
-      `Cannot record exception waiver when stage_status is "${state.stage_status}". Must be "in_progress".`,
-      { current_status: state.stage_status }
-    );
-  }
-
-  const id = options.deliverableId.trim();
-  const nextState: ProjectState = JSON.parse(JSON.stringify(state));
-  const deliverables = nextState.current_stage_detail.deliverables || [];
-  const delivIndex = deliverables.findIndex((d) => d.id === id);
-
-  if (delivIndex < 0) {
-    throw new ControllerError(
-      "DELIVERABLE_NOT_FOUND",
-      `Deliverable "${id}" does not exist in current stage ${state.current_stage}.`,
-      { deliverable_id: id, stage: state.current_stage }
-    );
-  }
-
-  const targetDeliverable = deliverables[delivIndex];
-
-  // Validate exception file path within repository
-  let validatedPath: { relativePath: string; absolutePath: string };
-  try {
-    validatedPath = validateCanonicalPath(targetDir, options.exceptionPath);
-  } catch (err: unknown) {
-    if (err instanceof TransactionError) {
-      throw new ControllerError(err.code, err.message, { path: options.exceptionPath });
-    }
-    throw new ControllerError(
-      "TARGET_PATH_INVALID",
-      `Invalid exception path: ${err instanceof Error ? err.message : String(err)}`,
-      { path: options.exceptionPath }
-    );
-  }
-
-  if (!fs.existsSync(validatedPath.absolutePath)) {
-    throw new ControllerError(
-      "EXCEPTION_NOT_FOUND",
-      `Exception markdown file does not exist on disk: "${validatedPath.relativePath}".`,
-      { path: validatedPath.relativePath }
-    );
-  }
-
-  const content = fs.readFileSync(validatedPath.absolutePath, "utf-8");
-  const validation = validateExceptionDocumentAst(
-    content,
-    validatedPath.relativePath,
-    id,
-    now
-  );
-
-  if (!validation.valid || !validation.metadata) {
-    const firstDiag = validation.diagnostics.find((d) => d.severity === "error") || {
-      code: "EXCEPTION_METADATA_INVALID",
-      message: validation.errors[0] || `Exception validation failed for "${validatedPath.relativePath}".`,
-    };
-    throw new ControllerError(firstDiag.code, firstDiag.message, {
-      path: validatedPath.relativePath,
-      errors: validation.errors,
-      diagnostics: validation.diagnostics,
-    });
-  }
-
-  const parsed = validation.metadata;
-
-  // Update deliverable status to waived
-  targetDeliverable.status = "waived";
-  targetDeliverable.validation_status = "waived";
-  targetDeliverable.exception_ref = parsed.exception_id;
-  deliverables[delivIndex] = targetDeliverable;
-  nextState.current_stage_detail.deliverables = deliverables;
-
-  // Record in current_stage_detail.exceptions[]
-  const exceptions = nextState.current_stage_detail.exceptions || [];
-  const existingExcIndex = exceptions.findIndex((e) => e.exception_id === parsed.exception_id);
-
-  const exceptionRecord: ExceptionRecord = {
-    exception_id: parsed.exception_id,
-    title: parsed.title,
-    path: validatedPath.relativePath,
-    waived_requirement: parsed.waived_requirement,
-    authorized_by: parsed.authorized_by,
-    authorized_at: nowIso,
-    expiration_date: parsed.expiration_date,
-    status: "active",
-  };
-
-  if (existingExcIndex >= 0) {
-    exceptions[existingExcIndex] = exceptionRecord;
-  } else {
-    exceptions.push(exceptionRecord);
-  }
-  nextState.current_stage_detail.exceptions = exceptions;
-
-  const actor = options.actor || "agent:controller";
-  const actorType = options.actorType || "agent";
-  nextState.last_updated = {
-    timestamp: nowIso,
-    updated_by: actor,
-    actor_type: actorType,
-    reason: `Waived deliverable "${id}" under authorized exception "${parsed.exception_id}".`,
-  };
-
-  const postVal = validator.validateState(nextState);
-  if (!postVal.valid) {
-    throw new ControllerError(
-      "STATE_SCHEMA_INVALID",
-      `Post-mutation state failed schema validation:\n${postVal.formattedErrors}`,
-      { errors: postVal.errors }
-    );
-  }
-
-  const currentSha256 = computeFileSha256(path.resolve(targetDir, DEFAULT_PATHS.stateFile)) || undefined;
-  const statePayload = JSON.stringify(nextState, null, 2) + "\n";
-
-  const txManager = new WriteAheadTransactionManager({
-    targetDir,
-    lockTimeoutMs: options.lockTimeoutMs,
-  });
-
-  const txResult = await txManager.executeTransaction(
-    "RECORD_EXCEPTION",
-    [
-      {
-        operation: "write",
-        targetPath: DEFAULT_PATHS.stateFile,
-        content: statePayload,
-        expectedPreviousSha256: currentSha256,
-      },
-    ],
-    {
-      deliverable_id: id,
-      exception_id: parsed.exception_id,
-      actor,
-    }
-  );
-
-  return {
-    success: true,
-    deliverable: targetDeliverable,
-    exception: exceptionRecord,
-    txId: txResult.txId,
-    recovery: txResult.recovery,
-  };
+export async function recordException(_options: RecordExceptionOptions): Promise<RecordExceptionResult> {
+  throw new ControllerError("EXCEPTION_LEGACY_WAIVER_DISABLED", "Documentary metadata cannot authorize a waiver. Use exception propose followed by an actual interactive exception approve after migration.");
 }

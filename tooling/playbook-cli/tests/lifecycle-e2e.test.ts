@@ -6,6 +6,7 @@ import path from "node:path";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { fileURLToPath } from "node:url";
+import { createValidExitPackage } from "./fixtures/exit-package.js";
 import { computeSha256 } from "../src/core/transaction/index.js";
 import { DEFAULT_PATHS, STAGE_NAMES, type StageNumber } from "../src/constants.js";
 import type { ProjectState, Deliverable, ExceptionRecord, RFCRecord } from "../src/types/state.js";
@@ -18,27 +19,6 @@ const __dirname = path.dirname(__filename);
 const cliBinPath = path.resolve(__dirname, "../src/bin/playbook.js");
 const approvalWorkerPath = path.resolve(__dirname, "fixtures/approval-worker.js");
 
-function createValidExitPackage(stage: number, stageName: string, deliverablesSummary: string): string {
-  return `# Stage Gate Exit Package — Stage ${stage}: ${stageName}
-
-## 1. Package & Stage Identification
-This exit package formally documents all verified deliverables and supporting evidence for Stage ${stage} (${stageName}).
-Active milestone: M-1.0.0. Project ID: e2e-service. All mandatory engineering invariants and gate criteria have been satisfied in full compliance with the constitution.
-
-## 2. Deliverables Manifest & Status
-The following deliverables have been produced, verified, and validated:
-- ${deliverablesSummary}
-
-## 3. Verifiable Validation Evidence
-- Automated test logs and validation evidence recorded with SHA-256 verification hashes.
-- 100% tests passing with zero failures.
-
-## 4. Traceability & Sign-Off Record
-- Traceability: All functional and non-functional requirements traced to verified deliverables.
-- Residual Risk: Zero outstanding critical or high defects.
-- Ready for formal human review.
-`;
-}
 
 describe("End-to-End Engineering Lifecycle Integration", () => {
   let tempDir: string;
@@ -731,24 +711,46 @@ describe("End-to-End Engineering Lifecycle Integration", () => {
       }
     );
 
-    // Positive Sub-test: Active valid waiver clears approval
+    // A documentary active flag also cannot authorize a waiver. Keep this
+    // negative path through the real executable; sealed lifecycle success is
+    // covered separately by exception-service tests in disposable projects.
     state.current_stage_detail.exceptions[0].status = "active";
     state.current_stage_detail.exceptions[0].expiration_date = "2026-12-31";
     fs.writeFileSync(statePath, JSON.stringify(state, null, 2) + "\n", "utf-8");
 
-    await execFileAsync("node", [
-      approvalWorkerPath,
-      "--cwd",
-      tempDir,
-      "--gate",
-      "4",
-      "--reviewer",
-      "Alice Human",
-      "--role",
-      "Lead Architect",
-      "--confirmation-phrase",
-      "CONFIRM APPROVAL GATE 4",
-    ]);
+    const documentaryState = fs.readFileSync(statePath, "utf8");
+    await assert.rejects(
+      execFileAsync("node", [approvalWorkerPath, "--cwd", tempDir, "--gate", "4", "--reviewer", "Alice Human", "--role", "Lead Architect", "--confirmation-phrase", "CONFIRM APPROVAL GATE 4"]),
+      (error: { code?: number; stderr?: string }) => {
+        assert.equal(error.code, 1);
+        assert.match(error.stderr || "", /EXCEPTION_WAIVER_UNAUTHORIZED/);
+        return true;
+      }
+    );
+    assert.equal(fs.readFileSync(statePath, "utf8"), documentaryState);
+
+    // Repair this synthetic legacy fixture by withdrawing its invalid metadata,
+    // then satisfy the original requirement using the normal CLI authoring path.
+    state.current_stage_detail.exceptions[0].status = "revoked";
+    state.current_stage_detail.deliverables[0].status = "in_progress";
+    state.current_stage_detail.deliverables[0].validation_status = "unvalidated";
+    state.current_stage_detail.deliverables[0].exception_ref = null;
+    state.stage_status = "in_progress";
+    state.current_stage_detail.human_approval.status = "not_requested";
+    state.current_stage_detail.exit_package.status = "drafted";
+    fs.writeFileSync(statePath, JSON.stringify(state, null, 2) + "\n", "utf8");
+    fs.mkdirSync(path.join(tempDir, "tests/integration"), { recursive: true });
+    fs.writeFileSync(path.join(tempDir, "tests/integration/README.md"), "Synthetic integration suite fixture.\n");
+    fs.writeFileSync(path.join(tempDir, ".playbook/logs/stage-4.log"), "Synthetic integration checks passed.\n");
+    fs.writeFileSync(path.join(tempDir, "docs/gates/GATE-4-EXIT-PACKAGE.md"), createValidExitPackage(4, STAGE_NAMES[4], "INT-TESTS (Verified)"));
+    await execFileAsync("node", [cliBinPath, "deliverable", "record", "--id", "INT-TESTS", "--artifact", "tests/integration", "--cwd", tempDir]);
+    await execFileAsync("node", [cliBinPath, "deliverable", "evidence", "--id", "INT-TESTS", "--type", "automated_test", "--result", "passed", "--evidence", ".playbook/logs/stage-4.log", "--procedure", "Synthetic integration review", "--cwd", tempDir]);
+    await execFileAsync("node", [cliBinPath, "stage", "submit", "--package", "docs/gates/GATE-4-EXIT-PACKAGE.md", "--cwd", tempDir]);
+    state = JSON.parse(fs.readFileSync(statePath, "utf8"));
+    assert.equal(state.current_stage_detail.deliverables[0].status, "verified");
+    assert.equal(state.current_stage_detail.deliverables[0].exception_ref, null);
+    assert.equal(state.current_stage_detail.exceptions[0].status, "revoked");
+    await execFileAsync("node", [approvalWorkerPath, "--cwd", tempDir, "--gate", "4", "--reviewer", "Alice Human", "--role", "Lead Architect", "--confirmation-phrase", "CONFIRM APPROVAL GATE 4"]);
 
     // Advance Stage 4 -> Stage 5
     await execFileAsync("node", [cliBinPath, "advance", "--cwd", tempDir]);

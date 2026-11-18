@@ -115,8 +115,21 @@ export class SchemaValidator {
       }
     }
 
+    // JSON Schema cannot compare dynamic IDs across arrays. Keep retired history,
+    // but reject review states that still rely on its expired/revoked authority.
+    if (valid) {
+      const state = data as { stage_status: string; current_stage_detail: { deliverables: Array<{ status: string; exception_ref?: string | null }>; exceptions: Array<{ exception_id: string; status: string }> } };
+      if (["pending_review", "approved"].includes(state.stage_status)) {
+        state.current_stage_detail.exceptions.forEach((exception, index) => {
+          if (["expired", "revoked"].includes(exception.status) && state.current_stage_detail.deliverables.some(d => d.status === "waived" && d.exception_ref === exception.exception_id)) {
+            errors.push({ instancePath: `/current_stage_detail/exceptions/${index}`, schemaPath: "#/semantic/exceptionReferences", keyword: "exception_ref", message: "A waived deliverable still references expired or revoked exception authority.", params: { exception_id: exception.exception_id } });
+          }
+        });
+      }
+    }
+
     return {
-      valid,
+      valid: valid && errors.length === 0,
       target: "state",
       errors,
       formattedErrors: this.formatErrors("state", errors),
@@ -169,8 +182,8 @@ export class SchemaValidator {
 
       if (err.keyword === "not" && err.instancePath.includes("/rfcs/")) {
         hint = " [Unresolved blocking RFC detected; stage cannot be in review or approved]";
-      } else if (err.keyword === "not" && err.instancePath.includes("/exceptions/")) {
-        hint = " [Expired or revoked exception detected; stage cannot be in review or approved]";
+      } else if (err.keyword === "exception_ref") {
+        hint = " [Remove reliance on retired authority by verifying the original requirement or obtaining valid authorization]";
       } else if (err.keyword === "const" && err.instancePath === "/last_updated/actor_type") {
         hint = " [Human Sovereignty violation: AI agent cannot approve stage transitions]";
       } else if (err.keyword === "const" && err.instancePath.endsWith("/validation_status")) {

@@ -27,6 +27,10 @@ import {
 } from "./config.js";
 import { resolveCheckDag } from "./dag.js";
 import { computeRif } from "./rif.js";
+import {configurationFingerprint,toolFingerprint,parseToolVersionCommand} from "./evidence-binding.js";
+import {resolveAuthoritativeVerification,resolveGovernanceProfile} from "../controller/resolver.js";
+import {assertEffectiveWaiver} from "../controller/exception-lifecycle.js";
+import {verifyExceptionAuthority} from "../controller/exception-service.js";
 import { assertWorkingTreePolicy, type WorkingTreeStatus } from "./policy.js";
 import { reapStagingFiles, type StagingMetadata } from "./reaper.js";
 
@@ -193,7 +197,7 @@ export class QualityGateRunner {
     // Determine target stage and profile
     const targetStageNum = options?.stage !== undefined ? options.stage : state.current_stage;
     const activeProfile: GovernanceProfile =
-      options?.profile || manifest.playbook?.governance_profile || "standard";
+      options?.profile || resolveGovernanceProfile(this.targetDir, manifest);
 
     // 2. Phase 2: Preconditions & Working Tree Assertion
     const workingTreeTier: WorkingTreeTier = options?.headless ? "ci" : "local";
@@ -451,18 +455,23 @@ export class QualityGateRunner {
     const startTimeMs = Date.now();
     const runNonce = crypto.randomUUID();
 
+    const configurationHash=configurationFingerprint(this.targetDir,JSON.parse(fs.readFileSync(path.join(this.targetDir,".playbook/manifest.json"),"utf8")));
+    let executableFingerprint: string | undefined;
+    let fingerprintError: string | undefined;
+    try { executableFingerprint=toolFingerprint(this.targetDir,check); }
+    catch (error) { fingerprintError=error instanceof Error?error.message:String(error); }
     // Determine tool version if configured
     let toolVersion = "v1.0.0";
     if (check.tool_version_command) {
       try {
-        const parts = check.tool_version_command.split(" ");
+        const parts = parseToolVersionCommand(check.tool_version_command);
         const bin = parts[0];
         const args = parts.slice(1);
         const resolved = resolveExecutable(bin, args, { cwd: this.targetDir, env: process.env as Record<string, string> });
         const out = spawnSyncToString(resolved.file, resolved.args, this.targetDir);
         toolVersion = out.trim() || toolVersion;
       } catch {
-        // fallback
+        throw new QualityGateExecutionError("TOOL_VERSION_UNAVAILABLE","Declared tool version could not be verified.");
       }
     }
 
@@ -515,7 +524,7 @@ export class QualityGateRunner {
     // Run process and stream to staging log
     let exitCode: number | null = null;
     let timedOut = false;
-    let executionError: string | undefined;
+    let executionError: string | undefined = fingerprintError;
 
     const stagingLogStream = fs.createWriteStream(stagingLogPath, { flags: "w", encoding: "utf-8" });
 
@@ -583,6 +592,8 @@ export class QualityGateRunner {
           resolve(null);
         });
       });
+    } catch (error) {
+      executionError = error instanceof Error ? error.message : String(error);
     } finally {
       await new Promise<void>((resolve) => {
         stagingLogStream.end(() => resolve());
@@ -650,6 +661,8 @@ export class QualityGateRunner {
     fs.writeFileSync(stagingLogPath, finalizedLogContent, "utf-8");
 
     const checkResult: CheckExecutionResult = {
+      config_hash: configurationHash,
+      tool_fingerprint: executableFingerprint,
       check_id: check.id,
       name: check.name,
       type: check.type,
@@ -745,9 +758,22 @@ export class QualityGateRunner {
         }
 
         const isPassed = result.outcome === "passed";
-        if (isPassed) {
-          deliverable.validation_status = "passed";
-          deliverable.status = "verified";
+        const manifest=JSON.parse(fs.readFileSync(path.join(this.targetDir,".playbook/manifest.json"),"utf8")) as ProjectManifest;
+        const check=stageGate.checks.find(c=>c.id===result.check_id)!;
+        if (result.config_hash!==configurationFingerprint(this.targetDir,manifest) ||
+            (result.tool_fingerprint ? result.tool_fingerprint!==toolFingerprint(this.targetDir,check) : result.outcome==="passed")) {
+          throw new QualityGateExecutionError("CHECK_RESULT_SUPERSEDED","Check configuration or tool changed while executing.");
+        }
+        const waived=deliverable.status==="waived";
+        const exception=freshState.current_stage_detail.exceptions.find(e=>e.exception_id===deliverable.exception_ref);
+        if (waived) {
+          assertEffectiveWaiver(freshState,deliverable,e=>verifyExceptionAuthority(this.targetDir,freshState,manifest,e));
+          if (!exception?.remediation_id || !exception.remediation_started_at || Date.parse(result.started_at)<=Date.parse(exception.remediation_started_at)) {
+            throw new QualityGateExecutionError("REMEDIATION_NOT_STARTED","Start fresh remediation before running checks for a waived deliverable.");
+          }
+        } else if (isPassed) {
+          deliverable.validation_status = "unvalidated";
+          deliverable.status = "in_progress";
         } else if (result.severity === "blocking") {
           deliverable.validation_status = "failed";
           deliverable.status = "in_progress";
@@ -773,8 +799,18 @@ export class QualityGateRunner {
             gate_id: `gate-stage-${stageGate.stage}`,
             check_id: result.check_id,
             duration_ms: result.duration_ms,
+            config_hash: result.config_hash,
+            tool_fingerprint: result.tool_fingerprint,
+            tool_version: result.tool_version,
           },
         };
+        if (freshState.schema_version==="1.1.0") {
+          freshState.transaction_sequence=(freshState.transaction_sequence || 0)+1;
+          evidenceRecord.sequence=freshState.transaction_sequence;
+          if (waived) evidenceRecord.remediation_ref=exception!.remediation_id;
+          freshState.audit_trail ||= [];
+          freshState.audit_trail.push({action:"EVIDENCE_RECORDED",sequence:freshState.transaction_sequence,timestamp:result.completed_at,actor:"agent:quality-gate-engine",actor_type:"agent",reason:`Quality check ${check.id} recorded`,deliverable_id:deliverable.id,prior_authorization_ref:exception?.authorization_ref || null});
+        }
 
         // Append evidence record
         deliverable.evidence.push(evidenceRecord);
@@ -787,6 +823,7 @@ export class QualityGateRunner {
           reason: `Recorded quality-gate evidence for check '${result.check_id}' (${result.outcome.toUpperCase()}).`,
         };
 
+        if (!this.validator.validateState(freshState).valid) throw new QualityGateExecutionError("STATE_SCHEMA_INVALID","Gate evidence update failed schema validation.");
         const serializedState = JSON.stringify(freshState, null, 2) + "\n";
 
         // Multi-file atomic operations:
@@ -814,6 +851,20 @@ export class QualityGateRunner {
           lockHandle
         );
         await this.txManager.commit(prepJournal, lockHandle);
+
+        // The log must exist before aggregate promotion. A crash between these
+        // transactions leaves a conservative in-progress target with intact proof.
+        if (!waived) {
+          const resolution=resolveAuthoritativeVerification(this.targetDir,freshState.current_stage,deliverable,manifest,deliverables);
+          if (resolution.authoritativeResult==="passed") {
+            const recordedRaw=fs.readFileSync(stateAbsolute,"utf8");
+            deliverable.status="verified";deliverable.validation_status="passed";
+            const promotion=await this.txManager.prepare("VERIFY_QUALITY_GATE_DELIVERABLE",[
+              {operation:"write",targetPath:stateRelative,content:JSON.stringify(freshState,null,2)+"\n",expectedPreviousSha256:computeSha256(recordedRaw)},
+            ],lockHandle);
+            await this.txManager.commit(promotion,lockHandle);
+          }
+        }
 
         return true;
       },

@@ -27,8 +27,11 @@
     },
     "schema_version": {
       "type": "string",
-      "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$",
-      "description": "Semantic version of the state schema (e.g. 1.0.0)."
+      "enum": [
+        "1.0.0",
+        "1.1.0"
+      ],
+      "description": "Explicitly supported storage versions; migration is never implicit."
     },
     "project_id": {
       "type": "string",
@@ -319,9 +322,29 @@
                           "type": "integer",
                           "minimum": 0,
                           "description": "Execution duration in milliseconds."
+                        },
+                        "config_hash": {
+                          "type": "string",
+                          "pattern": "^sha256:[a-f0-9]{64}$"
+                        },
+                        "tool_fingerprint": {
+                          "type": "string",
+                          "pattern": "^sha256:[a-f0-9]{64}$"
+                        },
+                        "tool_version": {
+                          "type": "string",
+                          "minLength": 1
                         }
                       },
                       "description": "Structured quality gate execution telemetry."
+                    },
+                    "remediation_ref": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "sequence": {
+                      "type": "integer",
+                      "minimum": 1
                     }
                   }
                 }
@@ -331,25 +354,35 @@
               {
                 "if": {
                   "properties": {
-                    "status": { "const": "verified" }
+                    "status": {
+                      "const": "verified"
+                    }
                   }
                 },
                 "then": {
                   "properties": {
-                    "validation_status": { "const": "passed" },
-                    "evidence": { "minItems": 1 }
+                    "validation_status": {
+                      "const": "passed"
+                    },
+                    "evidence": {
+                      "minItems": 1
+                    }
                   }
                 }
               },
               {
                 "if": {
                   "properties": {
-                    "status": { "const": "waived" }
+                    "status": {
+                      "const": "waived"
+                    }
                   }
                 },
                 "then": {
                   "properties": {
-                    "validation_status": { "const": "waived" },
+                    "validation_status": {
+                      "const": "waived"
+                    },
                     "exception_ref": {
                       "type": "string",
                       "pattern": "^EXC-[0-9]{8}-[0-9]{3}$"
@@ -500,11 +533,17 @@
                 "description": "Exact gate requirement or acceptance criterion waived."
               },
               "authorized_by": {
-                "type": "string",
+                "type": [
+                  "string",
+                  "null"
+                ],
                 "description": "Name and title of authorized human who granted waiver."
               },
               "authorized_at": {
-                "type": "string",
+                "type": [
+                  "string",
+                  "null"
+                ],
                 "format": "date-time",
                 "description": "Timestamp when exception was granted."
               },
@@ -516,12 +555,61 @@
               "status": {
                 "type": "string",
                 "enum": [
+                  "proposed",
                   "active",
                   "remediated",
                   "expired",
                   "revoked"
                 ],
-                "description": "Exception status. 'expired' or 'revoked' immediately blocks gate progression."
+                "description": "Expired or revoked authority cannot satisfy a referenced waiver. Historical retired records remain for audit; CLI semantic validation and gate readers enforce reference eligibility."
+              },
+              "proposal_hash": {
+                "type": "string",
+                "pattern": "^sha256:[a-f0-9]{64}$"
+              },
+              "authorization_ref": {
+                "type": "string",
+                "pattern": "^sha256:[a-f0-9]{64}$"
+              },
+              "proposed_at": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "revoked_at": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "remediation_started_at": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "proposal_actor": {
+                "type": "string",
+                "minLength": 1
+              },
+              "authorization_path": {
+                "type": "string",
+                "minLength": 1
+              },
+              "revoked_by": {
+                "type": "string",
+                "minLength": 1
+              },
+              "revocation_reason": {
+                "type": "string",
+                "minLength": 1
+              },
+              "remediation_id": {
+                "type": "string",
+                "minLength": 1
+              },
+              "ratification_commit": {
+                "type": "string",
+                "minLength": 1
+              },
+              "remediation_sequence": {
+                "type": "integer",
+                "minimum": 1
               }
             }
           }
@@ -893,6 +981,62 @@
           }
         }
       }
+    },
+    "transaction_sequence": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "audit_trail": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "action",
+          "sequence",
+          "timestamp",
+          "actor",
+          "actor_type",
+          "reason"
+        ],
+        "properties": {
+          "action": {
+            "type": "string"
+          },
+          "sequence": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "timestamp": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "actor": {
+            "type": "string"
+          },
+          "actor_type": {
+            "enum": [
+              "agent",
+              "human_interactive"
+            ]
+          },
+          "reason": {
+            "type": "string"
+          },
+          "exception_id": {
+            "type": "string"
+          },
+          "deliverable_id": {
+            "type": "string"
+          },
+          "prior_authorization_ref": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      }
     }
   },
   "allOf": [
@@ -999,11 +1143,8 @@
     {
       "if": {
         "properties": {
-          "stage_status": {
-            "enum": [
-              "pending_review",
-              "approved"
-            ]
+          "schema_version": {
+            "const": "1.0.0"
           }
         }
       },
@@ -1013,19 +1154,103 @@
             "properties": {
               "exceptions": {
                 "items": {
-                  "not": {
-                    "properties": {
-                      "status": {
-                        "enum": [
-                          "expired",
-                          "revoked"
-                        ]
+                  "properties": {
+                    "status": {
+                      "enum": [
+                        "active",
+                        "remediated",
+                        "expired",
+                        "revoked"
+                      ]
+                    },
+                    "authorized_by": {
+                      "type": "string"
+                    },
+                    "authorized_at": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "schema_version": {
+            "const": "1.1.0"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "transaction_sequence",
+          "audit_trail"
+        ],
+        "properties": {
+          "current_stage_detail": {
+            "properties": {
+              "exceptions": {
+                "items": {
+                  "allOf": [
+                    {
+                      "if": {
+                        "properties": {
+                          "status": {
+                            "const": "proposed"
+                          }
+                        }
+                      },
+                      "then": {
+                        "required": [
+                          "proposal_hash",
+                          "proposed_at",
+                          "proposal_actor",
+                          "ratification_commit"
+                        ],
+                        "properties": {
+                          "authorized_by": {
+                            "type": "null"
+                          },
+                          "authorized_at": {
+                            "type": "null"
+                          }
+                        }
                       }
                     },
-                    "required": [
-                      "status"
-                    ]
-                  }
+                    {
+                      "if": {
+                        "properties": {
+                          "status": {
+                            "const": "active"
+                          }
+                        }
+                      },
+                      "then": {
+                        "required": [
+                          "proposal_hash",
+                          "proposed_at",
+                          "proposal_actor",
+                          "ratification_commit",
+                          "authorization_ref",
+                          "authorization_path"
+                        ],
+                        "properties": {
+                          "authorized_by": {
+                            "type": "string",
+                            "minLength": 3
+                          },
+                          "authorized_at": {
+                            "type": "string",
+                            "format": "date-time"
+                          }
+                        }
+                      }
+                    }
+                  ]
                 }
               }
             }

@@ -1,4 +1,6 @@
 import fs from "node:fs";
+import {assertExceptionGateState} from "../controller/exception-service.js";
+import {resolveAuthoritativeVerification} from "../controller/resolver.js";
 import path from "node:path";
 import { SCHEMA_VERSION } from "../../constants.js";
 import { SchemaValidator } from "../validator.js";
@@ -391,6 +393,16 @@ export class DiagnosticsEngine {
       }
 
       // 5.4 Exceptions analysis
+      if (stateValid && manifest) {
+        try {assertExceptionGateState(raw.targetDir,state,manifest,now);}
+        catch (error) {diagnostics.push({code:"GATE_CRITERIA_UNMET",severity:"error",message:error instanceof Error?error.message:String(error),path:".playbook/state.json",remediation:"Resolve outstanding proposals or satisfy the original requirement; waiver authority must be valid."});}
+        for (const deliverable of state.current_stage_detail.deliverables.filter(d=>d.status==="verified")) {
+          try {
+            const proof=resolveAuthoritativeVerification(raw.targetDir,state.current_stage,deliverable,manifest,state.current_stage_detail.deliverables,now);
+            if (proof.authoritativeResult!=="passed") diagnostics.push({code:"GATE_CRITERIA_UNMET",severity:"error",message:`${deliverable.id}: ${proof.blockingReasons.join("; ")}`,path:deliverable.artifact_path,remediation:"Re-run required verification and record fresh proof."});
+          } catch (error) {diagnostics.push({code:"GATE_CRITERIA_UNMET",severity:"error",message:error instanceof Error?error.message:String(error),path:deliverable.artifact_path,remediation:"Repair the verification contract and reverify."});}
+        }
+      }
       const exceptions = state.current_stage_detail?.exceptions || [];
       exceptionsSummary.total = exceptions.length;
 
@@ -406,7 +418,7 @@ export class DiagnosticsEngine {
           exceptionsSummary.revoked++;
           diagnostics.push({
             code: "EXCEPTION_REVOKED",
-            severity: "error",
+            severity: state.current_stage_detail.deliverables.some(d=>d.exception_ref===exc.exception_id)?"error":"info",
             message: `Exception '${exc.title}' (${exc.exception_id}) was revoked.`,
             path: exc.path,
             remediation: `Remediate waived requirement or obtain new authorized exception.`,
@@ -415,7 +427,7 @@ export class DiagnosticsEngine {
           exceptionsSummary.expired++;
           diagnostics.push({
             code: "EXCEPTION_EXPIRED",
-            severity: "error",
+            severity: state.current_stage_detail.deliverables.some(d=>d.exception_ref===exc.exception_id)?"error":"info",
             message: `Exception '${exc.title}' (${exc.exception_id}) expired on ${exc.expiration_date}.`,
             path: exc.path,
             remediation: `Remediate the waived requirement (${exc.waived_requirement}) or obtain human renewal of exception.`,

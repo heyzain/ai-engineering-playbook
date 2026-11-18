@@ -71,6 +71,8 @@ export type WorkingTreeTier = "local" | "handover" | "ci";
 export type CheckOutcome = "passed" | "failed" | "skipped" | "timed_out" | "error";
 
 export interface CheckExecutionResult {
+  config_hash?: string;
+  tool_fingerprint?: string;
   check_id: string;
   name: string;
   type: CheckType;

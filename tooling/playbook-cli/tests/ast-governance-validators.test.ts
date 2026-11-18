@@ -644,7 +644,7 @@ Example code snippet:
   // 4. Controller Integration Tests
   // --------------------------------------------------------------------------
   describe("4. Stage-Gate & Controller Integration", () => {
-    test("recordException integration: succeeds with AST-validated exception file", async () => {
+    test("recordException integration: documentary approval cannot create a waiver", async () => {
       setupStageProject(tempDir, { stage: 0, status: "in_progress" });
 
       const prdFile = path.join(tempDir, "docs", "prd", "PRD-CORE.md");
@@ -701,16 +701,9 @@ Open.
         "utf-8"
       );
 
-      const res = await recordException({
-        targetDir: tempDir,
-        deliverableId: "PRD-CORE",
-        exceptionPath: "docs/exceptions/EXC-20261109-001.md",
-      });
-
-      assert.equal(res.success, true);
-      assert.equal(res.deliverable.status, "waived");
-      assert.equal(res.deliverable.validation_status, "waived");
-      assert.equal(res.deliverable.exception_ref, "EXC-20261109-001");
+      const before = fs.readFileSync(path.join(tempDir, ".playbook/state.json"), "utf8");
+      await assert.rejects(recordException({targetDir:tempDir,deliverableId:"PRD-CORE",exceptionPath:"docs/exceptions/EXC-20261109-001.md"}), {code:"EXCEPTION_LEGACY_WAIVER_DISABLED"});
+      assert.equal(fs.readFileSync(path.join(tempDir, ".playbook/state.json"), "utf8"), before);
     });
 
     test("recordException integration: fails closed when AST detects synthetic agent authorizer", async () => {
@@ -759,7 +752,7 @@ Open.
         },
         (err: unknown) => {
           assert.ok(err instanceof ControllerError);
-          assert.equal(err.code, "EXCEPTION_AGENT_ATTRIBUTION_FORBIDDEN");
+          assert.equal(err.code, "EXCEPTION_LEGACY_WAIVER_DISABLED");
           return true;
         }
       );
@@ -1368,7 +1361,8 @@ I confirm all deliverables are verified.
                 type: "automated_test",
                 severity: "blocking",
                 profiles: ["strict", "standard", "lightweight"],
-                command: "npm test",
+                command: process.execPath,
+                inputs: ["docs/prd/PRD-CORE.md"],
                 args: [],
               },
             ],
@@ -1400,6 +1394,8 @@ I confirm all deliverables are verified.
         procedure: "test",
         evidenceRef: ".playbook/logs/prd-pass.log",
         result: "passed",
+        checkId: "qg-001",
+        exitCode: 0,
       });
 
       // 4-section exit package (missing canonical sections 2, 5, 6, 7, 8)
@@ -1479,7 +1475,8 @@ All traceability and residual risks accepted.
                 type: "automated_test",
                 severity: "blocking",
                 profiles: ["strict", "standard", "lightweight"],
-                command: "npm test",
+                command: process.execPath,
+                inputs: ["docs/prd/PRD-CORE.md"],
                 args: [],
               },
             ],
@@ -1511,6 +1508,8 @@ All traceability and residual risks accepted.
         procedure: "test",
         evidenceRef: ".playbook/logs/prd-pass.log",
         result: "passed",
+        checkId: "qg-001",
+        exitCode: 0,
       });
 
       // 4-section exit package passes under lightweight
@@ -1724,15 +1723,10 @@ Open.
         "utf-8"
       );
 
-      // Intake succeeds on valid documentary metadata
-      const recordRes = await recordException({
-        targetDir: tempDir,
-        deliverableId: "PRD-CORE",
-        exceptionPath: "docs/exceptions/EXC-20261110-001.md",
-      });
-      assert.equal(recordRes.success, true);
-      assert.equal(recordRes.deliverable.status, "waived");
-      assert.equal(recordRes.deliverable.exception_ref, "EXC-20261110-001");
+      // Documentary metadata remains parseable but cannot activate authority.
+      const before = fs.readFileSync(path.join(tempDir, ".playbook/state.json"), "utf8");
+      await assert.rejects(recordException({targetDir:tempDir,deliverableId:"PRD-CORE",exceptionPath:"docs/exceptions/EXC-20261110-001.md"}), {code:"EXCEPTION_LEGACY_WAIVER_DISABLED"});
+      assert.equal(fs.readFileSync(path.join(tempDir, ".playbook/state.json"), "utf8"), before);
 
       // Verify that prohibited AI agent authorizer fails closed
       const badExcPath = path.join(tempDir, "docs", "exceptions", "EXC-20261110-002.md");
@@ -1753,7 +1747,7 @@ Open.
         },
         (err: unknown) => {
           assert.ok(err instanceof ControllerError);
-          assert.equal(err.code, "EXCEPTION_AGENT_ATTRIBUTION_FORBIDDEN");
+          assert.equal(err.code, "EXCEPTION_LEGACY_WAIVER_DISABLED");
           return true;
         }
       );

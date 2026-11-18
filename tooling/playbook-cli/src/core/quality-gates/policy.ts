@@ -38,7 +38,8 @@ export function inspectWorkingTree(
       encoding: "utf-8",
       stdio: ["ignore", "pipe", "ignore"],
     });
-  } catch {
+  } catch (error) {
+    if (fs.existsSync(path.join(resolvedDir,".git"))) throw new Error(`WORKING_TREE_INSPECTION_UNAVAILABLE: ${error instanceof Error?error.message:String(error)}`);
     // Non-git directory or git error
     return {
       isClean: true,
@@ -62,6 +63,7 @@ export function inspectWorkingTree(
     if (filePath.startsWith(".playbook/.tmp") || filePath.startsWith(".playbook/logs")) {
       continue;
     }
+    if (tier === "local" && [".playbook/state.json",".playbook/approval-fingerprint.json",".playbook/transaction.lock",".playbook/tx-journal.json"].includes(filePath)) continue;
 
     if (status.includes("?")) {
       untrackedFiles.push(filePath);

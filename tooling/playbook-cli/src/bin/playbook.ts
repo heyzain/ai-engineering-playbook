@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 import fs from "node:fs";
+import { runWorkflowCommand } from "../commands/workflow.js";
 import { parseArgs } from "node:util";
 import { PLAYBOOK_VERSION } from "../constants.js";
 import { runInit } from "../commands/init.js";
@@ -28,6 +29,9 @@ Usage:
   playbook <command> [options]
 
 Commands:
+  stage             Start a stage or submit its verified exit package (stage start|submit)
+  deliverable       Record authored work or append evidence (deliverable record|evidence)
+  exception         Local proposal/authorization/revocation/remediation; explicit migration and operator boundaries
   inspect           Inspect project governance state, deliverables, and readiness (read-only)
   verify-evidence   Verify evidence files and SHA-256 integrity hashes (read-only)
   lint              Evaluate governance rules across Categories A-E (read-only):
@@ -107,6 +111,10 @@ Examples:
 `;
 
 async function main(): Promise<void> {
+  const workflowGroup = process.argv[2];
+  if (["stage", "deliverable", "exception"].includes(workflowGroup)) {
+    process.exit(await runWorkflowCommand(workflowGroup, process.argv.slice(3)));
+  }
   const { values, positionals } = parseArgs({
     args: process.argv.slice(2),
     options: {

@@ -1205,7 +1205,7 @@ export class StackManager {
                 id: "core-typecheck",
                 name: "Base TypeScript Check",
                 type: "build_typecheck",
-                deliverable_id: "DELIV-1",
+                deliverable_id: "CODE-IMPL",
                 command: "tsc",
                 args: ["--noEmit"],
                 severity: "blocking",

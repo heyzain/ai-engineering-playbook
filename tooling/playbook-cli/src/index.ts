@@ -68,6 +68,12 @@ export * from "./core/linters/index.js";
 export * from "./commands/lint.js";
 export * from "./formatters/lint-json.js";
 export * from "./formatters/lint-terminal.js";
+export * from "./commands/workflow.js";
+export * from "./core/ratification-verifier.js";
+export { startStage, submitStage } from "./core/controller/stage-controller.js";
+export { recordDeliverable, recordEvidence } from "./core/controller/deliverable-controller.js";
+export { resolveAuthoritativeVerification } from "./core/controller/resolver.js";
+export { executeExceptionAction, migrateLocalExceptions, previewExceptionAction, previewLocalMigration, assertExceptionGateState } from "./core/controller/exception-service.js";
 
 
 

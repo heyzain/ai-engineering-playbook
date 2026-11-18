@@ -133,3 +133,17 @@ When interacting with human engineers, AI agents must:
 | **Machine-Readable Schemas & Contracts** | [schemas/README.md](schemas/README.md) |
 | **Standard Engineering Templates** | [templates/README.md](templates/README.md) |
 | **Repository Vision & Layout** | [README.md](README.md) |
+
+## Supported intra-stage CLI operations
+
+Use built `playbook stage start`, `deliverable record`, `deliverable evidence`
+and `stage submit` commands for normal authoring. Do not manufacture verified
+statuses or proof hashes in state. Bind configured proof with `--check` and
+record actual outcomes, including failed or inconclusive results. See
+`tooling/playbook-cli/README.md` for flags and examples.
+
+Exception proposals confer no waiver authority. Agents may initiate remediation
+and record fresh proof using the returned remediation ID. Explicit schema migration
+and exception approval/revocation belong to the human operator in an interactive
+terminal. Local Level A attestation cannot authorize team/remote-CI waivers.
+Gate approval and advancement retain the human boundaries defined above.

@@ -2,6 +2,14 @@
 
 Date: 2026-11-17. Stage 2. Milestone M-1.0.0. Author: Codex. Status: proposed for human review. Baseline: `1b4fb79`. Inputs: approved [requirements](../prd/REQUIREMENTS-SPEC.md) and [pilot](../prd/PILOT-SPEC.md). This specification changes no production code or schemas and asserts no human ratification.
 
+## Recorded disposition (2026-11-18)
+
+Gate 2 was approved by the operator and Stage 3 started, as recorded in
+`.playbook/state.json` and `docs/gates/GATE-2-EXIT-PACKAGE.md`. Original proposal
+wording is preserved below as history. Amendment ratification is separately
+recorded in `RATIFY-20261110-001.md`; no architectural review substitutes for it.
+Implementation verification and Gate 3 remain separate requirements.
+
 ## 1. System structure and boundaries
 
 ```mermaid

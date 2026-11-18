@@ -384,6 +384,8 @@ All mandatory engineering invariants and gate criteria have been satisfied in fu
       const state: ProjectState = JSON.parse(
         fs.readFileSync(path.join(tempDir, ".playbook/state.json"), "utf-8")
       );
+      state.stage_status = "pending_review";
+      state.current_stage_detail.human_approval.status = "pending_review";
       state.current_stage_detail.exit_package = {
         status: "submitted_for_review",
         path: "docs/gates/GATE-1-EXIT.md",

@@ -168,6 +168,8 @@ describe("Quality Gates Schema Compatibility & Migration Boundaries", () => {
     const mockState = {
       $schema: "https://ai-engineering-playbook.org/schemas/project-state.schema.json",
       schema_version: "1.1.0",
+      transaction_sequence: 0,
+      audit_trail: [],
       project_id: "test-project",
       playbook_version: "1.0.0",
       milestone_id: "M-1.0.0",
@@ -240,6 +242,8 @@ describe("Quality Gates Schema Compatibility & Migration Boundaries", () => {
     const mockState = {
       $schema: "https://ai-engineering-playbook.org/schemas/project-state.schema.json",
       schema_version: "1.1.0",
+      transaction_sequence: 0,
+      audit_trail: [],
       project_id: "test-project",
       playbook_version: "1.0.0",
       milestone_id: "M-1.0.0",

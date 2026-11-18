@@ -1,5 +1,73 @@
 # @ai-engineering-playbook/cli
 
+## Stage, deliverable and exception workflow
+
+Build first (`npm run build`), then run the commands below from this package.
+Replace `C:/project` with an eligible project. Create and actually verify the
+referenced artifacts before recording passing evidence.
+
+```powershell
+node dist/src/bin/playbook.js stage start --stage 0 --cwd C:/project --json
+node dist/src/bin/playbook.js deliverable record --id PRD-CORE --artifact docs/prd/PRD-CORE.md --status completed --cwd C:/project --json
+node dist/src/bin/playbook.js deliverable evidence --id PRD-CORE --type manual_functional --result passed --evidence .playbook/logs/review.txt --procedure "Review acceptance criteria" --cwd C:/project --json
+node dist/src/bin/playbook.js stage submit --package docs/gates/GATE-0-EXIT-PACKAGE.md --cwd C:/project --json
+```
+
+Submission requests human review. The operator runs `approve --gate N` and
+`advance` in their own terminal. Agents cannot approve mandatory gates.
+
+Common flags: `--cwd PATH`, `--json`, `--help`. Invalid arguments exit 2 before
+mutation; operation rejection exits 1; success exits 0. JSON emits one object
+with `success`, `operation`, and `data` or `error: {code, message}`. Unknown
+flags, extra positional arguments, invalid enums and stages are rejected.
+
+`deliverable record` accepts `--status in_progress|completed`, `--name`,
+`--description`. Evidence requires `--id`, `--type`, `--result`, `--evidence`,
+`--procedure`; optional flags are `--summary`, `--requirement`, `--exit-code`,
+`--commit`, `--check`, `--tool-version`, `--remediation`. Results are
+`passed|failed|inconclusive`. Use `--check CHECK_ID` for an exact configured check.
+Every mandatory check requires current matching proof. Logs, inputs, configuration,
+profile and tools are hashed; changed proof requires fresh verification.
+
+### Local exception lifecycle
+
+This is Level A local operator attestation, without authenticated identity or
+team/remote-CI waiver authority. Active local waivers fail closed in those contexts.
+Remote CI without waived requirements remains supported.
+
+```powershell
+# Human terminal: review the displayed migration inputs and explicitly confirm.
+node dist/src/bin/playbook.js exception migrate --ratification-root C:/ratified-playbook --cwd C:/project
+# Agent-safe proposal, following the exception template with Proposed status.
+node dist/src/bin/playbook.js exception propose --id PRD-CORE --document docs/exceptions/EXC-20261118-001.md --cwd C:/project --json
+# Human terminal: review scope/hash and confirm with Lead Architect authority.
+node dist/src/bin/playbook.js exception approve --id EXC-20261118-001 --cwd C:/project
+# Agent-safe: starts a fresh evidence window and returns its remediation ID.
+node dist/src/bin/playbook.js exception remediation-start --id EXC-20261118-001 --cwd C:/project --json
+node dist/src/bin/playbook.js deliverable evidence --id PRD-CORE --type manual_functional --result passed --evidence .playbook/logs/remediation.txt --procedure "Verify repaired criteria" --remediation RETURNED_ID --cwd C:/project --json
+node dist/src/bin/playbook.js exception remediate --id EXC-20261118-001 --cwd C:/project --json
+# Alternative human operation: withdraw authority, preserving history.
+node dist/src/bin/playbook.js exception revoke --id EXC-20261118-001 --reason "Withdraw dependency waiver" --cwd C:/project
+```
+
+Migration is explicit 1.0.0 to 1.1.0, solo, in-progress, with valid committed
+ratification proof. Unique read-only `.playbook/migrations/` backups preserve
+original manifest/state and inventory. Legacy authority is revoked, waived targets
+become unvalidated, and new proposals require new IDs and fresh authorization.
+The canonical proof checkout remains a runtime dependency for local authority.
+
+Migration/approval/revocation require actual interactive stdin/stdout; there is no
+`--yes` bypass. Optional `--operator` and `--role` supply declarations; exact
+confirmation is always prompted. Changed review inputs reject the transaction.
+Proposals confer no authority. Approval seals scope, document hash and ratification.
+Missing/tampered/expired proof blocks reliance; revocation still works with a
+missing source document. Expiry is exclusive midnight UTC after the declared date.
+Remediation requires fresh, marker-bound audited proof after authorization and
+initiation; old proof cannot retire a waiver. Writes use locking and WAL recovery.
+
+See repository `docs/audits/phase-4-5-implementation.md` for verification limits.
+These examples do not certify installed-package or cross-platform behavior.
+
 > Foundational, cross-platform governance CLI for the AI Engineering Playbook.
 
 ---

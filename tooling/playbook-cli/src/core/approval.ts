@@ -1,4 +1,6 @@
 import fs from "node:fs";
+import {assertExceptionGateState} from "./controller/exception-service.js";
+import {resolveAuthoritativeVerification} from "./controller/resolver.js";
 import path from "node:path";
 import crypto from "node:crypto";
 import { DEFAULT_PATHS, type ApprovalMode, type StageNumber } from "../constants.js";
@@ -136,6 +138,8 @@ export function checkGateEligibility(
 
   const manifest = rawManifest as ProjectManifest;
   const state = rawState as ProjectState;
+  try { assertExceptionGateState(targetDir,state,manifest,now); }
+  catch (error) { diagnostics.push({code:(error as {code?:string})?.code==="EXCEPTION_EXPIRED"?"EXCEPTION_EXPIRED":"GATE_CRITERIA_UNMET",severity:"error",message:error instanceof Error?error.message:String(error),path:DEFAULT_PATHS.stateFile,remediation:"Resolve the exception authorization or original requirement before approval."}); }
 
   // Consistency checks
   if (manifest.project_id !== state.project_id) {
@@ -353,72 +357,16 @@ export function checkGateEligibility(
         });
       }
 
-      // Check evidence items
-      for (const ev of deliv.evidence || []) {
-        if (ev.result !== "passed") {
-          diagnostics.push({
-            code: "EVIDENCE_RESULT_FAILED",
-            severity: "error",
-            message: `Evidence record for deliverable "${deliv.id}" recorded non-passing result "${ev.result}".`,
-            path: DEFAULT_PATHS.stateFile,
-            remediation: "Ensure all supporting evidence records report 'passed'.",
-          });
+      // Resolve current proof once; historical failures remain append-only and do not invalidate newer passing proof.
+      try {
+        const resolution=resolveAuthoritativeVerification(targetDir,state.current_stage,deliv,manifest,deliverables,now);
+        if (resolution.authoritativeResult!=="passed") {
+          const issue=resolution.issues?.[0];
+          const known=["EVIDENCE_FILE_MISSING","EVIDENCE_HASH_MISMATCH","EVIDENCE_RESULT_FAILED","TARGET_PATH_INVALID"];
+          diagnostics.push({code:issue && known.includes(issue.code)?issue.code as DiagnosticIssue["code"]:"DELIVERABLE_UNVERIFIED",severity:"error",message:issue?.message || resolution.blockingReasons.join("; "),path:issue?.ref || DEFAULT_PATHS.stateFile,remediation:"Run every required check and record fresh passing evidence."});
         }
+      } catch (error) { diagnostics.push({code:"DELIVERABLE_UNVERIFIED",severity:"error",message:error instanceof Error?error.message:String(error),path:DEFAULT_PATHS.stateFile,remediation:"Correct the verification contract and rerun required checks."}); }
 
-        // Automated disciplines require evidence_hash
-        const isAutomated = [
-          "automated_test",
-          "build_typecheck",
-          "static_analysis",
-          "schema_validation",
-          "security_audit",
-        ].includes(ev.type);
-
-        if (isAutomated && (!ev.evidence_hash || !/^sha256:[a-f0-9]{64}$/i.test(ev.evidence_hash))) {
-          diagnostics.push({
-            code: "EVIDENCE_HASH_MISMATCH",
-            severity: "error",
-            message: `Automated evidence for deliverable "${deliv.id}" requires a valid sha256 evidence_hash.`,
-            path: DEFAULT_PATHS.stateFile,
-            remediation: "Provide a valid SHA-256 evidence hash for automated disciplines.",
-          });
-        }
-
-        // Verify evidence file presence on disk
-        try {
-          const { absolutePath: absEvidence } = validateCanonicalPath(targetDir, ev.evidence_ref);
-          if (!fs.existsSync(absEvidence)) {
-            diagnostics.push({
-              code: "EVIDENCE_FILE_MISSING",
-              severity: "error",
-              message: `Evidence file for deliverable "${deliv.id}" does not exist on disk: "${ev.evidence_ref}".`,
-              path: ev.evidence_ref,
-              remediation: `Ensure evidence file exists at "${ev.evidence_ref}".`,
-            });
-          } else if (ev.evidence_hash) {
-            const calculatedHash = computeFileSha256(absEvidence);
-            if (calculatedHash?.toLowerCase() !== ev.evidence_hash.toLowerCase()) {
-              diagnostics.push({
-                code: "EVIDENCE_HASH_MISMATCH",
-                severity: "error",
-                message: `Evidence file "${ev.evidence_ref}" hash mismatch (expected ${ev.evidence_hash}, calculated ${calculatedHash}).`,
-                path: ev.evidence_ref,
-                remediation: "Update recorded evidence_hash or re-generate evidence artifact.",
-              });
-            }
-          }
-        } catch (err: unknown) {
-          diagnostics.push({
-            code: "TARGET_PATH_INVALID",
-            severity: "error",
-            message: `Evidence path is invalid or escapes project root: "${ev.evidence_ref}". Reason: ${
-              err instanceof Error ? err.message : String(err)
-            }`,
-            path: ev.evidence_ref,
-            remediation: "Ensure evidence path is strictly relative and contained within project root.",
-          });
-        }
-      }
     }
 
     if (deliv.status === "waived") {
@@ -462,7 +410,7 @@ export function checkGateEligibility(
 
   // Exception expiration check
   for (const exc of state.current_stage_detail?.exceptions || []) {
-    if (exc.status === "expired" || exc.status === "revoked") {
+    if ((exc.status === "expired" || exc.status === "revoked") && deliverables.some(d=>d.status==="waived" && d.exception_ref===exc.exception_id)) {
       diagnostics.push({
         code: "EXCEPTION_EXPIRED",
         severity: "error",
@@ -544,6 +492,9 @@ export function checkGateEligibility(
     }
   }
 
+  if (state.stage_status!=="approved" && (state.stage_status!=="pending_review" || state.current_stage_detail.exit_package.status!=="submitted_for_review" || state.current_stage_detail.human_approval.status!=="pending_review")) {
+    diagnostics.push({code:"GATE_CRITERIA_UNMET",severity:"error",message:"Formal stage submission and pending human review are required before gate approval.",path:DEFAULT_PATHS.stateFile,remediation:"Submit the verified exit package through playbook stage submit before approval."});
+  }
   const eligible = diagnostics.length === 0;
   return { eligible, diagnostics, state, manifest };
 }

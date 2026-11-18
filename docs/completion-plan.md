@@ -1,7 +1,7 @@
 # AI Engineering Playbook — Completion Plan
 
 Date: 2026-11-17  
-Status: Phases 1–3 committed and Gates 0–2 approved; Phase 4 implementation started with the ratification prerequisite checkpoint.
+Status: Phases 1–3 approved; Phase 4 ratification recorded; Phase 5 agent-safe CLI adapters started at operator request while remaining Phase 4 safety work stays open.
 Working agreement: Complete one phase, verify its exit criteria, review the changes, commit that phase, and only then begin the next.
 
 ## 1. Outcome
@@ -174,10 +174,23 @@ Exit: Final installation, smoke checks, observation, and rollback requirements p
 | Phase 1 | Approved and committed | Checkpoint `9afbfd1`; operator approved Gate 0 and advanced to Stage 1 on 2026-11-17. |
 | Phase 2 | Approved and committed | Checkpoint `1b4fb79`; operator approved Gate 1 and advanced to Stage 2 on 2026-11-17. |
 | Phase 3 | Approved and committed | Checkpoint `ef1b3db`; operator approved Gate 2 and advanced to Stage 3 on 2026-11-17. |
-| Phase 4 | In progress | Ratification utility/inventory and six behavior tests added. Prerequisite commit and actual operator ratification required before exception/schema changes; full baseline suite blocked by test-worker EPERM. See phase-4-ratification-bootstrap audit. |
-| Phase 5 | Not started | Requires verified Phase 4 commit. |
+| Phase 4 | Implementation authored; verification open | Local exception lifecycle/migration, shared waiver checks, per-check proof binding and legacy bypass closure implemented. Required complete regression/concurrency verification remains open; see phase-4-5-implementation audit. |
+| Phase 5 | Implementation authored; verification open | Stage/deliverable/evidence/submission and local exception commands exposed, CLI/API exports and instructions updated. Operator requested one remaining-work batch before committing. Full test pass and Gate 3 remain required. |
 | Phase 6 | Not started | Requires Phase 5 checkpoint and Gate 3 approval. |
 | Phase 7 | Not started | Requires Phase 6 checkpoint and Gate 4 approval. |
 | Phase 8 | Not started | Requires Phase 7 checkpoint and Gate 5 approval. |
 
 The roadmap was preserved in baseline checkpoint `bc5c4d3`. Phase records use existing transactional core APIs. Gates 0–2 approval/advancement were executed by the human operator; no gate or special amendment has been approved by the agent.
+
+### Phase 5 operator regression follow-up (2026-11-18)
+
+Normal-terminal transcript: 1011 tests, 1008 passed, 3 failed, zero skipped.
+Fixed the generated core deliverable placeholder, updated legacy-waiver lifecycle
+coverage, and corrected validation of retained retired exception history. Focused
+follow-up suites pass; the full isolated suite needs a fresh operator run before
+verification or Gate 3 submission. Details: `docs/audits/phase-4-5-implementation.md`.
+
+Latest operator rerun: 1014 total, 1013 passed, 1 failed, zero skipped. The remaining
+failure was a four-section lifecycle-test exit-package fixture. It now uses a shared
+complete eight-section helper with strict-parser regression coverage. Full rerun
+is still required; no phase verification or Gate 3 approval is inferred.

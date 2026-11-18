@@ -298,7 +298,7 @@ describe("Gate Approval Engine & CLI (playbook approve)", () => {
   });
 
   // Scenario 5c: Validly waived mandatory deliverable clears gate approval
-  test("Scenario 5c: Validly waived mandatory deliverable with active exception clears gate approval", async () => {
+  test("Scenario 5c: Unsealed legacy documentary waiver cannot clear gate approval", async () => {
     const { state, statePath } = setupStageProject(tempDir, { stage: 0, status: "pending_review" });
 
     // Mark PRD-CORE as waived with valid active exception
@@ -323,21 +323,21 @@ describe("Gate Approval Engine & CLI (playbook approve)", () => {
     ];
     fs.writeFileSync(statePath, JSON.stringify(state, null, 2) + "\n", "utf-8");
 
-    const res = await approveGate(tempDir, {
+    await assert.rejects(approveGate(tempDir, {
       gate: 0,
       reviewerName: "Alice Human",
       role: "Lead Engineer",
       confirmationPhrase: "CONFIRM APPROVAL GATE 0",
       isTTY: true,
-    });
-
-    assert.equal(res.success, true);
-    assert.ok(res.fingerprint?.startsWith("sha256:"));
+    }), /EXCEPTION_WAIVER_UNAUTHORIZED/);
   });
 
   // Scenario 6: Expired or revoked exceptions
   test("Scenario 6: Expired or revoked exceptions block gate approval with EXCEPTION_EXPIRED", async () => {
     const { state, statePath } = setupStageProject(tempDir, { stage: 0, status: "in_progress" });
+    state.current_stage_detail.deliverables[0].status="waived";
+    state.current_stage_detail.deliverables[0].validation_status="waived";
+    state.current_stage_detail.deliverables[0].exception_ref="EXC-20261001-001";
 
     // Add an expired exception
     state.current_stage_detail.exceptions = [

@@ -174,6 +174,21 @@ describe("SchemaValidator Core", () => {
     assert.ok(result.errors.some((e) => e.keyword === "required"));
   });
 
+  test("retired exception history is valid until a waived target still relies on it", () => {
+    const data = JSON.parse(fs.readFileSync(path.join(examplesDir, "valid-state-stage2-approved.json"), "utf8"));
+    data.current_stage_detail.exceptions = [{ exception_id: "EXC-20261118-001", title: "Historical synthetic waiver", path: "docs/exceptions/EXC-20261118-001.md", waived_requirement: data.current_stage_detail.deliverables[0].id, authorized_by: "Example Engineer", authorized_at: "2026-11-17T00:00:00Z", expiration_date: "2026-11-17", status: "revoked" }];
+    for (const status of ["revoked", "expired"]) {
+      data.current_stage_detail.exceptions[0].status = status;
+      const target = data.current_stage_detail.deliverables[0];
+      target.status = "verified"; target.validation_status = "passed"; target.exception_ref = null;
+      assert.equal(validator.validateState(data).valid, true);
+      target.status = "waived"; target.validation_status = "waived"; target.exception_ref = "EXC-20261118-001";
+      const invalid = validator.validateState(data);
+      assert.equal(invalid.valid, false);
+      assert.ok(invalid.errors.some(e => e.keyword === "exception_ref"));
+    }
+  });
+
   test("rejects state with out-of-range stage number (> 6)", () => {
     const validFixturePath = path.join(examplesDir, "valid-state-stage1-verified.json");
     const data = JSON.parse(fs.readFileSync(validFixturePath, "utf-8"));

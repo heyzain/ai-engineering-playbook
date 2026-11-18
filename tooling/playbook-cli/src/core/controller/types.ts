@@ -91,6 +91,9 @@ export interface RecordEvidenceOptions {
   requirementId?: string | null;
   exitCode?: number | null;
   commitSha?: string | null;
+  remediationRef?: string;
+  checkId?: string;
+  toolVersion?: string;
   actor?: string;
   actorType?: "agent" | "human";
   now?: Date;
@@ -168,6 +171,7 @@ export interface SubmitStageResult {
  * Result of authoritative verification evaluation.
  */
 export interface AuthoritativeResolutionResult {
+  issues?: Array<{code:string;message:string;ref?:string}>;
   authoritativeResult: "passed" | "failed" | "inconclusive" | "unverified";
   missingRequiredDisciplines: string[];
   failingDisciplines: string[];

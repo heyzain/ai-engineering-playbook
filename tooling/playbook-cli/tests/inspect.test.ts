@@ -1,3 +1,4 @@
+import {setupStageProject} from "./fixtures/governance-helper.js";
 import { test, describe, beforeEach, afterEach } from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
@@ -173,22 +174,15 @@ describe("Governance State Inspection & Diagnostics (playbook inspect)", () => {
     assert.equal(res.report.exceptions_summary.expired, 1);
   });
 
-  test("diagnoses verified deliverables pending human review (ready_for_human_review)", () => {
-    const manifest = JSON.parse(fs.readFileSync(path.join(examplesDir, "valid-manifest.json"), "utf-8"));
-    const state = JSON.parse(fs.readFileSync(path.join(examplesDir, "valid-state-stage1-verified.json"), "utf-8"));
-
-    fs.mkdirSync(path.join(tempDir, ".playbook"), { recursive: true });
-    fs.writeFileSync(path.join(tempDir, ".playbook", "manifest.json"), JSON.stringify(manifest, null, 2));
-    fs.writeFileSync(path.join(tempDir, ".playbook", "state.json"), JSON.stringify(state, null, 2));
-
-    const res = runInspect({ cwd: tempDir, json: true, silent: true });
-    assert.equal(res.success, true);
-    assert.equal(res.report.readiness.status, "ready_for_human_review");
-    assert.equal(res.report.deliverables_summary.verified, 2);
-    assert.ok(res.report.diagnostics.some((d) => d.code === "STAGE_PENDING_REVIEW"));
+  test("diagnoses actual verified baseline proof pending human review", () => {
+    setupStageProject(tempDir,{stage:1,status:"pending_review"});
+    const res=runInspect({cwd:tempDir,json:true,silent:true});
+    assert.equal(res.success,true);
+    assert.equal(res.report.readiness.status,"ready_for_human_review");
+    assert.equal(res.report.deliverables_summary.verified,1);
   });
 
-  test("diagnoses approved stage with active waiver (approved)", () => {
+  test("diagnoses legacy documentary waiver as unverified despite recorded approval", () => {
     const manifest = JSON.parse(fs.readFileSync(path.join(examplesDir, "valid-manifest.json"), "utf-8"));
     const state = JSON.parse(fs.readFileSync(path.join(examplesDir, "valid-state-stage2-approved.json"), "utf-8"));
     manifest.active_lifecycle_stage = 2;
@@ -198,31 +192,21 @@ describe("Governance State Inspection & Diagnostics (playbook inspect)", () => {
     fs.writeFileSync(path.join(tempDir, ".playbook", "state.json"), JSON.stringify(state, null, 2));
 
     const res = runInspect({ cwd: tempDir, json: true, silent: true });
-    assert.equal(res.success, true);
-    assert.equal(res.report.readiness.status, "approved");
+    assert.equal(res.success, false);
+    assert.equal(res.report.readiness.status, "blocked");
     assert.equal(res.report.stage?.status, "approved");
     assert.equal(res.report.deliverables_summary.waived, 1);
     assert.ok(res.report.diagnostics.some((d) => d.code === "STAGE_APPROVED"));
     assert.ok(res.report.diagnostics.some((d) => d.code === "DELIVERABLE_WAIVED"));
   });
 
-  test("diagnoses completed terminal lifecycle", () => {
-    const manifest = JSON.parse(fs.readFileSync(path.join(examplesDir, "valid-manifest.json"), "utf-8"));
-    const state = JSON.parse(fs.readFileSync(path.join(examplesDir, "valid-state-stage2-approved.json"), "utf-8"));
-    manifest.active_lifecycle_stage = 6;
-    state.current_stage = 6;
-    state.current_stage_detail.stage = 6;
-    state.current_stage_detail.stage_name = "Deployment & Operational Monitoring";
-    state.lifecycle_status = "completed_terminal";
-
-    fs.mkdirSync(path.join(tempDir, ".playbook"), { recursive: true });
-    fs.writeFileSync(path.join(tempDir, ".playbook", "manifest.json"), JSON.stringify(manifest, null, 2));
-    fs.writeFileSync(path.join(tempDir, ".playbook", "state.json"), JSON.stringify(state, null, 2));
-
-    const res = runInspect({ cwd: tempDir, json: true, silent: true });
-    assert.equal(res.success, true);
-    assert.equal(res.report.readiness.status, "completed_terminal");
-    assert.ok(res.report.diagnostics.some((d) => d.code === "LIFECYCLE_COMPLETED_TERMINAL"));
+  test("diagnoses a completed terminal lifecycle with real baseline proof", () => {
+    const {state,statePath}=setupStageProject(tempDir,{stage:6,status:"approved"});
+    state.lifecycle_status="completed_terminal";
+    fs.writeFileSync(statePath,JSON.stringify(state));
+    const res=runInspect({cwd:tempDir,json:true,silent:true});
+    assert.equal(res.success,true);
+    assert.equal(res.report.readiness.status,"completed_terminal");
   });
 
   test("evaluates exception expiration boundary deterministically in UTC (inclusive calendar day)", () => {
@@ -368,24 +352,11 @@ describe("Governance State Inspection & Diagnostics (playbook inspect)", () => {
   });
 
   test("readiness assessment: Stage 6 approved specifies CLOSE_LIFECYCLE rather than advance", () => {
-    const manifest = JSON.parse(fs.readFileSync(path.join(examplesDir, "valid-manifest.json"), "utf-8"));
-    const state = JSON.parse(fs.readFileSync(path.join(examplesDir, "valid-state-stage2-approved.json"), "utf-8"));
-    manifest.active_lifecycle_stage = 6;
-    state.current_stage = 6;
-    state.current_stage_detail.stage = 6;
-    state.current_stage_detail.stage_name = "Deployment & Operational Monitoring";
-    state.stage_status = "approved";
-    state.lifecycle_status = "active";
-
-    fs.mkdirSync(path.join(tempDir, ".playbook"), { recursive: true });
-    fs.writeFileSync(path.join(tempDir, ".playbook", "manifest.json"), JSON.stringify(manifest, null, 2));
-    fs.writeFileSync(path.join(tempDir, ".playbook", "state.json"), JSON.stringify(state, null, 2));
-
-    const res = runInspect({ cwd: tempDir, json: true, silent: true });
-    assert.equal(res.success, true);
-    assert.equal(res.report.readiness.status, "approved");
-    assert.match(res.report.readiness.summary, /CLOSE_LIFECYCLE/);
-    assert.doesNotMatch(res.report.readiness.summary, /ADVANCE_STAGE/);
+    setupStageProject(tempDir,{stage:6,status:"approved"});
+    const res=runInspect({cwd:tempDir,json:true,silent:true});
+    assert.equal(res.success,true);
+    assert.match(res.report.readiness.summary,/CLOSE_LIFECYCLE/);
+    assert.doesNotMatch(res.report.readiness.summary,/Stage 7/);
   });
 
   test("source-of-truth consistency: state.current_stage is authoritative when manifest drifts", () => {

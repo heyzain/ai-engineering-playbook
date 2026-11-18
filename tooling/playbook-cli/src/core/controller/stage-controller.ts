@@ -1,4 +1,5 @@
 import fs from "node:fs";
+import {assertExceptionGateState} from "./exception-service.js";
 import path from "node:path";
 import {
   DEFAULT_PATHS,
@@ -299,6 +300,7 @@ export async function submitStage(options: SubmitStageOptions): Promise<SubmitSt
   }
 
   const deliverables = state.current_stage_detail?.deliverables || [];
+  assertExceptionGateState(targetDir,state,manifest,now);
   if (deliverables.length === 0) {
     throw new ControllerError(
       "STAGE_DELIVERABLES_INCOMPLETE",

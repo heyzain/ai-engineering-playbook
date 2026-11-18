@@ -12,6 +12,7 @@ export interface ProjectManifest {
     repository_uri?: string;
     governance_profile: GovernanceProfile;
     approval_mode: ApprovalMode;
+    ratification_root?: string;
   };
   tech_stack: {
     ecosystem: string;

@@ -22,6 +22,8 @@ describe("Cross-Platform Process Execution & Hardening (Task 007D.2.2)", () => {
     const state = {
       $schema: "https://ai-engineering-playbook.org/schemas/project-state.schema.json",
       schema_version: "1.1.0",
+      transaction_sequence: 0,
+      audit_trail: [],
       project_id: "proc-test",
       playbook_version: "1.0.0",
       milestone_id: "M-1.0.0",

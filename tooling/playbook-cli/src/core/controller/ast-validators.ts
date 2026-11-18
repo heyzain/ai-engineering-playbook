@@ -80,7 +80,8 @@ export class ExceptionValidator {
     content: string,
     filePath: string,
     deliverableId?: string,
-    now?: Date
+    now?: Date,
+    mode: "legacy" | "proposal" = "legacy"
   ): ExceptionValidationResult {
     const errors: string[] = [];
     const diagnostics: AstDiagnostic[] = [];
@@ -232,7 +233,7 @@ export class ExceptionValidator {
 
     // Check Section 7 Human Authorization & Sign-Off table if present
     const sec7 = doc.findSection(/^(?:7\.\s*)?(?:Human\s+Authorization|Sign-Off)/i, 2);
-    if (sec7) {
+    if (sec7 && mode === "legacy") {
       const sec7Tables = sec7.contentNodes.filter((n): n is TableNode => n.type === "table");
       for (const t of sec7Tables) {
         const kvs = doc.extractTableKeyValues(t);
@@ -296,7 +297,7 @@ export class ExceptionValidator {
         source: filePath,
       });
     } else {
-      const isApproved = /^(?:active|approved|active\s*\(authorized\))$/i.test(statusStr.trim());
+      const isApproved = (mode === "proposal" && /^proposed$/i.test(statusStr.trim())) || /^(?:active|approved|active\s*\(authorized\))$/i.test(statusStr.trim());
       if (!isApproved) {
         const msg = `Exception "${docId}" is not approved (status: "${statusStr}"). Only approved/active exceptions can waive deliverables.`;
         errors.push(msg);
@@ -338,7 +339,10 @@ export class ExceptionValidator {
     }
 
     // Authorized By (Human) verification
-    if (!authorizedBy) {
+    if (mode === "proposal") {
+      // Attribution in a proposal is never treated as human authorization.
+      authorizedBy = "";
+    } else if (!authorizedBy) {
       const msg = `Exception document "${baseName}" is missing mandatory "Authorized By (Human)" field.`;
       errors.push(msg);
       diagnostics.push({
@@ -390,7 +394,7 @@ export class ExceptionValidator {
       } else {
         const boundaryIso = `${dateMatch[1]}T23:59:59.999Z`;
         const expiryBoundary = new Date(boundaryIso).getTime();
-        if (isNaN(expiryBoundary)) {
+        if (isNaN(expiryBoundary) || new Date(`${dateMatch[1]}T00:00:00.000Z`).toISOString().slice(0,10) !== dateMatch[1]) {
           const msg = `Exception "${docId}" has invalid expiration date format: "${expirationDate}". Must be YYYY-MM-DD.`;
           errors.push(msg);
           diagnostics.push({
@@ -494,15 +498,21 @@ export class ExceptionValidator {
       });
     }
 
+    if (mode === "proposal") {
+      for (const diagnostic of diagnostics.filter(d => d.severity === "warning")) {
+        diagnostic.severity = "error";
+        errors.push(diagnostic.message);
+      }
+    }
     const isValid = errors.length === 0;
     const metadata: ValidatedExceptionMetadata | undefined =
-      docId && statusStr && waivedReq && authorizedBy && expirationDate
+      docId && statusStr && waivedReq && (authorizedBy || mode === "proposal") && expirationDate
         ? {
             exception_id: docId,
             title,
             status: statusStr,
             waived_requirement: waivedReq,
-            authorized_by: authorizedBy,
+            authorized_by: authorizedBy || "",
             expiration_date: expirationDate,
           }
         : undefined;
@@ -707,9 +717,10 @@ export function validateExceptionDocumentAst(
   content: string,
   filePath: string,
   deliverableId?: string,
-  now?: Date
+  now?: Date,
+  mode: "legacy" | "proposal" = "legacy"
 ): ExceptionValidationResult {
-  return ExceptionValidator.validate(content, filePath, deliverableId, now);
+  return ExceptionValidator.validate(content, filePath, deliverableId, now, mode);
 }
 
 /**

@@ -56,6 +56,8 @@ describe("Controlled Human Recovery & Governance Integrity (Task 005B.4 Verified
     const state: ProjectState = {
       $schema: "https://ai-engineering-playbook.org/schemas/project-state.schema.json",
       schema_version: "1.1.0",
+      transaction_sequence: 0,
+      audit_trail: [],
       project_id: "recovery-app",
       playbook_version: "1.0.0",
       milestone_id: "M-1.0.0",

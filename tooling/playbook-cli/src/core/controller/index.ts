@@ -19,3 +19,5 @@ export * from './stage-controller.js';
 export * from './deliverable-controller.js';
 export * from './markdown-ast.js';
 export * from './ast-validators.js';
+export * from './exception-lifecycle.js';
+export * from './exception-service.js';

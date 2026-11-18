@@ -1,3 +1,4 @@
+import crypto from "node:crypto";
 import { test, describe, beforeEach, afterEach } from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
@@ -545,140 +546,22 @@ Waived due to upstream regulatory dependency.
   /* -------------------------------------------------------------------------
    * 4. RECORD_EXCEPTION (§3.5)
    * ----------------------------------------------------------------------- */
-  describe("4. Transition §3.5 (RECORD_EXCEPTION)", () => {
-    test("successfully records approved exception and transitions deliverable to waived", async () => {
-      setupStageProject(tempDir, { stage: 0, status: "in_progress" });
-
-      const excPath = path.join(tempDir, "governance", "exceptions", "EXC-20261109-001.md");
-      createValidExceptionDoc(excPath, {
-        id: "EXC-20261109-001",
-        scope: "PRD-CORE",
-        status: "Approved",
-        approvedBy: "Alice Lead Architect",
-        expires: "2026-12-31",
+  describe("4. Historical direct waiver is disabled after ratification", () => {
+    for (const actorType of ["agent", "human"] as const) {
+      test("Approved metadata cannot waive a target for actor " + actorType, async () => {
+        setupStageProject(tempDir, { stage: 0, status: "in_progress" });
+        const document = "docs/exceptions/EXC-20261109-001.md";
+        createValidExceptionDoc(path.join(tempDir, document));
+        const stateFile = path.join(tempDir, DEFAULT_PATHS.stateFile);
+        const before = fs.readFileSync(stateFile, "utf8");
+        await assert.rejects(recordException({ targetDir: tempDir, deliverableId: "PRD-CORE", exceptionPath: document, actorType }), /EXCEPTION_LEGACY_WAIVER_DISABLED/);
+        assert.equal(fs.readFileSync(stateFile, "utf8"), before);
       });
-
-      const res = await recordException({
-        targetDir: tempDir,
-        deliverableId: "PRD-CORE",
-        exceptionPath: "governance/exceptions/EXC-20261109-001.md",
-      });
-
-      assert.equal(res.success, true);
-      assert.equal(res.deliverable.id, "PRD-CORE");
-      assert.equal(res.deliverable.status, "waived");
-      assert.equal(res.deliverable.validation_status, "waived");
-      assert.equal(res.deliverable.exception_ref, "EXC-20261109-001");
-
-      // Verify on disk state
-      const state: ProjectState = JSON.parse(
-        fs.readFileSync(path.join(tempDir, DEFAULT_PATHS.stateFile), "utf-8")
-      );
-      const prd = state.current_stage_detail.deliverables.find((d) => d.id === "PRD-CORE");
-      assert.ok(prd);
-      assert.equal(prd.status, "waived");
-      assert.equal(prd.validation_status, "waived");
-      assert.equal(prd.exception_ref, "EXC-20261109-001");
-      assert.equal(state.current_stage_detail.exceptions.length, 1);
-
-      // Verify schema conformance
-      assert.equal(validator.validateState(state).valid, true);
-    });
-
-    test("rejects exception document that is not status Approved (e.g. Draft)", async () => {
-      setupStageProject(tempDir, { stage: 0, status: "in_progress" });
-
-      const excPath = path.join(tempDir, "governance", "exceptions", "EXC-20261109-002.md");
-      createValidExceptionDoc(excPath, {
-        id: "EXC-20261109-002",
-        status: "Draft",
-      });
-
-      await assert.rejects(
-        () =>
-          recordException({
-            targetDir: tempDir,
-            deliverableId: "PRD-CORE",
-            exceptionPath: "governance/exceptions/EXC-20261109-002.md",
-          }),
-        (err: Error) => {
-          assert.ok(err instanceof ControllerError);
-          assert.equal(err.code, "EXCEPTION_NOT_APPROVED");
-          return true;
-        }
-      );
-    });
-
-    test("rejects exception document authored or approved by forbidden AI agent name", async () => {
-      setupStageProject(tempDir, { stage: 0, status: "in_progress" });
-
-      const excPath = path.join(tempDir, "governance", "exceptions", "EXC-20261109-003.md");
-      createValidExceptionDoc(excPath, {
-        id: "EXC-20261109-003",
-        approvedBy: "agent:antigravity",
-      });
-
-      await assert.rejects(
-        () =>
-          recordException({
-            targetDir: tempDir,
-            deliverableId: "PRD-CORE",
-            exceptionPath: "governance/exceptions/EXC-20261109-003.md",
-          }),
-        (err: Error) => {
-          assert.ok(err instanceof ControllerError);
-          assert.equal(err.code, "EXCEPTION_AGENT_ATTRIBUTION_FORBIDDEN");
-          return true;
-        }
-      );
-    });
-
-    test("rejects expired exception document based on strict UTC expiration boundary", async () => {
-      setupStageProject(tempDir, { stage: 0, status: "in_progress" });
-
-      const excPath = path.join(tempDir, "governance", "exceptions", "EXC-20261109-004.md");
-      createValidExceptionDoc(excPath, {
-        id: "EXC-20261109-004",
-        expires: "2020-01-01", // Long expired
-      });
-
-      await assert.rejects(
-        () =>
-          recordException({
-            targetDir: tempDir,
-            deliverableId: "PRD-CORE",
-            exceptionPath: "governance/exceptions/EXC-20261109-004.md",
-          }),
-        (err: Error) => {
-          assert.ok(err instanceof ControllerError);
-          assert.equal(err.code, "EXCEPTION_EXPIRED");
-          return true;
-        }
-      );
-    });
-
-    test("rejects exception whose scope does not match deliverable id", async () => {
-      setupStageProject(tempDir, { stage: 0, status: "in_progress" });
-
-      const excPath = path.join(tempDir, "governance", "exceptions", "EXC-20261109-005.md");
-      createValidExceptionDoc(excPath, {
-        id: "EXC-20261109-005",
-        scope: "DIFFERENT-DELIVERABLE",
-      });
-
-      await assert.rejects(
-        () =>
-          recordException({
-            targetDir: tempDir,
-            deliverableId: "PRD-CORE",
-            exceptionPath: "governance/exceptions/EXC-20261109-005.md",
-          }),
-        (err: Error) => {
-          assert.ok(err instanceof ControllerError);
-          assert.equal(err.code, "EXCEPTION_SCOPE_MISMATCH");
-          return true;
-        }
-      );
+    }
+    test("missing documents and unsafe paths cannot re-enable legacy waiver", async () => {
+      for (const exceptionPath of ["missing.md", "../EXC-20261109-001.md"]) {
+        await assert.rejects(recordException({ targetDir: tempDir, deliverableId: "PRD-CORE", exceptionPath }), /EXCEPTION_LEGACY_WAIVER_DISABLED/);
+      }
     });
   });
 
@@ -999,6 +882,11 @@ Waived due to upstream regulatory dependency.
         ],
       };
 
+      for (const evidence of deliverable.evidence) {
+        const file=path.join(tempDir,evidence.evidence_ref);fs.mkdirSync(path.dirname(file),{recursive:true});
+        const content=evidence.result+" synthetic test proof\n";fs.writeFileSync(file,content);
+        evidence.evidence_hash="sha256:"+crypto.createHash("sha256").update(content).digest("hex");
+      }
       const result = resolveAuthoritativeVerification(
         tempDir,
         0,
@@ -1060,8 +948,9 @@ Waived due to upstream regulatory dependency.
                 name: "PRD Test Suite",
                 type: "automated_test",
                 deliverable_id: "PRD-CORE",
-                command: "npm",
-                args: ["test"],
+                command: process.execPath,
+                args: ["-e", "process.exit(0)"],
+                inputs: ["docs/prd/PRD-CORE.md"],
                 severity: "blocking",
               },
               {
@@ -1069,8 +958,9 @@ Waived due to upstream regulatory dependency.
                 name: "PRD Documentation Linter",
                 type: "static_analysis",
                 deliverable_id: "PRD-CORE",
-                command: "npx",
-                args: ["markdownlint"],
+                command: process.execPath,
+                args: ["-e", "process.exit(0)"],
+                inputs: ["docs/prd/PRD-CORE.md"],
                 severity: "blocking",
               },
             ],
@@ -1137,6 +1027,7 @@ Waived due to upstream regulatory dependency.
       const res1 = await recordEvidence({
         targetDir: tempDir,
         deliverableId: "PRD-CORE",
+        checkId: "prd-unit-tests",
         type: "automated_test",
         procedure: "npm test",
         evidenceRef: ".playbook/logs/test-pass.log",
@@ -1159,7 +1050,7 @@ Waived due to upstream regulatory dependency.
         t1
       );
       assert.equal(resAuthoritative1.authoritativeResult, "unverified");
-      assert.deepEqual(resAuthoritative1.missingRequiredDisciplines, ["static_analysis"]);
+      assert.deepEqual(resAuthoritative1.missingRequiredDisciplines, ["static_analysis", "check:prd-linter"]);
       assert.equal(resAuthoritative1.isContended, false);
 
       // --- STEP 2: Second record (static_analysis PASSED; both required disciplines now pass) ---
@@ -1167,6 +1058,7 @@ Waived due to upstream regulatory dependency.
       const res2 = await recordEvidence({
         targetDir: tempDir,
         deliverableId: "PRD-CORE",
+        checkId: "prd-linter",
         type: "static_analysis",
         procedure: "npx markdownlint",
         evidenceRef: ".playbook/logs/lint-pass.log",
@@ -1197,6 +1089,7 @@ Waived due to upstream regulatory dependency.
       const res3 = await recordEvidence({
         targetDir: tempDir,
         deliverableId: "PRD-CORE",
+        checkId: "prd-unit-tests",
         type: "automated_test",
         procedure: "npm test",
         evidenceRef: ".playbook/logs/test-fail.log",
@@ -1218,7 +1111,7 @@ Waived due to upstream regulatory dependency.
         t3
       );
       assert.equal(resAuthoritative3.authoritativeResult, "failed");
-      assert.deepEqual(resAuthoritative3.failingDisciplines, ["automated_test"]);
+      assert.deepEqual(resAuthoritative3.failingDisciplines, ["check:prd-unit-tests", "automated_test"]);
       assert.equal(resAuthoritative3.isContended, true);
 
       // Stage submission MUST fail-closed because authoritative verification failed
@@ -1245,6 +1138,7 @@ Waived due to upstream regulatory dependency.
       const res4 = await recordEvidence({
         targetDir: tempDir,
         deliverableId: "PRD-CORE",
+        checkId: "prd-unit-tests",
         type: "automated_test",
         procedure: "npm test",
         evidenceRef: ".playbook/logs/test-pass.log",
@@ -1274,7 +1168,8 @@ Waived due to upstream regulatory dependency.
       assert.equal(submitRes.stageStatus, "pending_review");
     });
 
-    test("Optional disciplines (warning/advisory severity) do not block deliverable verification", () => {
+    test("Optional disciplines (warning/advisory severity) do not block deliverable verification", async () => {
+      setupStageProject(tempDir,{stage:0,status:"in_progress"});
       fs.mkdirSync(path.join(tempDir, ".playbook"), { recursive: true });
       const qgConfig = {
         $schema: "https://ai-engineering-playbook.org/schemas/quality-gates.schema.json",
@@ -1299,8 +1194,9 @@ Waived due to upstream regulatory dependency.
                 name: "Blocking Tests",
                 type: "automated_test",
                 deliverable_id: "PRD-CORE",
-                command: "npm",
-                args: ["test"],
+                command: process.execPath,
+                args: ["-e", "process.exit(0)"],
+                inputs: ["docs/prd/PRD-CORE.md"],
                 severity: "blocking",
               },
               {
@@ -1308,8 +1204,9 @@ Waived due to upstream regulatory dependency.
                 name: "Advisory Audit",
                 type: "visual_review",
                 deliverable_id: "PRD-CORE",
-                command: "npm",
-                args: ["run", "audit"],
+                command: process.execPath,
+                args: ["-e", "process.exit(1)"],
+                inputs: ["docs/prd/PRD-CORE.md"],
                 severity: "advisory",
               },
             ],
@@ -1337,39 +1234,14 @@ Waived due to upstream regulatory dependency.
       const reqDisciplines = getRequiredDisciplinesForDeliverable(tempDir, 0, deliverable);
       assert.deepEqual(reqDisciplines, ["automated_test"]);
 
-      // If automated_test passes and visual_review fails, authoritative resolution passes
-      deliverable.evidence = [
-        {
-          type: "automated_test",
-          procedure: "npm test",
-          evidence_ref: ".playbook/logs/test.log",
-          evidence_hash: "sha256:1111111111111111111111111111111111111111111111111111111111111111",
-          result: "passed",
-          verified_at: "2026-11-09T10:00:00.000Z",
-          requirement_id: null,
-          summary: "Passed",
-          exit_code: 0,
-          verified_by: "agent:antigravity",
-          actor_type: "agent",
-        },
-        {
-          type: "visual_review",
-          procedure: "audit",
-          evidence_ref: ".playbook/logs/audit.log",
-          evidence_hash: "sha256:2222222222222222222222222222222222222222222222222222222222222222",
-          result: "failed", // Advisory failure
-          verified_at: "2026-11-09T10:05:00.000Z",
-          requirement_id: null,
-          summary: "Advisory warning",
-          exit_code: 1,
-          verified_by: "agent:antigravity",
-          actor_type: "agent",
-        },
-      ];
-
-      const res = resolveAuthoritativeVerification(tempDir, 0, deliverable, null, [deliverable]);
-      assert.equal(res.authoritativeResult, "passed");
-      assert.equal(res.failingDisciplines.length, 0);
+      fs.writeFileSync(path.join(tempDir,"docs/prd/PRD-CORE.md"),"# Synthetic reviewed problem\n");
+      fs.writeFileSync(path.join(tempDir,".playbook/logs/bound-test.txt"),"Synthetic blocking test passed\n");
+      fs.writeFileSync(path.join(tempDir,".playbook/logs/advisory.txt"),"Synthetic advisory failed\n");
+      await recordEvidence({targetDir:tempDir,deliverableId:"PRD-CORE",type:"automated_test",checkId:"blocking-test",result:"passed",evidenceRef:".playbook/logs/bound-test.txt"});
+      const advice=await recordEvidence({targetDir:tempDir,deliverableId:"PRD-CORE",type:"visual_review",checkId:"advisory-audit",result:"failed",evidenceRef:".playbook/logs/advisory.txt"});
+      const result=resolveAuthoritativeVerification(tempDir,0,advice.deliverable,null,[advice.deliverable]);
+      assert.equal(result.authoritativeResult,"passed");
+      assert.equal(result.failingDisciplines.length,0);
     });
 
     test("Profile semantics: Comprehensive strict, standard, and lightweight discipline resolution", () => {
