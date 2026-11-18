@@ -1,0 +1,4 @@
+[manifest] Valid: F:\workspace\ai-engineering-playbook\.playbook\manifest.json
+[state] Valid: F:\workspace\ai-engineering-playbook\.playbook\state.json
+
+Γ£ô All governance files conform to official JSON Schemas.

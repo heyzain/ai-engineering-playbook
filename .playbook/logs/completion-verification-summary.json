@@ -1,0 +1,65 @@
+{
+  "date": "2026-11-18T04:42:31.488976+00:00",
+  "baseline": "ad0ff39",
+  "source": "Uncommitted implementation; exact code/schema/package hashes in completion-source-snapshot.json",
+  "runtime": {
+    "platform": "Windows x64",
+    "node": "24.14.0",
+    "npm": "11.9.0"
+  },
+  "build": {
+    "command": "npm --prefix tooling/playbook-cli run build",
+    "exit_code": 0,
+    "result": "passed"
+  },
+  "regression": {
+    "command": "node --test --test-isolation=none <all compiled test files except exception-service.test.js>",
+    "result": "inconclusive for release; execution failed",
+    "exit_code": 1,
+    "tests": 1006,
+    "pass": 864,
+    "fail": 142,
+    "skipped": 0,
+    "cancelled": 0
+  },
+  "focused_safety": {
+    "command": "node --test --test-isolation=none dist/tests/resolver-safety.test.js dist/tests/runner-safety.test.js dist/tests/exception-lifecycle.test.js dist/tests/workflow-cli.test.js dist/tests/ratification-verifier.test.js",
+    "exit_code": 0,
+    "tests": 23,
+    "pass": 23,
+    "fail": 0,
+    "skipped": 0,
+    "cancelled": 0
+  },
+  "isolated_exception_service": {
+    "command": "node --test --test-isolation=none dist/tests/exception-service.test.js",
+    "exit_code": 0,
+    "tests": 5,
+    "pass": 5,
+    "fail": 0,
+    "skipped": 0,
+    "cancelled": 0
+  },
+  "standard_suite": {
+    "command": "npm --prefix tooling/playbook-cli test",
+    "exit_code": 1,
+    "result": "Child-process launcher rejected with spawn EPERM; no complete test result."
+  },
+  "limitations": [
+    "In-process broad fallback lacks normal per-file process isolation; synthetic exception-service tests run separately. Focused tests overlap broad regression and are not additive.",
+    "Many failures depend on prohibited tool/Git/process launches. The complete suite remains failed; a capable-environment rerun is necessary to identify any remaining assertions.",
+    "No failures were skipped or waived; no real gate or exception authorization was simulated for this project.",
+    "No installed-package, remote CI, platform matrix, pilot or release-readiness certification is made."
+  ],
+  "logs": {
+    "completion-build-final.txt": "sha256:cb3bed2806d5a9ca128eb0ea9ca0b52e1cb61401c574752690304773abd18366",
+    "completion-regression-final.txt": "sha256:d5da4c9a1147e712f4d7b4e780b37191adc4488e226072b8bbe53640f57f1116",
+    "completion-safety-tests-final.txt": "sha256:2d12cd23648c8b56b02895ba7888e0d2bcbc813208e39886bd64bb7b3e9dc889",
+    "completion-exception-service-tests-final.txt": "sha256:1c5080d8b878ba8edc497d53d6b8d06a9db9a93fd86dae1cc79d214e5a3627b1",
+    "completion-npm-test-final.txt": "sha256:1719d71f8846f0333bcebdb4e528175b0b9ef94735e1a9dff46b51c5374c28a7",
+    "completion-cli-smoke.json": "sha256:a43dce0917e4d528f19bf6c28a3d1eb3f5568afdaf82a93926b7f2296deefa0c",
+    "completion-schema-sync.json": "sha256:d8a6c3ada6939030dbdcbb075b65b6e10fbf64abdec22bccac8d3afcea6b4448",
+    "completion-source-scan.json": "sha256:06e1e0f493d6eabc1d08f072172cf027bf4f51de1325c8c25074550c5af5615d",
+    "completion-source-snapshot.json": "sha256:dc62085dbe91c170ada07cf612a293bbeb75ab0f401fb4326e05f50870adc670"
+  }
+}

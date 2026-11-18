@@ -1,7 +1,7 @@
 # Phase 4/5 implementation handover
 
 Date: 2026-11-18. Baseline: `ad0ff39`. Active milestone M-1.0.0, Stage 3.
-Status: implementation authored; mandatory complete regression verification open.
+Status: implementation verified against the passing operator run; Gate 3 human review pending. Earlier sections preserve historical checkpoints and failures.
 The operator requested completing the remaining work before committing. No commit,
 push, schema migration of this repository, exception authorization, or gate approval
 was performed by the agent.
@@ -154,3 +154,26 @@ unchanged. The prior generator/waiver fixes pass in the operator transcript.
 Local fixture build and workflow results are in `.playbook/logs/phase-5-final-fixture-*`.
 The complete isolated suite still needs a fresh normal-terminal pass; this handover
 and Gate 3 remain unapproved, with changes uncommitted.
+
+## Passing operator run and source checkpoint (2026-11-18)
+
+**1015 tests passed, 0 failed, 0 skipped, 0 cancelled; 172 suites.** The isolated
+full run finished in 120453.2943 ms after the pretest build. Source:
+[Pasted text(4).txt](https://chatgpt.com/library?file_id=libfile_c756c131b64481919b297257ad17f6b1&account_id=personal).
+The reviewed excerpt/provenance is recorded in `.playbook/logs/phase-5-passing-tests.json`.
+This result supersedes earlier verification blockers without deleting failed history.
+
+The operator committed and pushed the tested source as `dc95b5d` (`main` and
+`origin/main` matched when inspected). The transcript predates that commit and
+does not itself embed a source SHA; the operator report and inspected source tree
+provide local documentary provenance. No independent runner identity is asserted.
+
+Implementation and regression verification for the Phase 4/5 work are complete.
+Stage 3 exit is submitted for human review through supported CLI operations.
+No human approval or advancement is performed by the agent. The remaining
+installation, separate pilot, remote CI, runtime/platform matrix and hardening
+work belongs to the later phases. Phase 5 gate closure awaits actual Gate 3 approval.
+
+Only governance/evidence records changed after the passing source checkpoint.
+Preserve ignored `phase-5-*` and `completion-*` logs in the handover commit so
+append-only evidence references remain reproducible on another checkout.

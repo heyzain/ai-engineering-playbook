@@ -1,0 +1,10 @@
+{
+  "project-manifest.schema.json": {
+    "matching": true,
+    "sha256": "eff9b7067f4b0088e5da6f294706cf28596df03e03bbe03a23a91a23499adfbe"
+  },
+  "project-state.schema.json": {
+    "matching": true,
+    "sha256": "9a209a851b082768a80855513abe891544c730f49ed7d836af143b6e681ee671"
+  }
+}

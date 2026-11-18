@@ -1,0 +1,15 @@
+{
+  "scope": "Changed and untracked text files; narrow credential-pattern scan, not a dependency/security audit",
+  "files": 56,
+  "findings": [
+    {
+      "file": "tooling/playbook-cli/tests/quality-gates-execution.test.ts",
+      "line": 228
+    },
+    {
+      "file": "tooling/playbook-cli/tests/quality-gates-execution.test.ts",
+      "line": 231
+    }
+  ],
+  "disposition": "Both findings are pre-existing deliberately synthetic token literals in the secret-scrubbing regression test, confirmed by source review. No actual credential identified by this narrow scan."
+}

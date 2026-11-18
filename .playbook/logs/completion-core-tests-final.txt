@@ -1,0 +1,343 @@
+Error: [TTY_REQUIRED] Gate approval requires an interactive terminal session.
+Automated, scripted, or piped approval invocations are strictly prohibited.
+
+ΓöîΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÉ
+Γöé       AI Engineering Playbook ΓÇö Project Inspection       Γöé
+ΓööΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÿ
+
+ Target Directory: C:\Users\za184\AppData\Local\Temp\playbook-inspect-test-wFKSRG
+ Initialized:      YES
+ Manifest File:    VALID
+ State File:       VALID
+
+ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+ Project Identity & Standards
+ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+  ID / Name:        readonly-app ΓÇö Readonly App
+  Tech Stack:       agnostic (agnostic)
+  Governance Profile: STANDARD profile
+  Approval Mode:    SOLO mode
+
+ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+ Milestone & Lifecycle Status
+ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+  Active Milestone: M-1.0.0 ("Initial MVP Release")
+  Lifecycle Status: ACTIVE
+
+ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+ Active Lifecycle Stage
+ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+  Current Stage:    Stage 0: Discovery & Problem Formulation
+  Stage Status:     NOT_STARTED
+  Stage Started At: 2026-11-18T04:36:09.705Z
+
+  Deliverables Breakdown:
+    Total Configured: 1
+    - Verified:       0
+    - Waived:         0
+    - Completed:      0 (unverified)
+    - In Progress:    0
+    - Not Started:    1
+    - Blocked:        0
+
+ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+ Gate Review & Human Approval
+ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+  Approval Status:  NOT_REQUESTED
+
+ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+ Diagnostic Findings (1 issue)
+ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+  WARNINGS (1):
+  Γû▓ [DELIVERABLE_INCOMPLETE] Deliverable 'Problem Statement Document (PRD Core)' (PRD-CORE) has not been started.
+     Target:      docs/prd/PRD-CORE.md
+     Remediation: Author the artifact at docs/prd/PRD-CORE.md.
+
+ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+ Preliminary Readiness Assessment
+ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+  Readiness: [NEEDS ATTENTION ΓÇö WORK IN PROGRESS]
+  Summary:   Stage 0 has 1 unfinished/unverified deliverable(s). Active engineering underway.
+
+  * Notice: This is a read-only diagnostic assessment, not a state transition.
+    Only an authorized human engineer may sign off on stage gate transitions.
+ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+
+{
+  "schema_version": "1.0.0",
+  "timestamp": "2026-11-18T04:36:09.787Z",
+  "target_dir": "C:\\Users\\za184\\AppData\\Local\\Temp\\playbook-inspect-test-wFKSRG",
+  "initialized": true,
+  "manifest_present": true,
+  "state_present": true,
+  "manifest_valid": true,
+  "state_valid": true,
+  "project": {
+    "id": "readonly-app",
+    "name": "Readonly App",
+    "ecosystem": "agnostic",
+    "language": "agnostic",
+    "profile": "standard",
+    "approval_mode": "solo"
+  },
+  "milestone": {
+    "id": "M-1.0.0",
+    "name": "Initial MVP Release",
+    "lifecycle_status": "active"
+  },
+  "stage": {
+    "number": 0,
+    "name": "Discovery & Problem Formulation",
+    "status": "not_started",
+    "started_at": "2026-11-18T04:36:09.705Z"
+  },
+  "deliverables_summary": {
+    "total": 1,
+    "not_started": 1,
+    "in_progress": 0,
+    "completed": 0,
+    "verified": 0,
+    "waived": 0,
+    "blocked": 0
+  },
+  "rfcs_summary": {
+    "total": 0,
+    "pending_decision": 0,
+    "blocking_unresolved": 0,
+    "resolved": 0,
+    "rejected": 0
+  },
+  "exceptions_summary": {
+    "total": 0,
+    "active": 0,
+    "expired": 0,
+    "revoked": 0,
+    "remediated": 0
+  },
+  "approval_summary": {
+    "status": "not_requested",
+    "approver": null,
+    "role": null,
+    "decision": null,
+    "approved_at": null,
+    "mode": "solo"
+  },
+  "readiness": {
+    "status": "needs_attention",
+    "summary": "Stage 0 has 1 unfinished/unverified deliverable(s). Active engineering underway.",
+    "blockers": [],
+    "warnings": [
+      "Deliverable 'Problem Statement Document (PRD Core)' (PRD-CORE) has not been started."
+    ]
+  },
+  "diagnostics": [
+    {
+      "code": "DELIVERABLE_INCOMPLETE",
+      "severity": "warning",
+      "message": "Deliverable 'Problem Statement Document (PRD Core)' (PRD-CORE) has not been started.",
+      "path": "docs/prd/PRD-CORE.md",
+      "remediation": "Author the artifact at docs/prd/PRD-CORE.md."
+    }
+  ]
+}
+Γû╢ Gate Approval Engine & CLI (playbook approve)
+  Γ£ö Scenario 1: Successful gate approval updates state to approved, creates sidecar, and finalizes WAL (208.3041ms)
+  Γ£ö Scenario 2: Non-TTY approval invocation is rejected with TTY_REQUIRED and zero mutations (50.7721ms)
+  Γ£ö Scenario 3: Incorrect confirmation phrase aborts with zero mutations (58.9232ms)
+  Γ£ö Scenario 4: Agent self-approval is strictly prohibited for known AI/agent patterns (49.0106ms)
+  Γ£ö Scenario 5: Incomplete or unverified deliverables block gate approval with GATE_CRITERIA_UNMET (89.3388ms)
+  Γ£ö Scenario 5a: Missing mandatory baseline deliverable rejects with GATE_REQUIRED_DELIVERABLE_MISSING (116.9218ms)
+  Γ£ö Scenario 5b: Optional deliverable cannot substitute for missing mandatory baseline deliverable (132.1023ms)
+  Γ£ö Scenario 5c: Unsealed legacy documentary waiver cannot clear gate approval (154.0121ms)
+  Γ£ö Scenario 6: Expired or revoked exceptions block gate approval with EXCEPTION_EXPIRED (190.0886ms)
+  Γ£ö Scenario 7: Unresolved blocking RFC blocks gate approval with RFC_BLOCKING_UNRESOLVED (125.1335ms)
+  Γ£ö Scenario 8: Missing evidence file or mismatched hash blocks gate approval (173.3715ms)
+  Γ£ö Scenario 8c: Exit package missing required sections rejects with EXIT_PACKAGE_INCOMPLETE (104.9069ms)
+  Γ£ö Scenario 8d: Exit package with unresolved placeholders rejects with EXIT_PACKAGE_INCOMPLETE (96.3942ms)
+  Γ£ö Scenario 8e: Truncated exit package (< 200 bytes) rejects with EXIT_PACKAGE_INCOMPLETE (101.1532ms)
+  Γ£ö Scenario 8f: Evidence record with result 'failed' rejects with EVIDENCE_RESULT_FAILED (90.3759ms)
+  Γ£ö Scenario 8g: Evidence record with result 'inconclusive' rejects with EVIDENCE_RESULT_FAILED (89.3411ms)
+  Γ£ö Scenario 8h: Null or absent hash in automated evidence rejects with EVIDENCE_HASH_MISMATCH (82.404ms)
+  Γ£ö Scenario 8i: Manual review evidence without hash is accepted when file exists on disk (152.1792ms)
+  Γ£ö Scenario 8j: Multi-evidence deliverable where second evidence fails rejects with EVIDENCE_RESULT_FAILED (88.7645ms)
+  Γ£ö Scenario 9: Gate rejection reverts stage to in_progress, records conditions, and purges sidecar (101.8927ms)
+  Γ£ö Scenario 10: Crash during COMMITTING phase of approval is rolled forward cleanly upon recovery (160.2612ms)
+Γ£ö Gate Approval Engine & CLI (playbook approve) (2418.2692ms)
+Γ£ö proposal is nonprivileged and cannot manufacture waiver from documentary metadata (0.9314ms)
+Γ£ö authorization binds exact proposal and creates local-only sidecar with audit atomically planned (0.7043ms)
+Γ£ö bad operator, role, phrase, duplicate proposal, target, time and version fail closed (0.709ms)
+Γ£ö revocation preserves history and clears only an active waiver, without fabricated failed evidence (0.3206ms)
+Γ£ö remediation marker is fresh and uniquely binds subsequent evidence without prematurely unwaiving (0.3769ms)
+Γ£ö expiry validates real calendar dates and the exclusive next-midnight UTC boundary (0.1829ms)
+Γû╢ Governance State Inspection & Diagnostics (playbook inspect)
+  Γ£ö diagnoses uninitialized project with remediation guidance (44.7869ms)
+  Γ£ö diagnoses missing manifest (.playbook/manifest.json missing) with safe non-destructive remediation (38.2938ms)
+  Γ£ö diagnoses missing state (.playbook/state.json missing) with safe non-destructive remediation (39.5226ms)
+  Γ£ö diagnoses malformed JSON syntax in governance files (38.3607ms)
+  Γ£ö diagnoses schema-invalid manifest and state (40.8453ms)
+  Γ£ö diagnoses valid Stage 0 initialized project (needs_attention) (60.1852ms)
+  Γ£ö diagnoses active milestone mismatch between manifest and state (39.679ms)
+  Γ£ö diagnoses blocking RFC and sets readiness to blocked (45.5273ms)
+  Γ£ö diagnoses expired exception and sets readiness to blocked (53.7952ms)
+  Γ£ö diagnoses actual verified baseline proof pending human review (97.986ms)
+  Γ£ö diagnoses legacy documentary waiver as unverified despite recorded approval (42.2096ms)
+  Γ£ö diagnoses a completed terminal lifecycle with real baseline proof (84.6715ms)
+  Γ£ö evaluates exception expiration boundary deterministically in UTC (inclusive calendar day) (80.3073ms)
+  Γ£ö does not treat remediated exception with past expiration date as expired (48.4711ms)
+  Γ£ö enforces gate criteria invariant: pending_review with incomplete deliverables raises GATE_CRITERIA_UNMET and blocks readiness (42.2879ms)
+  Γ£ö enforces terminal lifecycle consistency: completed_terminal requires Stage 6 approval (41.6368ms)
+  Γ£ö readiness assessment: blockers strictly take precedence over approved stage status (42.6367ms)
+  Γ£ö readiness assessment: Stage 6 approved specifies CLOSE_LIFECYCLE rather than advance (91.0386ms)
+  Γ£ö source-of-truth consistency: state.current_stage is authoritative when manifest drifts (42.1226ms)
+  Γ£û CLI executable: formats human-readable and machine-readable JSON output correctly (11.9942ms)
+  Γ£û strictly enforces read-only behaviour (zero filesystem modifications) (88.9208ms)
+Γ£û Governance State Inspection & Diagnostics (playbook inspect) (1116.4461ms)
+Γû╢ Operational Controller Engine (Task 009B.1)
+  Γû╢ 1. Transition ┬º3.2 (START_STAGE)
+    Γ£ö starts stage 0 from unstarted state and initializes baseline deliverables (199.918ms)
+    Γ£ö rejects starting stage when already in_progress (126.1442ms)
+    Γ£ö rejects starting stage when in pending_review without approval (118.7107ms)
+    Γ£ö rejects starting stage on a terminal completed lifecycle (130.0212ms)
+    Γ£ö rejects starting Stage 1 if preceding Stage 0 is not approved in stage_history (131.7275ms)
+    Γ£ö starts Stage 1 successfully when Stage 0 is recorded as approved in stage_history (157.4234ms)
+  Γ£ö 1. Transition ┬º3.2 (START_STAGE) (864.2995ms)
+  Γû╢ 2. Transition ┬º3.3 (RECORD_DELIVERABLE)
+    Γ£ö successfully records completed deliverable when artifact file exists on disk (164.9496ms)
+    Γ£ö successfully records in-progress deliverable without requiring file on disk (147.6341ms)
+    Γ£ö rejects recording completed deliverable if file does not exist on disk (116.0009ms)
+    Γ£ö rejects deliverable path attempting path traversal outside project root (113.5355ms)
+  Γ£ö 2. Transition ┬º3.3 (RECORD_DELIVERABLE) (542.4135ms)
+  Γû╢ 3. Transition ┬º3.4 (RECORD_EVIDENCE)
+    Γ£ö successfully records passed evidence and promotes deliverable to verified (179.1401ms)
+    Γ£ö CRITICAL INVARIANT: Appending failed evidence does NOT demote an already verified deliverable (157.7025ms)
+    Γ£ö rejects recording empty evidence file (0 bytes) (119.0484ms)
+    Γ£ö rejects recording missing evidence file (121.7421ms)
+    Γ£ö rejects future timestamp exceeding 60-second clock skew guard (112.8939ms)
+  Γ£ö 3. Transition ┬º3.4 (RECORD_EVIDENCE) (690.8947ms)
+  Γû╢ 4. Historical direct waiver is disabled after ratification
+    Γ£ö Approved metadata cannot waive a target for actor agent (80.5345ms)
+    Γ£ö Approved metadata cannot waive a target for actor human (77.9952ms)
+    Γ£ö missing documents and unsafe paths cannot re-enable legacy waiver (37.1117ms)
+  Γ£ö 4. Historical direct waiver is disabled after ratification (195.8285ms)
+  Γû╢ 5. Transition ┬º3.8 (REQUEST_HUMAN_APPROVAL / submitStage)
+    Γ£ö successfully transitions stage to pending_review when all deliverables are verified/waived and exit package is complete (317.446ms)
+    Γ£ö rejects submitStage if any deliverable is still in_progress or unverified (188.9049ms)
+    Γ£ö rejects submitStage if authoritative verification fails (e.g. failing latest evidence) (349.0024ms)
+    Γ£ö rejects submitStage if blocking RFC is unresolved (306.069ms)
+    Γ£ö rejects submitStage if exit package is structurally incomplete (267.3517ms)
+  Γ£ö 5. Transition ┬º3.8 (REQUEST_HUMAN_APPROVAL / submitStage) (1429.0375ms)
+  Γû╢ 6. Security Invariants & Boundary Enforcement
+    Γ£ö inspectAndHashEvidenceFile verifies size, hash, and non-empty file (45.6104ms)
+    Γ£ö resolveAuthoritativeVerification applies deterministic 3-tier tie-breaking (53.5851ms)
+    Γ£ö Candidate Transition ┬º3.15 (INVALIDATE_DELIVERABLE) is strictly NOT exported and uncallable (61.2621ms)
+  Γ£ö 6. Security Invariants & Boundary Enforcement (160.681ms)
+  Γû╢ 7. Task 009B.1.1 Audit: Multi-Discipline Promotion & Transaction Integrity
+    Γ£ö Concrete Scenario: Deliverable requires automated_test AND static_analysis; verified only after both pass; subsequent failure blocks submission without demoting history (6841.2814ms)
+    Γ£ö Optional disciplines (warning/advisory severity) do not block deliverable verification (1899.9946ms)
+    Γ£ö Profile semantics: Comprehensive strict, standard, and lightweight discipline resolution (230.2598ms)
+    Γ£ö Discipline resolution fails closed on missing, malformed, or inconsistent configurations (77.7835ms)
+    Γ£ö Transaction expectedPreviousSha256 prevents concurrent target file modifications (86.5805ms)
+  Γ£ö 7. Task 009B.1.1 Audit: Multi-Discipline Promotion & Transaction Integrity (9136.2062ms)
+Γ£ö Operational Controller Engine (Task 009B.1) (13019.8591ms)
+Γû╢ Path Utilities
+  Γ£ö converts Windows backslashes to POSIX slashes (0.144ms)
+  Γ£ö leaves POSIX slashes untouched (0.0663ms)
+  Γ£ö strips redundant leading ./ (0.1199ms)
+Γ£ö Path Utilities (0.4325ms)
+Γ£ö validates every bound object without asserting authenticated identity (0.6351ms)
+Γ£ö rejects missing, malformed and altered bindings (0.5767ms)
+Γ£ö rejects missing required specifications and unexpected inventory scope (0.2877ms)
+Γ£ö rejects mismatching Git tree, blob and unavailable reference objects (0.3949ms)
+Γ£ö empty inventory has the canonical JSON SHA-256 (0.1065ms)
+Γ£ö inventory rejects ambiguous or unsafe identifiers and ordering (0.3771ms)
+Γ£ö operator must supply exact amendment phrase, role and a substantive non-agent name (0.3442ms)
+Γ£ö terminal guard uses real process streams without a caller-supplied TTY override (0.2871ms)
+Γ£ö bootstrap refuses to grandfather existing authority without the future migration verifier (0.2725ms)
+Γ£ö record binds inventory, commit, tree and specifications without claiming identity or Level B (0.3468ms)
+Γ£ö each mandatory check needs exact proof even when check types are identical (1787.1124ms)
+Γ£ö forged metadata, changed evidence bytes and changed input cannot satisfy a gate (2206.6411ms)
+Γ£ö configuration edits and missing tool binding require re-verification (1674.4757ms)
+Γ£ö missing stages/mappings retain baseline obligations and custom deliverables fail closed (128.1929ms)
+Γ£ö missing advisory proof is reported without blocking fresh mandatory checks (603.5736ms)
+Γ£û tool binding covers the executed script even with a separate version command (287.3409ms)
+Γû╢ SchemaValidator Core
+  Γ£ö initializes successfully and exposes schemas (0.6301ms)
+  Γ£ö bundled schemas match canonical root schemas byte-for-byte (4.2344ms)
+  Γ£ö validates canonical valid-manifest.json fixture successfully (1.4515ms)
+  Γ£ö validates canonical valid-state-stage1-verified.json fixture successfully (0.3214ms)
+  Γ£ö validates canonical valid-state-stage2-approved.json fixture successfully (1.2246ms)
+  Γ£ö correctly rejects canonical invalid-manifest.json fixture (1.3125ms)
+  Γ£ö correctly rejects canonical invalid-state-agent-self-approval.json fixture (1.0614ms)
+  Γ£ö correctly rejects canonical invalid-state-unverified-advance.json fixture (0.8987ms)
+  Γ£ö correctly rejects canonical invalid-state-unresolved-rfc.json fixture (0.9691ms)
+  Γ£ö correctly rejects canonical invalid-state-expired-exception.json fixture (1.0292ms)
+  Γ£ö rejects manifest with missing required fields (0.1508ms)
+  Γ£ö rejects state with out-of-range stage number (> 6) (0.3511ms)
+  Γ£ö rejects state with malformed milestone_id pattern (0.3124ms)
+  Γ£ö rejects deliverable with invalid status enum (0.3062ms)
+Γ£ö SchemaValidator Core (16.8239ms)
+Γ£ö headless workflow starts, records and verifies an authored document truthfully (446.5219ms)
+Γ£ö invalid flags, enums, stages, extra positionals and missing arguments leave bytes unchanged (56.8777ms)
+Γ£ö wrong-stage submission is a structured operation failure, never approval (80.0337ms)
+Γ£ö exception routes require explicit migration instead of invoking historical documentary waiver (83.5209ms)
+Γä╣ tests 116
+Γä╣ suites 12
+Γä╣ pass 113
+Γä╣ fail 3
+Γä╣ cancelled 0
+Γä╣ skipped 0
+Γä╣ todo 0
+Γä╣ duration_ms 24360.9671
+
+Γ£û failing tests:
+
+test at dist\tests\inspect.test.js:324:5
+Γ£û CLI executable: formats human-readable and machine-readable JSON output correctly (11.9942ms)
+  Error: spawn EPERM
+      at ChildProcess.spawn (node:internal/child_process:421:11)
+      at spawn (node:child_process:796:9)
+      at execFile (node:child_process:349:17)
+      at execFile (node:child_process:245:21)
+      at TestContext.<anonymous> (file:///F:/workspace/ai-engineering-playbook/tooling/playbook-cli/dist/tests/inspect.test.js:332:43)
+      at Test.runInAsyncScope (node:async_hooks:228:14)
+      at Test.run (node:internal/test_runner/test:1118:25)
+      at async Suite.processPendingSubtests (node:internal/test_runner/test:787:7) {
+    errno: -4048,
+    code: 'EPERM',
+    syscall: 'spawn'
+  }
+
+test at dist\tests\inspect.test.js:348:5
+Γ£û strictly enforces read-only behaviour (zero filesystem modifications) (88.9208ms)
+  Error: spawn EPERM
+      at ChildProcess.spawn (node:internal/child_process:421:11)
+      at spawn (node:child_process:796:9)
+      at execFile (node:child_process:349:17)
+      at execFile (node:child_process:245:21)
+      at TestContext.<anonymous> (file:///F:/workspace/ai-engineering-playbook/tooling/playbook-cli/dist/tests/inspect.test.js:363:15)
+      at Test.runInAsyncScope (node:async_hooks:228:14)
+      at Test.run (node:internal/test_runner/test:1118:25)
+      at async Suite.processPendingSubtests (node:internal/test_runner/test:787:7) {
+    errno: -4048,
+    code: 'EPERM',
+    syscall: 'spawn'
+  }
+
+test at dist\tests\resolver-safety.test.js:95:1
+Γ£û tool binding covers the executed script even with a separate version command (287.3409ms)
+  Error: ENOENT: no such file or directory, lstat 'C:\Program'
+      at Object.realpathSync (node:fs:2775:29)
+      at file:///F:/workspace/ai-engineering-playbook/tooling/playbook-cli/dist/src/core/quality-gates/evidence-binding.js:37:38
+      at Array.map (<anonymous>)
+      at file:///F:/workspace/ai-engineering-playbook/tooling/playbook-cli/dist/src/core/quality-gates/evidence-binding.js:37:22
+      at Array.map (<anonymous>)
+      at toolFingerprint (file:///F:/workspace/ai-engineering-playbook/tooling/playbook-cli/dist/src/core/quality-gates/evidence-binding.js:18:31)
+      at file:///F:/workspace/ai-engineering-playbook/tooling/playbook-cli/dist/tests/resolver-safety.test.js:99:20
+      at fixture (file:///F:/workspace/ai-engineering-playbook/tooling/playbook-cli/dist/tests/resolver-safety.test.js:17:9)
+      at TestContext.<anonymous> (file:///F:/workspace/ai-engineering-playbook/tooling/playbook-cli/dist/tests/resolver-safety.test.js:95:92)
+      at Test.runInAsyncScope (node:async_hooks:228:14) {
+    errno: -4058,
+    code: 'ENOENT',
+    syscall: 'lstat',
+    path: 'C:\\Program'
+  }

@@ -1,0 +1,8 @@
+
+> @ai-engineering-playbook/cli@1.0.0 build
+> npm run sync-schemas && tsc && node -e "const fs = require('fs'); fs.cpSync('src/schemas', 'dist/src/schemas', {recursive: true}); if (fs.existsSync('src/core/ci/templates')) fs.cpSync('src/core/ci/templates', 'dist/src/core/ci/templates', {recursive: true});"
+
+
+> @ai-engineering-playbook/cli@1.0.0 sync-schemas
+> node -e "const fs = require('fs'); const path = require('path'); const src = path.resolve('../../schemas'); if (fs.existsSync(src)) { fs.copyFileSync(path.join(src, 'project-manifest.schema.json'), 'src/schemas/project-manifest.schema.json'); fs.copyFileSync(path.join(src, 'project-state.schema.json'), 'src/schemas/project-state.schema.json'); fs.copyFileSync(path.join(src, 'quality-gates.schema.json'), 'src/schemas/quality-gates.schema.json'); }"
+

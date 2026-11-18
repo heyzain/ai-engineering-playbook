@@ -1,0 +1,14 @@
+Γ£ö headless workflow starts, records and verifies an authored document truthfully (669.2512ms)
+Γ£ö invalid flags, enums, stages, extra positionals and missing arguments leave bytes unchanged (64.6067ms)
+Γ£ö wrong-stage submission is a structured operation failure, never approval (94.6191ms)
+Γ£ö exception routes require explicit migration instead of invoking historical documentary waiver (93.1679ms)
+Γ£ö rejected legacy waiver recovers through original integration proof and submission (426.746ms)
+Γ£ö executable lifecycle exit-package fixture satisfies strict submission for every stage (1.5348ms)
+Γä╣ tests 6
+Γä╣ suites 0
+Γä╣ pass 6
+Γä╣ fail 0
+Γä╣ cancelled 0
+Γä╣ skipped 0
+Γä╣ todo 0
+Γä╣ duration_ms 1549.7177

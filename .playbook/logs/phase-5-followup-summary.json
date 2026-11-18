@@ -1,0 +1,47 @@
+{
+  "status": "Follow-up fixes authored; complete operator rerun required",
+  "baseline": "ad0ff39 + uncommitted changes",
+  "operator_run": {
+    "tests": 1011,
+    "pass": 1008,
+    "fail": 3,
+    "skipped": 0
+  },
+  "commands": {
+    "focused": "node --test --test-isolation=none dist/tests/workflow-cli.test.js dist/tests/resolver-safety.test.js dist/tests/exception-lifecycle.test.js dist/tests/runner-safety.test.js dist/tests/validator.test.js dist/tests/approval.test.js",
+    "composition": "node --test --test-isolation=none --test-name-pattern \"composed core checks\" dist/tests/mobile-stack-integration.test.js",
+    "exceptions": "node --test --test-isolation=none dist/tests/exception-service.test.js"
+  },
+  "logs": {
+    "phase-5-followup-safety-tests.txt": {
+      "sha256": "7b6bd3ca56a6ac48bca73907c432e6e9c6192543f6857ba766bba6632de9d6d2",
+      "tests": 56,
+      "pass": 56,
+      "fail": 0,
+      "skipped": 0
+    },
+    "phase-5-followup-green-test.txt": {
+      "sha256": "23a0cddf26402ac1656b8867b6c902b9762334a976a09062848aa98e865020fa",
+      "tests": 1,
+      "pass": 1,
+      "fail": 0,
+      "skipped": 0
+    },
+    "phase-5-followup-exception-tests.txt": {
+      "sha256": "4108f594cef218abbecb356d6e61a45d7e1cb90ad43f456de695d7eb1baa78ca",
+      "tests": 5,
+      "pass": 5,
+      "fail": 0,
+      "skipped": 0
+    }
+  },
+  "source_sha256": {
+    "schemas/project-state.schema.json": "be90615c4cd3eb3b9c386f2c472196fc043e17497a755d0098eee12c51de13b0",
+    "tooling/playbook-cli/src/core/validator.ts": "52a78d9147e97499557e57fe7dc32806c0fb832990367af0c01dadc6bddaa74e",
+    "tooling/playbook-cli/src/core/stacks/stack-manager.ts": "a0098f5bf5bf83a322a723f99a244d4c5ff7da7bb31ce6a64b951798ef846e20",
+    "tooling/playbook-cli/tests/mobile-stack-integration.test.ts": "8f4dde11015beef9cc5709ab22b7e6c5ed5a5be8c3f3ad169714c6541ae919dd",
+    "tooling/playbook-cli/tests/lifecycle-e2e.test.ts": "d7e06447a46ede87239e16b3b180851211c996a8a3c1d3acc2cf735160c2189a",
+    "tooling/playbook-cli/tests/workflow-cli.test.ts": "d0c9707bfe0c3cc5020a0512d4ecdf5f3fe2970804608718bb450886457bc03c",
+    "tooling/playbook-cli/tests/validator.test.ts": "a87f31ba1e204442f84d0c3b433f6d9c1926b8364a4e58371dabc34486351d5a"
+  }
+}

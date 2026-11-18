@@ -1,0 +1,67 @@
+
+==================================================
+ AI Engineering Playbook Initialized Successfully
+==================================================
+ Project ID:      target-react-native
+ Project Name:    Declared Target
+ Target Directory: C:\Users\za184\AppData\Local\Temp\playbook-mobile-integ-test-eVwexx\declared-target-react-native
+ Milestone:       M-1.0.0
+ Active Stage:    Stage 0 (Discovery & Problem Formulation)
+ Governance:      standard profile, solo approval mode
+ Tech Stack:      node / typescript (Stack: react-native, 19 files scaffolded)
+
+ Governed Artifacts Created:
+   .playbook\manifest.json (Project Manifest)
+   .playbook\state.json (Machine-Readable State)
+   docs/prd/ (Product Requirements)
+   docs/adr/ (Architecture Decisions)
+   docs/rfcs/ (Clarification Requests)
+   docs/gates/ (Stage Gate Exit Packages)
+   docs/exceptions/ (Gate Exception Records)
+   .playbook/logs/ (Verification Logs & Proof Evidence)
+
+ Next Steps:
+   1. Author initial problem statement in docs/prd/PRD-CORE.md
+   2. AI Agents: review AGENTS.md and execute lifecycle sequentially.
+==================================================
+
+
+==================================================
+ AI Engineering Playbook Initialized Successfully
+==================================================
+ Project ID:      target-expo
+ Project Name:    Declared Target
+ Target Directory: C:\Users\za184\AppData\Local\Temp\playbook-mobile-integ-test-eVwexx\declared-target-expo
+ Milestone:       M-1.0.0
+ Active Stage:    Stage 0 (Discovery & Problem Formulation)
+ Governance:      standard profile, solo approval mode
+ Tech Stack:      node / typescript (Stack: expo, 38 files scaffolded)
+
+ Governed Artifacts Created:
+   .playbook\manifest.json (Project Manifest)
+   .playbook\state.json (Machine-Readable State)
+   docs/prd/ (Product Requirements)
+   docs/adr/ (Architecture Decisions)
+   docs/rfcs/ (Clarification Requests)
+   docs/gates/ (Stage Gate Exit Packages)
+   docs/exceptions/ (Gate Exception Records)
+   .playbook/logs/ (Verification Logs & Proof Evidence)
+
+ Next Steps:
+   1. Author initial problem statement in docs/prd/PRD-CORE.md
+   2. AI Agents: review AGENTS.md and execute lifecycle sequentially.
+==================================================
+
+Γû╢ Task 007D.5 ΓÇö Mobile Stack Integration and Final Regression
+  Γû╢ 2. Quality Gate Execution via QualityGateRunner
+    Γ£ö composed core checks reference the same declared code target as mobile checks (957.9644ms)
+  Γ£ö 2. Quality Gate Execution via QualityGateRunner (960.8792ms)
+Γ£ö Task 007D.5 ΓÇö Mobile Stack Integration and Final Regression (963.8245ms)
+Γä╣ tests 1
+Γä╣ suites 2
+Γä╣ pass 1
+Γä╣ fail 0
+Γä╣ cancelled 0
+Γä╣ skipped 0
+Γä╣ todo 0
+Γä╣ duration_ms 1256.8381

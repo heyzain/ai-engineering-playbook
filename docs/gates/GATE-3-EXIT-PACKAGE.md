@@ -2,74 +2,87 @@
 
 ## 1. Package & Stage Identification
 
-Date: 2026-11-18. Milestone M-1.0.0. Stage 3: Implementation & Unit
-Verification. Author: agent:codex. **Draft; blocked on complete regression
-verification. Not submitted for human approval.** Source baseline: `ad0ff39`
-plus the current uncommitted implementation diff.
+Date: 2026-11-18. Milestone M-1.0.0. Stage 3: Implementation & Unit Verification.
+Author: agent:codex. Status: submitted for human review; no approval granted.
+Source checkpoint: `dc95b5d076fcd629d684227e7c0373954d9fcf89` (pushed by operator).
+Only governance and evidence records change after this checkpoint.
 
 ## 2. Stage Objectives & Scope Summary
 
-Expose the approved governed workflow through the CLI, close unsafe documentary
-waiver authority, implement ratified local exceptions and explicit migration,
-and require fresh applicable evidence for completion. Preserve human gate
-authority, existing transactional recovery and lifecycle contracts.
+Expose governed CLI authoring and strict stage submission; implement ratified
+local exceptions and explicit migration; close documentary-waiver bypasses and
+require fresh check-specific evidence. Preserve operator authority and transactional
+recovery. See the implementation handover for module and command details.
 
 ## 3. Deliverables Manifest & Status
 
-| Deliverable | Artifact | Status |
+| Deliverable | Artifact | Validation |
 | --- | --- | --- |
-| CODE-IMPL | tooling/playbook-cli/src | Authored; unvalidated pending mandatory complete regression |
-| Workflow/safety coverage | tooling/playbook-cli/tests | Focused tests passing; broad process/Git checks unverified |
-| CLI instructions | tooling/playbook-cli/README.md; AGENTS.md | Updated to implemented operations and human boundaries |
+| CODE-IMPL | tooling/playbook-cli/src | Verified against complete passing operator regression |
+| Regression coverage | tooling/playbook-cli/tests | 1015 passed, zero failed/skipped/cancelled |
+| CLI and agent instructions | tooling/playbook-cli/README.md; AGENTS.md | Updated; examples and guards covered by workflow tests/smoke |
 
 ## 4. Verifiable Validation Evidence
 
-See [implementation handover](../audits/phase-4-5-implementation.md) and the
-final summary at `.playbook/logs/completion-verification-summary.json` for exact
-commands, runtime, counts, outcomes and references. Build/typecheck and focused
-safety tests pass. Actual executable smoke covers successful authoring and
-rejected human-only invocation without state mutation. The complete suite has
-not passed: this environment rejects Node subprocesses with `spawn EPERM`.
-Hash verification proves recorded file integrity, not successful test execution.
+Command: `npm --prefix tooling/playbook-cli test`. The operator's normal Windows
+PowerShell run completed the pretest source build, then executed 55 compiled test
+files with isolation: **1015 tests, 172 suites, 1015 passed, 0 failed, 0 skipped,
+0 cancelled**, duration 120453.2943 ms.
 
-The operator subsequently supplied a normal-terminal result of 1008 passed and
-3 failed (1011 total, zero skipped). The three causes and follow-up fixes are
-recorded in the implementation handover and `phase-5-operator-test-review.json`.
-A fresh complete run after those fixes remains required; this package stays a draft.
+Original transcript: [Pasted text(4).txt](https://chatgpt.com/library?file_id=libfile_c756c131b64481919b297257ad17f6b1&account_id=personal).
+Local reviewed evidence/provenance: `.playbook/logs/phase-5-passing-tests.json`.
+The state records its SHA-256. This is reviewed operator execution, not a claim
+that the restricted agent environment ran the complete process suite. The transcript
+predates the source commit and embeds no SHA; the operator report and inspected
+committed source provide local documentary provenance, not independent identity.
+
+Build, schema synchronization, executable smoke, focused regressions and older
+failed attempts remain in `.playbook/logs/phase-5-*` and `completion-*`. The full
+passing result supersedes prior blockers; historical failures remain append-only.
+Evidence hash validation proves recorded integrity, not test authenticity.
 
 ## 5. Traceability Matrix
 
-The handover maps all REQ-001..021, NFR-001..009 and NEG-001..009 to implementation,
-test files and remaining acceptance. Exception lifecycle, resolver, migration,
-schema and CLI contracts have focused executable coverage. Installed-package,
-separate pilot, remote CI, runtime/platform and final observation proof remain
-allocated to later roadmap phases; this draft certifies none of them.
+| Scope | Implementation and acceptance |
+| --- | --- |
+| REQ-003..006 | stage/deliverable workflow adapters and strict AST submission; workflow/controller tests |
+| REQ-007,008 | Human approval, bound advancement and recovery; lifecycle/authorization regressions |
+| REQ-009..011 | Proposal, sealed local authorization, revocation, fresh remediation, migration; exception tests |
+| REQ-005,012,013,021 | Per-check proof/config/tool/RIF binding, shared resolver, WAL and concurrency tests |
+| REQ-001,002,014..017,019 | Existing commands retained; schema/inspect/lint/hooks/CI/stacks/CLI regression and documentation |
+| NFR-002,006,007; NEG-001..009 | Full reference suite, failure/recovery and CLI contract coverage; no production or remote certification implied |
+
+Detailed requirement and later-stage allocations are in
+[implementation handover](../audits/phase-4-5-implementation.md) and the approved
+architecture and pilot specifications.
 
 ## 6. Outstanding Issues, Deferred Items & Accepted Limitations
 
-Mandatory zero-failure/zero-skip complete regression remains unresolved. Run
-`npm --prefix tooling/playbook-cli test` in a capable normal terminal, review all
-failures, and record fresh output. No exception waives this requirement. No
-phase verification, gate submission or advancement is justified by this draft.
-Local Level A exception attestation does not implement Level B distributed
-waiver authority or authenticate the local writer's identity.
+No unresolved failure remains in the complete reference suite. Gate 3 still
+requires actual human review. Local Level A attestation does not provide Level B
+team/remote waiver authority or authenticate the local writer.
+
+Installed-package resources, separate pilot and genuine pilot approvals, actual
+remote CI, runtime/platform matrix, dependency hardening, performance, release
+artifact/rollback and observation evidence remain later-phase work under the
+approved plan. These are not certified or waived by this Stage 3 handover.
 
 ## 7. Related Governance Artifacts
 
-- Requirements: `docs/prd/REQUIREMENTS-SPEC.md` and `PILOT-SPEC.md`.
-- Architecture: `docs/adr/ARCHITECTURE-SPEC.md` and ADR-20261117-001.
-- Ratification: `docs/adr/RATIFY-20261110-001.md`, operator commit `ad0ff39`,
-  immutable prerequisite commit `4eea89f`.
-- Plan: `docs/completion-plan.md`. Prior human Gate 2 approval remains in state.
+Requirements: `docs/prd/REQUIREMENTS-SPEC.md`, `PILOT-SPEC.md`.
+Architecture: `docs/adr/ARCHITECTURE-SPEC.md`, ADR-20261117-001.
+Ratification: `docs/adr/RATIFY-20261110-001.md`, operator commit `ad0ff39`,
+immutable prerequisite `4eea89f`. Plan: `docs/completion-plan.md`.
+Prior human Gate 2 approval remains in state history.
 
 ## 8. AI Agent Completion Assertion
 
-Implementation has been authored and checked to the extent documented. The agent
-does **not** assert complete verification or readiness for Stage 4. Failed and
-inconclusive evidence is retained. This report grants no human authorization.
+The implementation and Stage 3 regression deliverable have passing evidence as
+listed above. The agent submits them for review without approving the gate,
+advancing the lifecycle, or claiming that later integration/release work is complete.
 
 ## 9. Human Gate Sign-Off & Approval Record
 
-Not requested. No decision, signature or human approval is recorded by this
-draft. After every mandatory check passes, submit using `stage submit` and let
-the actual operator review and execute `approve --gate 3` and `advance`.
+Pending actual operator review. No approver, decision or signature is fabricated.
+The operator may review this package and execute `approve --gate 3` interactively,
+then `advance` after approval. Phase 6 cannot begin before that transition.

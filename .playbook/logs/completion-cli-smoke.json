@@ -1,0 +1,13 @@
+{
+  "headlessApprovalError": "TTY_REQUIRED",
+  "record": true,
+  "root": "C:\\Users\\za184\\AppData\\Local\\Temp\\playbook-cli-smoke-0bcf0a9c4df74f02a1a528f0c14cfff3",
+  "evidence": true,
+  "rejectedStateUnchanged": true,
+  "invalidStageExit": 2,
+  "start": true,
+  "headlessApprovalExit": 1,
+  "submit": true,
+  "finalStageStatus": "pending_review",
+  "humanApproval": "pending_review"
+}

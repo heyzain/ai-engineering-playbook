@@ -1,0 +1,42 @@
+{
+  "reviewed_at": "2026-11-18T05:06:28.729290+00:00",
+  "source": {
+    "name": "Pasted text(1).txt",
+    "library_file_id": "libfile_76739873acec8191a51394c0ebded1b4",
+    "reference": "https://chatgpt.com/library?file_id=libfile_76739873acec8191a51394c0ebded1b4&account_id=personal",
+    "read_windows": [
+      "1-180",
+      "2480-2719"
+    ],
+    "provenance": "User-supplied normal PowerShell transcript; review summary, not a new agent full-suite run."
+  },
+  "command": "npm --prefix tooling/playbook-cli test",
+  "reported_results": {
+    "tests": 1011,
+    "pass": 1008,
+    "fail": 3,
+    "skipped": 0,
+    "cancelled": 0
+  },
+  "failures": [
+    {
+      "test": "lifecycle-e2e Scenario D",
+      "diagnostic": "EXCEPTION_WAIVER_UNAUTHORIZED",
+      "cause": "Fixture expected an unsealed legacy documentary waiver to authorize Gate 4.",
+      "change": "Require rejection and unchanged bytes, then recover through original integration proof and normal CLI submission."
+    },
+    {
+      "test": "mobile-stack-integration React Native Stage 4",
+      "diagnostic": "QUALITY_GATE_INCONSISTENT",
+      "cause": "Generated core-typecheck targeted placeholder DELIV-1 rather than mobile code target CODE-IMPL.",
+      "change": "Fix default stack composition target; keep undeclared-deliverable rejection intact."
+    },
+    {
+      "test": "mobile-stack-integration Expo Stage 4",
+      "diagnostic": "QUALITY_GATE_INCONSISTENT",
+      "cause": "Same inherited generator placeholder.",
+      "change": "Same generator correction plus RN/Expo composition-and-resolver regression."
+    }
+  ],
+  "status": "Failed external run reviewed; changes authored; fresh complete operator rerun required."
+}

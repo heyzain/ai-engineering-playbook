@@ -1,0 +1,28 @@
+{
+  "reviewed_at": "2026-11-18T05:31:38.052914+00:00",
+  "source": {
+    "name": "Pasted text(2).txt",
+    "library_file_id": "libfile_168c889b05308191a0c87c675cba5f38",
+    "reference": "https://chatgpt.com/library?file_id=libfile_168c889b05308191a0c87c675cba5f38&account_id=personal",
+    "read_windows": [
+      "1-35",
+      "2610-2737"
+    ],
+    "provenance": "Reviewed user-supplied normal PowerShell transcript; not a new agent full-suite run."
+  },
+  "command": "npm --prefix tooling/playbook-cli test",
+  "reported_results": {
+    "tests": 1014,
+    "pass": 1013,
+    "fail": 1,
+    "skipped": 0,
+    "cancelled": 0
+  },
+  "failure": {
+    "test": "lifecycle-e2e Scenario D",
+    "diagnostic": "EXIT_PACKAGE_INCOMPLETE",
+    "cause": "The legacy exit-package helper emitted four sections, while guarded CLI stage submission requires eight canonical sections.",
+    "fix": "Extract complete eight-section helper shared by executable lifecycle test and strict-parser regression; do not weaken production validation."
+  },
+  "status": "Fixture corrected; new complete operator run still required."
+}

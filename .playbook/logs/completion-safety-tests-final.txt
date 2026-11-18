@@ -1,0 +1,31 @@
+Γ£ö proposal is nonprivileged and cannot manufacture waiver from documentary metadata (3.7233ms)
+Γ£ö authorization binds exact proposal and creates local-only sidecar with audit atomically planned (1.5384ms)
+Γ£ö bad operator, role, phrase, duplicate proposal, target, time and version fail closed (0.8251ms)
+Γ£ö revocation preserves history and clears only an active waiver, without fabricated failed evidence (0.3985ms)
+Γ£ö remediation marker is fresh and uniquely binds subsequent evidence without prematurely unwaiving (0.7553ms)
+Γ£ö expiry validates real calendar dates and the exclusive next-midnight UTC boundary (0.2026ms)
+Γ£ö validates every bound object without asserting authenticated identity (0.5415ms)
+Γ£ö rejects missing, malformed and altered bindings (0.6572ms)
+Γ£ö rejects missing required specifications and unexpected inventory scope (0.3829ms)
+Γ£ö rejects mismatching Git tree, blob and unavailable reference objects (0.4326ms)
+Γ£ö each mandatory check needs exact proof even when check types are identical (2021.0622ms)
+Γ£ö forged metadata, changed evidence bytes and changed input cannot satisfy a gate (2230.9971ms)
+Γ£ö configuration edits and missing tool binding require re-verification (1660.0465ms)
+Γ£ö missing stages/mappings retain baseline obligations and custom deliverables fail closed (139.5154ms)
+Γ£ö missing advisory proof is reported without blocking fresh mandatory checks (564.1092ms)
+Γ£ö tool binding covers the executed script even with a separate version command (953.4696ms)
+Γ£ö version probes preserve quoted paths and never evaluate shell text (0.721ms)
+Γ£ö tool binding does not mistake wildcard test arguments for entry scripts (287.8051ms)
+Γ£ö synchronous process-launch rejection persists failed proof without verification (747.866ms)
+Γ£ö headless workflow starts, records and verifies an authored document truthfully (379.4876ms)
+Γ£ö invalid flags, enums, stages, extra positionals and missing arguments leave bytes unchanged (59.4007ms)
+Γ£ö wrong-stage submission is a structured operation failure, never approval (85.4124ms)
+Γ£ö exception routes require explicit migration instead of invoking historical documentary waiver (85.4616ms)
+Γä╣ tests 23
+Γä╣ suites 0
+Γä╣ pass 23
+Γä╣ fail 0
+Γä╣ cancelled 0
+Γä╣ skipped 0
+Γä╣ todo 0
+Γä╣ duration_ms 9445.4509

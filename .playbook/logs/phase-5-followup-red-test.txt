@@ -1,0 +1,65 @@
+
+==================================================
+ AI Engineering Playbook Initialized Successfully
+==================================================
+ Project ID:      target-react-native
+ Project Name:    Declared Target
+ Target Directory: C:\Users\za184\AppData\Local\Temp\playbook-mobile-integ-test-54uCQF\declared-target-react-native
+ Milestone:       M-1.0.0
+ Active Stage:    Stage 0 (Discovery & Problem Formulation)
+ Governance:      standard profile, solo approval mode
+ Tech Stack:      node / typescript (Stack: react-native, 19 files scaffolded)
+
+ Governed Artifacts Created:
+   .playbook\manifest.json (Project Manifest)
+   .playbook\state.json (Machine-Readable State)
+   docs/prd/ (Product Requirements)
+   docs/adr/ (Architecture Decisions)
+   docs/rfcs/ (Clarification Requests)
+   docs/gates/ (Stage Gate Exit Packages)
+   docs/exceptions/ (Gate Exception Records)
+   .playbook/logs/ (Verification Logs & Proof Evidence)
+
+ Next Steps:
+   1. Author initial problem statement in docs/prd/PRD-CORE.md
+   2. AI Agents: review AGENTS.md and execute lifecycle sequentially.
+==================================================
+
+Γû╢ Task 007D.5 ΓÇö Mobile Stack Integration and Final Regression
+  Γû╢ 2. Quality Gate Execution via QualityGateRunner
+    Γ£û composed core checks reference the same declared code target as mobile checks (383.5374ms)
+  Γ£û 2. Quality Gate Execution via QualityGateRunner (384.5342ms)
+Γ£û Task 007D.5 ΓÇö Mobile Stack Integration and Final Regression (386.8087ms)
+Γä╣ tests 1
+Γä╣ suites 2
+Γä╣ pass 0
+Γä╣ fail 1
+Γä╣ cancelled 0
+Γä╣ skipped 0
+Γä╣ todo 0
+Γä╣ duration_ms 691.0647
+
+Γ£û failing tests:
+
+test at dist\tests\mobile-stack-integration.test.js:174:9
+Γ£û composed core checks reference the same declared code target as mobile checks (383.5374ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  + actual - expected
+  
+  + 'DELIV-1'
+  - 'CODE-IMPL'
+  
+      at TestContext.<anonymous> (file:///F:/workspace/ai-engineering-playbook/tooling/playbook-cli/dist/tests/mobile-stack-integration.test.js:180:24)
+      at async Test.run (node:internal/test_runner/test:1125:7)
+      at async Promise.all (index 0)
+      at async Suite.run (node:internal/test_runner/test:1533:7)
+      at async Promise.all (index 1)
+      at async Suite.run (node:internal/test_runner/test:1533:7)
+      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:358:3) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: 'DELIV-1',
+    expected: 'CODE-IMPL',
+    operator: 'strictEqual',
+    diff: 'simple'
+  }

@@ -1,0 +1,26 @@
+{
+  "timestamp": "2026-11-17T13:58:31.132Z",
+  "phase4": "incomplete; actual ratification verified",
+  "phase5": "partial agent-safe adapters; exception routes fenced",
+  "build": {
+    "exit": 0
+  },
+  "targetedTests": {
+    "passed": 31,
+    "failed": 0,
+    "skipped": 0
+  },
+  "executableSmoke": "passed: start/record/evidence and rejected-state immutability",
+  "fullSuite": {
+    "exit": 1,
+    "result": "inconclusive",
+    "reason": "spawn EPERM on test workers"
+  },
+  "hashes": {
+    "tooling/playbook-cli/src/bin/playbook.ts": "2c992eb40ed2dd565d21a368b38dd59bbd5ccfb501872bfa26b2c36bc1893f4f",
+    "tooling/playbook-cli/src/commands/workflow.ts": "531de23f883156b1706ef6f6fb7492ae9d1a593900d1b6511e69cb214c4fcf1d",
+    "tooling/playbook-cli/src/core/ratification-verifier.ts": "37bc780c221462617c4f19ca54711b6758399f24d9ac6d0233465fb0cc9b92bb",
+    "tooling/playbook-cli/tests/workflow-cli.test.ts": "b2e6b6a231ab1dc7af495e8fa2e4c4af4cca7e2668cf0efc6dd8088579cefc8f",
+    "tooling/playbook-cli/tests/ratification-verifier.test.ts": "2b15730bb9940111884771b295b03a41a3f1a1d2dbf2baf067dcca7bc033cb49"
+  }
+}

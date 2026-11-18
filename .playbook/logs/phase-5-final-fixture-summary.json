@@ -1,0 +1,20 @@
+{
+  "status": "Complete normal-terminal rerun required; no gate approval or commit",
+  "operator_run": {
+    "tests": 1014,
+    "pass": 1013,
+    "fail": 1,
+    "skipped": 0
+  },
+  "workflow_tests": {
+    "tests": 6,
+    "pass": 6,
+    "fail": 0,
+    "skipped": 0
+  },
+  "logs": {
+    "phase-5-final-fixture-build.txt": "cb3bed2806d5a9ca128eb0ea9ca0b52e1cb61401c574752690304773abd18366",
+    "phase-5-final-fixture-tests.txt": "9c3e036773f7987dcfd5e1ea62b872eac17ce351f919f0fd869f897adf60e968",
+    "phase-5-operator-rerun-review.json": "0cc87cc22a75324634d67bcb2918b319b5997783001b083883226c638c29b99a"
+  }
+}

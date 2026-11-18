@@ -1,0 +1,43 @@
+▶ Path Utilities
+  ✔ converts Windows backslashes to POSIX slashes (0.906ms)
+  ✔ leaves POSIX slashes untouched (0.1155ms)
+  ✔ strips redundant leading ./ (0.1403ms)
+✔ Path Utilities (2.3685ms)
+✔ validates every bound object without asserting authenticated identity (2.0713ms)
+✔ rejects missing, malformed and altered bindings (1.1552ms)
+✔ rejects missing required specifications and unexpected inventory scope (0.6453ms)
+✔ rejects mismatching Git tree, blob and unavailable reference objects (0.3665ms)
+✔ empty inventory has the canonical JSON SHA-256 (0.8164ms)
+✔ inventory rejects ambiguous or unsafe identifiers and ordering (0.2983ms)
+✔ operator must supply exact amendment phrase, role and a substantive non-agent name (0.4306ms)
+✔ terminal guard uses real process streams without a caller-supplied TTY override (0.3732ms)
+✔ bootstrap refuses to grandfather existing authority without the future migration verifier (0.3573ms)
+✔ record binds inventory, commit, tree and specifications without claiming identity or Level B (0.3519ms)
+▶ SchemaValidator Core
+  ✔ initializes successfully and exposes schemas (0.3347ms)
+  ✔ bundled schemas match canonical root schemas byte-for-byte (2.1897ms)
+  ✔ validates canonical valid-manifest.json fixture successfully (4.9822ms)
+  ✔ validates canonical valid-state-stage1-verified.json fixture successfully (6.9329ms)
+  ✔ validates canonical valid-state-stage2-approved.json fixture successfully (1.4968ms)
+  ✔ correctly rejects canonical invalid-manifest.json fixture (1.0947ms)
+  ✔ correctly rejects canonical invalid-state-agent-self-approval.json fixture (0.8546ms)
+  ✔ correctly rejects canonical invalid-state-unverified-advance.json fixture (0.9124ms)
+  ✔ correctly rejects canonical invalid-state-unresolved-rfc.json fixture (1.0064ms)
+  ✔ correctly rejects canonical invalid-state-expired-exception.json fixture (1.0946ms)
+  ✔ rejects manifest with missing required fields (0.1535ms)
+  ✔ rejects state with out-of-range stage number (> 6) (0.8626ms)
+  ✔ rejects state with malformed milestone_id pattern (0.8229ms)
+  ✔ rejects deliverable with invalid status enum (0.7572ms)
+✔ SchemaValidator Core (23.9446ms)
+✔ headless workflow starts, records and verifies an authored document truthfully (495.7022ms)
+✔ invalid flags, enums, stages, extra positionals and missing arguments leave bytes unchanged (54.153ms)
+✔ wrong-stage submission is a structured operation failure, never approval (82.5626ms)
+✔ exception routes remain explicitly fenced instead of invoking historical documentary waiver (44.4401ms)
+ℹ tests 31
+ℹ suites 2
+ℹ pass 31
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 985.1496

@@ -1,0 +1,33 @@
+{
+  "reviewed_at": "2026-11-18T06:27:22.473009+00:00",
+  "source": {
+    "name": "Pasted text(4).txt",
+    "library_file_id": "libfile_c756c131b64481919b297257ad17f6b1",
+    "file_id": "file_00000000d8648210b8ff636ef48794a3",
+    "size_bytes": 180641,
+    "reference": "https://chatgpt.com/library?file_id=libfile_c756c131b64481919b297257ad17f6b1&account_id=personal",
+    "read_windows": [
+      "1-25",
+      "2675-2713"
+    ],
+    "provenance": "Reviewed user-provided normal PowerShell transcript, not a new agent sandbox execution."
+  },
+  "command": "npm --prefix tooling/playbook-cli test",
+  "build": "pretest build and schema sync completed before test execution",
+  "runner": "55 compiled test files with process isolation",
+  "results": {
+    "tests": 1015,
+    "suites": 172,
+    "pass": 1015,
+    "fail": 0,
+    "cancelled": 0,
+    "skipped": 0,
+    "todo": 0,
+    "duration_ms": 120453.2943
+  },
+  "result": "passed",
+  "exit_code": 0,
+  "source_checkpoint": "dc95b5d076fcd629d684227e7c0373954d9fcf89",
+  "binding_limit": "Transcript predates the source commit and does not embed its SHA. Operator reports committing/pushing the tested tree; the current source checkpoint has no subsequent code edits. This is documentary provenance, not independent runner authentication.",
+  "authority": "Test evidence only. No human gate or exception approval is granted by this record."
+}

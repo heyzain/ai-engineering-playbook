@@ -1,0 +1,13 @@
+Γ£ö synthetic migration preserves backups; proposal and authorization write consistent state, seal and audit (1743.3653ms)
+Γ£ö synthetic remediation cannot use historic proof and retires only fresh marker-bound passing evidence (1991.9518ms)
+Γ£ö real headless authorization and migration have no injectable TTY bypass (0.7053ms)
+Γ£ö migration withdraws legacy waivers, preserves originals and rejects stale review (624.5201ms)
+Γ£ö review changes, repeat authorization and remote waiver reliance are rejected without mutation (1378.5488ms)
+Γä╣ tests 5
+Γä╣ suites 0
+Γä╣ pass 5
+Γä╣ fail 0
+Γä╣ cancelled 0
+Γä╣ skipped 0
+Γä╣ todo 0
+Γä╣ duration_ms 6111.0004

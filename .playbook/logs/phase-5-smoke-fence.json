@@ -1,0 +1,1 @@
+{"success":false,"operation":"exception propose","error":{"code":"EXCEPTION_IMPLEMENTATION_PENDING","message":"Exception commands are fenced until Phase 4 safety and migration verification are complete."}}

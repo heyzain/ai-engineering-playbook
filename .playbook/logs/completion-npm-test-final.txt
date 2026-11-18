@@ -1,0 +1,999 @@
+
+> @ai-engineering-playbook/cli@1.0.0 pretest
+> npm run build
+
+
+> @ai-engineering-playbook/cli@1.0.0 build
+> npm run sync-schemas && tsc && node -e "const fs = require('fs'); fs.cpSync('src/schemas', 'dist/src/schemas', {recursive: true}); if (fs.existsSync('src/core/ci/templates')) fs.cpSync('src/core/ci/templates', 'dist/src/core/ci/templates', {recursive: true});"
+
+
+> @ai-engineering-playbook/cli@1.0.0 sync-schemas
+> node -e "const fs = require('fs'); const path = require('path'); const src = path.resolve('../../schemas'); if (fs.existsSync(src)) { fs.copyFileSync(path.join(src, 'project-manifest.schema.json'), 'src/schemas/project-manifest.schema.json'); fs.copyFileSync(path.join(src, 'project-state.schema.json'), 'src/schemas/project-state.schema.json'); fs.copyFileSync(path.join(src, 'quality-gates.schema.json'), 'src/schemas/quality-gates.schema.json'); }"
+
+
+> @ai-engineering-playbook/cli@1.0.0 test
+> node scripts/run-tests.mjs
+
+Running 54 compiled test files with process isolation.
+Γ£û dist\tests\advancement.test.js (21.3091ms)
+Γ£û dist\tests\approval.test.js (20.2117ms)
+Γ£û dist\tests\ast-governance-validators.test.js (20.8658ms)
+Γ£û dist\tests\authorization-recovery-remediation.test.js (21.4652ms)
+Γ£û dist\tests\ci-adapter.test.js (21.4245ms)
+Γ£û dist\tests\ci-evidence-hardening.test.js (22.149ms)
+Γ£û dist\tests\ci-execution-evidence.test.js (22.8231ms)
+Γ£û dist\tests\ci-provenance-closure.test.js (20.3892ms)
+Γ£û dist\tests\cli.test.js (21.2516ms)
+Γ£û dist\tests\exception-lifecycle.test.js (21.4187ms)
+Γ£û dist\tests\exception-service.test.js (20.7966ms)
+Γ£û dist\tests\expo-stack.test.js (20.497ms)
+Γ£û dist\tests\governance-consistency.test.js (18.2643ms)
+Γ£û dist\tests\hook-manager.test.js (16.4502ms)
+Γ£û dist\tests\init.test.js (13.7361ms)
+Γ£û dist\tests\inspect.test.js (12.3295ms)
+Γ£û dist\tests\lifecycle-e2e.test.js (11.1385ms)
+Γ£û dist\tests\linter-cli-ci.test.js (11.1124ms)
+Γ£û dist\tests\linter-core-engine.test.js (11.269ms)
+Γ£û dist\tests\linter-doc-rules.test.js (12.2049ms)
+Γ£û dist\tests\linter-invariant-rules.test.js (12.9505ms)
+Γ£û dist\tests\linter-schema-rules.test.js (13.365ms)
+Γ£û dist\tests\linter-security-rules.test.js (13.5425ms)
+Γ£û dist\tests\linter-stack-rules.test.js (13.3607ms)
+Γ£û dist\tests\lock-manager.test.js (13.2184ms)
+Γ£û dist\tests\mobile-rif-rules.test.js (13.0154ms)
+Γ£û dist\tests\mobile-stack-integration.test.js (12.1873ms)
+Γ£û dist\tests\operational-controller.test.js (11.7195ms)
+Γ£û dist\tests\paths.test.js (11.9287ms)
+Γ£û dist\tests\pivot-governance-hardening.test.js (13.7669ms)
+Γ£û dist\tests\pivot-storage-enforcement.test.js (13.4879ms)
+Γ£û dist\tests\pivot.test.js (13.053ms)
+Γ£û dist\tests\prd-applicability.test.js (13.071ms)
+Γ£û dist\tests\pre-commit-engine.test.js (12.6031ms)
+Γ£û dist\tests\pre-push-engine.test.js (12.1158ms)
+Γ£û dist\tests\process-execution.test.js (11.3023ms)
+Γ£û dist\tests\programmatic-tty-alignment.test.js (9.4057ms)
+Γ£û dist\tests\quality-gates-execution.test.js (9.5295ms)
+Γ£û dist\tests\quality-gates-recovery.test.js (9.7175ms)
+Γ£û dist\tests\quality-gates-rif.test.js (10.2706ms)
+Γ£û dist\tests\quality-gates-schema-compat.test.js (10.9144ms)
+Γ£û dist\tests\ratification-verifier.test.js (11.1408ms)
+Γ£û dist\tests\ratification.test.js (11.1012ms)
+Γ£û dist\tests\react-native-stack.test.js (10.7759ms)
+Γ£û dist\tests\reopen-tty-alignment.test.js (10.4779ms)
+Γ£û dist\tests\reopen.test.js (10.9455ms)
+Γ£û dist\tests\resolver-safety.test.js (10.7178ms)
+Γ£û dist\tests\stack-dependency-resolution.test.js (10.3422ms)
+Γ£û dist\tests\technology-stacks.test.js (8.9796ms)
+Γ£û dist\tests\transaction-engine-v130.test.js (7.6753ms)
+Γ£û dist\tests\transaction-manager.test.js (6.4864ms)
+Γ£û dist\tests\validator.test.js (5.3747ms)
+Γ£û dist\tests\verify-evidence.test.js (3.5309ms)
+Γ£û dist\tests\workflow-cli.test.js (1.653ms)
+Γä╣ tests 54
+Γä╣ suites 0
+Γä╣ pass 0
+Γä╣ fail 54
+Γä╣ cancelled 0
+Γä╣ skipped 0
+Γä╣ todo 0
+Γä╣ duration_ms 141.4499
+
+Γ£û failing tests:
+
+test at dist\tests\advancement.test.js:1:1
+Γ£û dist\tests\advancement.test.js (21.3091ms)
+  Error: spawn EPERM
+      at ChildProcess.spawn (node:internal/child_process:421:11)
+      at spawn (node:child_process:796:9)
+      at TestContext.<anonymous> (node:internal/test_runner/runner:415:19)
+      at FileTest.runInAsyncScope (node:async_hooks:228:14)
+      at FileTest.run (node:internal/test_runner/test:1118:25)
+      at FileTest.start (node:internal/test_runner/test:1015:17)
+      at runTestFile (node:internal/test_runner/runner:497:32)
+      at node:internal/test_runner/runner:809:25
+      at node:internal/per_context/primordials:561:37
+      at new Promise (<anonymous>) {
+    errno: -4048,
+    code: 'EPERM',
+    syscall: 'spawn'
+  }
+
+test at dist\tests\approval.test.js:1:1
+Γ£û dist\tests\approval.test.js (20.2117ms)
+  Error: spawn EPERM
+      at ChildProcess.spawn (node:internal/child_process:421:11)
+      at spawn (node:child_process:796:9)
+      at TestContext.<anonymous> (node:internal/test_runner/runner:415:19)
+      at FileTest.runInAsyncScope (node:async_hooks:228:14)
+      at FileTest.run (node:internal/test_runner/test:1118:25)
+      at FileTest.start (node:internal/test_runner/test:1015:17)
+      at runTestFile (node:internal/test_runner/runner:497:32)
+      at node:internal/test_runner/runner:809:25
+      at node:internal/per_context/primordials:561:37
+      at new Promise (<anonymous>) {
+    errno: -4048,
+    code: 'EPERM',
+    syscall: 'spawn'
+  }
+
+test at dist\tests\ast-governance-validators.test.js:1:1
+Γ£û dist\tests\ast-governance-validators.test.js (20.8658ms)
+  Error: spawn EPERM
+      at ChildProcess.spawn (node:internal/child_process:421:11)
+      at spawn (node:child_process:796:9)
+      at TestContext.<anonymous> (node:internal/test_runner/runner:415:19)
+      at FileTest.runInAsyncScope (node:async_hooks:228:14)
+      at FileTest.run (node:internal/test_runner/test:1118:25)
+      at FileTest.start (node:internal/test_runner/test:1015:17)
+      at runTestFile (node:internal/test_runner/runner:497:32)
+      at node:internal/test_runner/runner:809:25
+      at node:internal/per_context/primordials:561:37
+      at new Promise (<anonymous>) {
+    errno: -4048,
+    code: 'EPERM',
+    syscall: 'spawn'
+  }
+
+test at dist\tests\authorization-recovery-remediation.test.js:1:1
+Γ£û dist\tests\authorization-recovery-remediation.test.js (21.4652ms)
+  Error: spawn EPERM
+      at ChildProcess.spawn (node:internal/child_process:421:11)
+      at spawn (node:child_process:796:9)
+      at TestContext.<anonymous> (node:internal/test_runner/runner:415:19)
+      at FileTest.runInAsyncScope (node:async_hooks:228:14)
+      at FileTest.run (node:internal/test_runner/test:1118:25)
+      at FileTest.start (node:internal/test_runner/test:1015:17)
+      at runTestFile (node:internal/test_runner/runner:497:32)
+      at node:internal/test_runner/runner:809:25
+      at node:internal/per_context/primordials:561:37
+      at new Promise (<anonymous>) {
+    errno: -4048,
+    code: 'EPERM',
+    syscall: 'spawn'
+  }
+
+test at dist\tests\ci-adapter.test.js:1:1
+Γ£û dist\tests\ci-adapter.test.js (21.4245ms)
+  Error: spawn EPERM
+      at ChildProcess.spawn (node:internal/child_process:421:11)
+      at spawn (node:child_process:796:9)
+      at TestContext.<anonymous> (node:internal/test_runner/runner:415:19)
+      at FileTest.runInAsyncScope (node:async_hooks:228:14)
+      at FileTest.run (node:internal/test_runner/test:1118:25)
+      at FileTest.start (node:internal/test_runner/test:1015:17)
+      at runTestFile (node:internal/test_runner/runner:497:32)
+      at node:internal/test_runner/runner:809:25
+      at node:internal/per_context/primordials:561:37
+      at new Promise (<anonymous>) {
+    errno: -4048,
+    code: 'EPERM',
+    syscall: 'spawn'
+  }
+
+test at dist\tests\ci-evidence-hardening.test.js:1:1
+Γ£û dist\tests\ci-evidence-hardening.test.js (22.149ms)
+  Error: spawn EPERM
+      at ChildProcess.spawn (node:internal/child_process:421:11)
+      at spawn (node:child_process:796:9)
+      at TestContext.<anonymous> (node:internal/test_runner/runner:415:19)
+      at FileTest.runInAsyncScope (node:async_hooks:228:14)
+      at FileTest.run (node:internal/test_runner/test:1118:25)
+      at FileTest.start (node:internal/test_runner/test:1015:17)
+      at runTestFile (node:internal/test_runner/runner:497:32)
+      at node:internal/test_runner/runner:809:25
+      at node:internal/per_context/primordials:561:37
+      at new Promise (<anonymous>) {
+    errno: -4048,
+    code: 'EPERM',
+    syscall: 'spawn'
+  }
+
+test at dist\tests\ci-execution-evidence.test.js:1:1
+Γ£û dist\tests\ci-execution-evidence.test.js (22.8231ms)
+  Error: spawn EPERM
+      at ChildProcess.spawn (node:internal/child_process:421:11)
+      at spawn (node:child_process:796:9)
+      at TestContext.<anonymous> (node:internal/test_runner/runner:415:19)
+      at FileTest.runInAsyncScope (node:async_hooks:228:14)
+      at FileTest.run (node:internal/test_runner/test:1118:25)
+      at FileTest.start (node:internal/test_runner/test:1015:17)
+      at runTestFile (node:internal/test_runner/runner:497:32)
+      at node:internal/test_runner/runner:809:25
+      at node:internal/per_context/primordials:561:37
+      at new Promise (<anonymous>) {
+    errno: -4048,
+    code: 'EPERM',
+    syscall: 'spawn'
+  }
+
+test at dist\tests\ci-provenance-closure.test.js:1:1
+Γ£û dist\tests\ci-provenance-closure.test.js (20.3892ms)
+  Error: spawn EPERM
+      at ChildProcess.spawn (node:internal/child_process:421:11)
+      at spawn (node:child_process:796:9)
+      at TestContext.<anonymous> (node:internal/test_runner/runner:415:19)
+      at FileTest.runInAsyncScope (node:async_hooks:228:14)
+      at FileTest.run (node:internal/test_runner/test:1118:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:787:18)
+      at FileTest.postRun (node:internal/test_runner/test:1247:19)
+      at FileTest.run (node:internal/test_runner/test:1175:12) {
+    errno: -4048,
+    code: 'EPERM',
+    syscall: 'spawn'
+  }
+
+test at dist\tests\cli.test.js:1:1
+Γ£û dist\tests\cli.test.js (21.2516ms)
+  Error: spawn EPERM
+      at ChildProcess.spawn (node:internal/child_process:421:11)
+      at spawn (node:child_process:796:9)
+      at TestContext.<anonymous> (node:internal/test_runner/runner:415:19)
+      at FileTest.runInAsyncScope (node:async_hooks:228:14)
+      at FileTest.run (node:internal/test_runner/test:1118:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:787:18)
+      at FileTest.postRun (node:internal/test_runner/test:1247:19)
+      at FileTest.run (node:internal/test_runner/test:1175:12) {
+    errno: -4048,
+    code: 'EPERM',
+    syscall: 'spawn'
+  }
+
+test at dist\tests\exception-lifecycle.test.js:1:1
+Γ£û dist\tests\exception-lifecycle.test.js (21.4187ms)
+  Error: spawn EPERM
+      at ChildProcess.spawn (node:internal/child_process:421:11)
+      at spawn (node:child_process:796:9)
+      at TestContext.<anonymous> (node:internal/test_runner/runner:415:19)
+      at FileTest.runInAsyncScope (node:async_hooks:228:14)
+      at FileTest.run (node:internal/test_runner/test:1118:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:787:18)
+      at FileTest.postRun (node:internal/test_runner/test:1247:19)
+      at FileTest.run (node:internal/test_runner/test:1175:12) {
+    errno: -4048,
+    code: 'EPERM',
+    syscall: 'spawn'
+  }
+
+test at dist\tests\exception-service.test.js:1:1
+Γ£û dist\tests\exception-service.test.js (20.7966ms)
+  Error: spawn EPERM
+      at ChildProcess.spawn (node:internal/child_process:421:11)
+      at spawn (node:child_process:796:9)
+      at TestContext.<anonymous> (node:internal/test_runner/runner:415:19)
+      at FileTest.runInAsyncScope (node:async_hooks:228:14)
+      at FileTest.run (node:internal/test_runner/test:1118:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:787:18)
+      at FileTest.postRun (node:internal/test_runner/test:1247:19)
+      at FileTest.run (node:internal/test_runner/test:1175:12) {
+    errno: -4048,
+    code: 'EPERM',
+    syscall: 'spawn'
+  }
+
+test at dist\tests\expo-stack.test.js:1:1
+Γ£û dist\tests\expo-stack.test.js (20.497ms)
+  Error: spawn EPERM
+      at ChildProcess.spawn (node:internal/child_process:421:11)
+      at spawn (node:child_process:796:9)
+      at TestContext.<anonymous> (node:internal/test_runner/runner:415:19)
+      at FileTest.runInAsyncScope (node:async_hooks:228:14)
+      at FileTest.run (node:internal/test_runner/test:1118:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:787:18)
+      at FileTest.postRun (node:internal/test_runner/test:1247:19)
+      at FileTest.run (node:internal/test_runner/test:1175:12) {
+    errno: -4048,
+    code: 'EPERM',
+    syscall: 'spawn'
+  }
+
+test at dist\tests\governance-consistency.test.js:1:1
+Γ£û dist\tests\governance-consistency.test.js (18.2643ms)
+  Error: spawn EPERM
+      at ChildProcess.spawn (node:internal/child_process:421:11)
+      at spawn (node:child_process:796:9)
+      at TestContext.<anonymous> (node:internal/test_runner/runner:415:19)
+      at FileTest.runInAsyncScope (node:async_hooks:228:14)
+      at FileTest.run (node:internal/test_runner/test:1118:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:787:18)
+      at FileTest.postRun (node:internal/test_runner/test:1247:19)
+      at FileTest.run (node:internal/test_runner/test:1175:12) {
+    errno: -4048,
+    code: 'EPERM',
+    syscall: 'spawn'
+  }
+
+test at dist\tests\hook-manager.test.js:1:1
+Γ£û dist\tests\hook-manager.test.js (16.4502ms)
+  Error: spawn EPERM
+      at ChildProcess.spawn (node:internal/child_process:421:11)
+      at spawn (node:child_process:796:9)
+      at TestContext.<anonymous> (node:internal/test_runner/runner:415:19)
+      at FileTest.runInAsyncScope (node:async_hooks:228:14)
+      at FileTest.run (node:internal/test_runner/test:1118:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:787:18)
+      at FileTest.postRun (node:internal/test_runner/test:1247:19)
+      at FileTest.run (node:internal/test_runner/test:1175:12) {
+    errno: -4048,
+    code: 'EPERM',
+    syscall: 'spawn'
+  }
+
+test at dist\tests\init.test.js:1:1
+Γ£û dist\tests\init.test.js (13.7361ms)
+  Error: spawn EPERM
+      at ChildProcess.spawn (node:internal/child_process:421:11)
+      at spawn (node:child_process:796:9)
+      at TestContext.<anonymous> (node:internal/test_runner/runner:415:19)
+      at FileTest.runInAsyncScope (node:async_hooks:228:14)
+      at FileTest.run (node:internal/test_runner/test:1118:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:787:18)
+      at FileTest.postRun (node:internal/test_runner/test:1247:19)
+      at FileTest.run (node:internal/test_runner/test:1175:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:787:7) {
+    errno: -4048,
+    code: 'EPERM',
+    syscall: 'spawn'
+  }
+
+test at dist\tests\inspect.test.js:1:1
+Γ£û dist\tests\inspect.test.js (12.3295ms)
+  Error: spawn EPERM
+      at ChildProcess.spawn (node:internal/child_process:421:11)
+      at spawn (node:child_process:796:9)
+      at TestContext.<anonymous> (node:internal/test_runner/runner:415:19)
+      at FileTest.runInAsyncScope (node:async_hooks:228:14)
+      at FileTest.run (node:internal/test_runner/test:1118:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:787:18)
+      at FileTest.postRun (node:internal/test_runner/test:1247:19)
+      at FileTest.run (node:internal/test_runner/test:1175:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:787:7) {
+    errno: -4048,
+    code: 'EPERM',
+    syscall: 'spawn'
+  }
+
+test at dist\tests\lifecycle-e2e.test.js:1:1
+Γ£û dist\tests\lifecycle-e2e.test.js (11.1385ms)
+  Error: spawn EPERM
+      at ChildProcess.spawn (node:internal/child_process:421:11)
+      at spawn (node:child_process:796:9)
+      at TestContext.<anonymous> (node:internal/test_runner/runner:415:19)
+      at FileTest.runInAsyncScope (node:async_hooks:228:14)
+      at FileTest.run (node:internal/test_runner/test:1118:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:787:18)
+      at FileTest.postRun (node:internal/test_runner/test:1247:19)
+      at FileTest.run (node:internal/test_runner/test:1175:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:787:7) {
+    errno: -4048,
+    code: 'EPERM',
+    syscall: 'spawn'
+  }
+
+test at dist\tests\linter-cli-ci.test.js:1:1
+Γ£û dist\tests\linter-cli-ci.test.js (11.1124ms)
+  Error: spawn EPERM
+      at ChildProcess.spawn (node:internal/child_process:421:11)
+      at spawn (node:child_process:796:9)
+      at TestContext.<anonymous> (node:internal/test_runner/runner:415:19)
+      at FileTest.runInAsyncScope (node:async_hooks:228:14)
+      at FileTest.run (node:internal/test_runner/test:1118:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:787:18)
+      at FileTest.postRun (node:internal/test_runner/test:1247:19)
+      at FileTest.run (node:internal/test_runner/test:1175:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:787:7) {
+    errno: -4048,
+    code: 'EPERM',
+    syscall: 'spawn'
+  }
+
+test at dist\tests\linter-core-engine.test.js:1:1
+Γ£û dist\tests\linter-core-engine.test.js (11.269ms)
+  Error: spawn EPERM
+      at ChildProcess.spawn (node:internal/child_process:421:11)
+      at spawn (node:child_process:796:9)
+      at TestContext.<anonymous> (node:internal/test_runner/runner:415:19)
+      at FileTest.runInAsyncScope (node:async_hooks:228:14)
+      at FileTest.run (node:internal/test_runner/test:1118:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:787:18)
+      at FileTest.postRun (node:internal/test_runner/test:1247:19)
+      at FileTest.run (node:internal/test_runner/test:1175:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:787:7) {
+    errno: -4048,
+    code: 'EPERM',
+    syscall: 'spawn'
+  }
+
+test at dist\tests\linter-doc-rules.test.js:1:1
+Γ£û dist\tests\linter-doc-rules.test.js (12.2049ms)
+  Error: spawn EPERM
+      at ChildProcess.spawn (node:internal/child_process:421:11)
+      at spawn (node:child_process:796:9)
+      at TestContext.<anonymous> (node:internal/test_runner/runner:415:19)
+      at FileTest.runInAsyncScope (node:async_hooks:228:14)
+      at FileTest.run (node:internal/test_runner/test:1118:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:787:18)
+      at FileTest.postRun (node:internal/test_runner/test:1247:19)
+      at FileTest.run (node:internal/test_runner/test:1175:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:787:7) {
+    errno: -4048,
+    code: 'EPERM',
+    syscall: 'spawn'
+  }
+
+test at dist\tests\linter-invariant-rules.test.js:1:1
+Γ£û dist\tests\linter-invariant-rules.test.js (12.9505ms)
+  Error: spawn EPERM
+      at ChildProcess.spawn (node:internal/child_process:421:11)
+      at spawn (node:child_process:796:9)
+      at TestContext.<anonymous> (node:internal/test_runner/runner:415:19)
+      at FileTest.runInAsyncScope (node:async_hooks:228:14)
+      at FileTest.run (node:internal/test_runner/test:1118:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:787:18)
+      at FileTest.postRun (node:internal/test_runner/test:1247:19)
+      at FileTest.run (node:internal/test_runner/test:1175:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:787:7) {
+    errno: -4048,
+    code: 'EPERM',
+    syscall: 'spawn'
+  }
+
+test at dist\tests\linter-schema-rules.test.js:1:1
+Γ£û dist\tests\linter-schema-rules.test.js (13.365ms)
+  Error: spawn EPERM
+      at ChildProcess.spawn (node:internal/child_process:421:11)
+      at spawn (node:child_process:796:9)
+      at TestContext.<anonymous> (node:internal/test_runner/runner:415:19)
+      at FileTest.runInAsyncScope (node:async_hooks:228:14)
+      at FileTest.run (node:internal/test_runner/test:1118:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:787:18)
+      at FileTest.postRun (node:internal/test_runner/test:1247:19)
+      at FileTest.run (node:internal/test_runner/test:1175:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:787:7) {
+    errno: -4048,
+    code: 'EPERM',
+    syscall: 'spawn'
+  }
+
+test at dist\tests\linter-security-rules.test.js:1:1
+Γ£û dist\tests\linter-security-rules.test.js (13.5425ms)
+  Error: spawn EPERM
+      at ChildProcess.spawn (node:internal/child_process:421:11)
+      at spawn (node:child_process:796:9)
+      at TestContext.<anonymous> (node:internal/test_runner/runner:415:19)
+      at FileTest.runInAsyncScope (node:async_hooks:228:14)
+      at FileTest.run (node:internal/test_runner/test:1118:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:787:18)
+      at FileTest.postRun (node:internal/test_runner/test:1247:19)
+      at FileTest.run (node:internal/test_runner/test:1175:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:787:7) {
+    errno: -4048,
+    code: 'EPERM',
+    syscall: 'spawn'
+  }
+
+test at dist\tests\linter-stack-rules.test.js:1:1
+Γ£û dist\tests\linter-stack-rules.test.js (13.3607ms)
+  Error: spawn EPERM
+      at ChildProcess.spawn (node:internal/child_process:421:11)
+      at spawn (node:child_process:796:9)
+      at TestContext.<anonymous> (node:internal/test_runner/runner:415:19)
+      at FileTest.runInAsyncScope (node:async_hooks:228:14)
+      at FileTest.run (node:internal/test_runner/test:1118:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:787:18)
+      at FileTest.postRun (node:internal/test_runner/test:1247:19)
+      at FileTest.run (node:internal/test_runner/test:1175:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:787:7) {
+    errno: -4048,
+    code: 'EPERM',
+    syscall: 'spawn'
+  }
+
+test at dist\tests\lock-manager.test.js:1:1
+Γ£û dist\tests\lock-manager.test.js (13.2184ms)
+  Error: spawn EPERM
+      at ChildProcess.spawn (node:internal/child_process:421:11)
+      at spawn (node:child_process:796:9)
+      at TestContext.<anonymous> (node:internal/test_runner/runner:415:19)
+      at FileTest.runInAsyncScope (node:async_hooks:228:14)
+      at FileTest.run (node:internal/test_runner/test:1118:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:787:18)
+      at FileTest.postRun (node:internal/test_runner/test:1247:19)
+      at FileTest.run (node:internal/test_runner/test:1175:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:787:7) {
+    errno: -4048,
+    code: 'EPERM',
+    syscall: 'spawn'
+  }
+
+test at dist\tests\mobile-rif-rules.test.js:1:1
+Γ£û dist\tests\mobile-rif-rules.test.js (13.0154ms)
+  Error: spawn EPERM
+      at ChildProcess.spawn (node:internal/child_process:421:11)
+      at spawn (node:child_process:796:9)
+      at TestContext.<anonymous> (node:internal/test_runner/runner:415:19)
+      at FileTest.runInAsyncScope (node:async_hooks:228:14)
+      at FileTest.run (node:internal/test_runner/test:1118:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:787:18)
+      at FileTest.postRun (node:internal/test_runner/test:1247:19)
+      at FileTest.run (node:internal/test_runner/test:1175:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:787:7) {
+    errno: -4048,
+    code: 'EPERM',
+    syscall: 'spawn'
+  }
+
+test at dist\tests\mobile-stack-integration.test.js:1:1
+Γ£û dist\tests\mobile-stack-integration.test.js (12.1873ms)
+  Error: spawn EPERM
+      at ChildProcess.spawn (node:internal/child_process:421:11)
+      at spawn (node:child_process:796:9)
+      at TestContext.<anonymous> (node:internal/test_runner/runner:415:19)
+      at FileTest.runInAsyncScope (node:async_hooks:228:14)
+      at FileTest.run (node:internal/test_runner/test:1118:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:787:18)
+      at FileTest.postRun (node:internal/test_runner/test:1247:19)
+      at FileTest.run (node:internal/test_runner/test:1175:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:787:7) {
+    errno: -4048,
+    code: 'EPERM',
+    syscall: 'spawn'
+  }
+
+test at dist\tests\operational-controller.test.js:1:1
+Γ£û dist\tests\operational-controller.test.js (11.7195ms)
+  Error: spawn EPERM
+      at ChildProcess.spawn (node:internal/child_process:421:11)
+      at spawn (node:child_process:796:9)
+      at TestContext.<anonymous> (node:internal/test_runner/runner:415:19)
+      at FileTest.runInAsyncScope (node:async_hooks:228:14)
+      at FileTest.run (node:internal/test_runner/test:1118:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:787:18)
+      at FileTest.postRun (node:internal/test_runner/test:1247:19)
+      at FileTest.run (node:internal/test_runner/test:1175:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:787:7) {
+    errno: -4048,
+    code: 'EPERM',
+    syscall: 'spawn'
+  }
+
+test at dist\tests\paths.test.js:1:1
+Γ£û dist\tests\paths.test.js (11.9287ms)
+  Error: spawn EPERM
+      at ChildProcess.spawn (node:internal/child_process:421:11)
+      at spawn (node:child_process:796:9)
+      at TestContext.<anonymous> (node:internal/test_runner/runner:415:19)
+      at FileTest.runInAsyncScope (node:async_hooks:228:14)
+      at FileTest.run (node:internal/test_runner/test:1118:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:787:18)
+      at FileTest.postRun (node:internal/test_runner/test:1247:19)
+      at FileTest.run (node:internal/test_runner/test:1175:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:787:7) {
+    errno: -4048,
+    code: 'EPERM',
+    syscall: 'spawn'
+  }
+
+test at dist\tests\pivot-governance-hardening.test.js:1:1
+Γ£û dist\tests\pivot-governance-hardening.test.js (13.7669ms)
+  Error: spawn EPERM
+      at ChildProcess.spawn (node:internal/child_process:421:11)
+      at spawn (node:child_process:796:9)
+      at TestContext.<anonymous> (node:internal/test_runner/runner:415:19)
+      at FileTest.runInAsyncScope (node:async_hooks:228:14)
+      at FileTest.run (node:internal/test_runner/test:1118:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:787:18)
+      at FileTest.postRun (node:internal/test_runner/test:1247:19)
+      at FileTest.run (node:internal/test_runner/test:1175:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:787:7) {
+    errno: -4048,
+    code: 'EPERM',
+    syscall: 'spawn'
+  }
+
+test at dist\tests\pivot-storage-enforcement.test.js:1:1
+Γ£û dist\tests\pivot-storage-enforcement.test.js (13.4879ms)
+  Error: spawn EPERM
+      at ChildProcess.spawn (node:internal/child_process:421:11)
+      at spawn (node:child_process:796:9)
+      at TestContext.<anonymous> (node:internal/test_runner/runner:415:19)
+      at FileTest.runInAsyncScope (node:async_hooks:228:14)
+      at FileTest.run (node:internal/test_runner/test:1118:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:787:18)
+      at FileTest.postRun (node:internal/test_runner/test:1247:19)
+      at FileTest.run (node:internal/test_runner/test:1175:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:787:7) {
+    errno: -4048,
+    code: 'EPERM',
+    syscall: 'spawn'
+  }
+
+test at dist\tests\pivot.test.js:1:1
+Γ£û dist\tests\pivot.test.js (13.053ms)
+  Error: spawn EPERM
+      at ChildProcess.spawn (node:internal/child_process:421:11)
+      at spawn (node:child_process:796:9)
+      at TestContext.<anonymous> (node:internal/test_runner/runner:415:19)
+      at FileTest.runInAsyncScope (node:async_hooks:228:14)
+      at FileTest.run (node:internal/test_runner/test:1118:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:787:18)
+      at FileTest.postRun (node:internal/test_runner/test:1247:19)
+      at FileTest.run (node:internal/test_runner/test:1175:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:787:7) {
+    errno: -4048,
+    code: 'EPERM',
+    syscall: 'spawn'
+  }
+
+test at dist\tests\prd-applicability.test.js:1:1
+Γ£û dist\tests\prd-applicability.test.js (13.071ms)
+  Error: spawn EPERM
+      at ChildProcess.spawn (node:internal/child_process:421:11)
+      at spawn (node:child_process:796:9)
+      at TestContext.<anonymous> (node:internal/test_runner/runner:415:19)
+      at FileTest.runInAsyncScope (node:async_hooks:228:14)
+      at FileTest.run (node:internal/test_runner/test:1118:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:787:18)
+      at FileTest.postRun (node:internal/test_runner/test:1247:19)
+      at FileTest.run (node:internal/test_runner/test:1175:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:787:7) {
+    errno: -4048,
+    code: 'EPERM',
+    syscall: 'spawn'
+  }
+
+test at dist\tests\pre-commit-engine.test.js:1:1
+Γ£û dist\tests\pre-commit-engine.test.js (12.6031ms)
+  Error: spawn EPERM
+      at ChildProcess.spawn (node:internal/child_process:421:11)
+      at spawn (node:child_process:796:9)
+      at TestContext.<anonymous> (node:internal/test_runner/runner:415:19)
+      at FileTest.runInAsyncScope (node:async_hooks:228:14)
+      at FileTest.run (node:internal/test_runner/test:1118:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:787:18)
+      at FileTest.postRun (node:internal/test_runner/test:1247:19)
+      at FileTest.run (node:internal/test_runner/test:1175:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:787:7) {
+    errno: -4048,
+    code: 'EPERM',
+    syscall: 'spawn'
+  }
+
+test at dist\tests\pre-push-engine.test.js:1:1
+Γ£û dist\tests\pre-push-engine.test.js (12.1158ms)
+  Error: spawn EPERM
+      at ChildProcess.spawn (node:internal/child_process:421:11)
+      at spawn (node:child_process:796:9)
+      at TestContext.<anonymous> (node:internal/test_runner/runner:415:19)
+      at FileTest.runInAsyncScope (node:async_hooks:228:14)
+      at FileTest.run (node:internal/test_runner/test:1118:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:787:18)
+      at FileTest.postRun (node:internal/test_runner/test:1247:19)
+      at FileTest.run (node:internal/test_runner/test:1175:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:787:7) {
+    errno: -4048,
+    code: 'EPERM',
+    syscall: 'spawn'
+  }
+
+test at dist\tests\process-execution.test.js:1:1
+Γ£û dist\tests\process-execution.test.js (11.3023ms)
+  Error: spawn EPERM
+      at ChildProcess.spawn (node:internal/child_process:421:11)
+      at spawn (node:child_process:796:9)
+      at TestContext.<anonymous> (node:internal/test_runner/runner:415:19)
+      at FileTest.runInAsyncScope (node:async_hooks:228:14)
+      at FileTest.run (node:internal/test_runner/test:1118:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:787:18)
+      at FileTest.postRun (node:internal/test_runner/test:1247:19)
+      at FileTest.run (node:internal/test_runner/test:1175:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:787:7) {
+    errno: -4048,
+    code: 'EPERM',
+    syscall: 'spawn'
+  }
+
+test at dist\tests\programmatic-tty-alignment.test.js:1:1
+Γ£û dist\tests\programmatic-tty-alignment.test.js (9.4057ms)
+  Error: spawn EPERM
+      at ChildProcess.spawn (node:internal/child_process:421:11)
+      at spawn (node:child_process:796:9)
+      at TestContext.<anonymous> (node:internal/test_runner/runner:415:19)
+      at FileTest.runInAsyncScope (node:async_hooks:228:14)
+      at FileTest.run (node:internal/test_runner/test:1118:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:787:18)
+      at FileTest.postRun (node:internal/test_runner/test:1247:19)
+      at FileTest.run (node:internal/test_runner/test:1175:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:787:7) {
+    errno: -4048,
+    code: 'EPERM',
+    syscall: 'spawn'
+  }
+
+test at dist\tests\quality-gates-execution.test.js:1:1
+Γ£û dist\tests\quality-gates-execution.test.js (9.5295ms)
+  Error: spawn EPERM
+      at ChildProcess.spawn (node:internal/child_process:421:11)
+      at spawn (node:child_process:796:9)
+      at TestContext.<anonymous> (node:internal/test_runner/runner:415:19)
+      at FileTest.runInAsyncScope (node:async_hooks:228:14)
+      at FileTest.run (node:internal/test_runner/test:1118:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:787:18)
+      at FileTest.postRun (node:internal/test_runner/test:1247:19)
+      at FileTest.run (node:internal/test_runner/test:1175:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:787:7) {
+    errno: -4048,
+    code: 'EPERM',
+    syscall: 'spawn'
+  }
+
+test at dist\tests\quality-gates-recovery.test.js:1:1
+Γ£û dist\tests\quality-gates-recovery.test.js (9.7175ms)
+  Error: spawn EPERM
+      at ChildProcess.spawn (node:internal/child_process:421:11)
+      at spawn (node:child_process:796:9)
+      at TestContext.<anonymous> (node:internal/test_runner/runner:415:19)
+      at FileTest.runInAsyncScope (node:async_hooks:228:14)
+      at FileTest.run (node:internal/test_runner/test:1118:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:787:18)
+      at FileTest.postRun (node:internal/test_runner/test:1247:19)
+      at FileTest.run (node:internal/test_runner/test:1175:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:787:7) {
+    errno: -4048,
+    code: 'EPERM',
+    syscall: 'spawn'
+  }
+
+test at dist\tests\quality-gates-rif.test.js:1:1
+Γ£û dist\tests\quality-gates-rif.test.js (10.2706ms)
+  Error: spawn EPERM
+      at ChildProcess.spawn (node:internal/child_process:421:11)
+      at spawn (node:child_process:796:9)
+      at TestContext.<anonymous> (node:internal/test_runner/runner:415:19)
+      at FileTest.runInAsyncScope (node:async_hooks:228:14)
+      at FileTest.run (node:internal/test_runner/test:1118:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:787:18)
+      at FileTest.postRun (node:internal/test_runner/test:1247:19)
+      at FileTest.run (node:internal/test_runner/test:1175:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:787:7) {
+    errno: -4048,
+    code: 'EPERM',
+    syscall: 'spawn'
+  }
+
+test at dist\tests\quality-gates-schema-compat.test.js:1:1
+Γ£û dist\tests\quality-gates-schema-compat.test.js (10.9144ms)
+  Error: spawn EPERM
+      at ChildProcess.spawn (node:internal/child_process:421:11)
+      at spawn (node:child_process:796:9)
+      at TestContext.<anonymous> (node:internal/test_runner/runner:415:19)
+      at FileTest.runInAsyncScope (node:async_hooks:228:14)
+      at FileTest.run (node:internal/test_runner/test:1118:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:787:18)
+      at FileTest.postRun (node:internal/test_runner/test:1247:19)
+      at FileTest.run (node:internal/test_runner/test:1175:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:787:7) {
+    errno: -4048,
+    code: 'EPERM',
+    syscall: 'spawn'
+  }
+
+test at dist\tests\ratification-verifier.test.js:1:1
+Γ£û dist\tests\ratification-verifier.test.js (11.1408ms)
+  Error: spawn EPERM
+      at ChildProcess.spawn (node:internal/child_process:421:11)
+      at spawn (node:child_process:796:9)
+      at TestContext.<anonymous> (node:internal/test_runner/runner:415:19)
+      at FileTest.runInAsyncScope (node:async_hooks:228:14)
+      at FileTest.run (node:internal/test_runner/test:1118:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:787:18)
+      at FileTest.postRun (node:internal/test_runner/test:1247:19)
+      at FileTest.run (node:internal/test_runner/test:1175:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:787:7) {
+    errno: -4048,
+    code: 'EPERM',
+    syscall: 'spawn'
+  }
+
+test at dist\tests\ratification.test.js:1:1
+Γ£û dist\tests\ratification.test.js (11.1012ms)
+  Error: spawn EPERM
+      at ChildProcess.spawn (node:internal/child_process:421:11)
+      at spawn (node:child_process:796:9)
+      at TestContext.<anonymous> (node:internal/test_runner/runner:415:19)
+      at FileTest.runInAsyncScope (node:async_hooks:228:14)
+      at FileTest.run (node:internal/test_runner/test:1118:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:787:18)
+      at FileTest.postRun (node:internal/test_runner/test:1247:19)
+      at FileTest.run (node:internal/test_runner/test:1175:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:787:7) {
+    errno: -4048,
+    code: 'EPERM',
+    syscall: 'spawn'
+  }
+
+test at dist\tests\react-native-stack.test.js:1:1
+Γ£û dist\tests\react-native-stack.test.js (10.7759ms)
+  Error: spawn EPERM
+      at ChildProcess.spawn (node:internal/child_process:421:11)
+      at spawn (node:child_process:796:9)
+      at TestContext.<anonymous> (node:internal/test_runner/runner:415:19)
+      at FileTest.runInAsyncScope (node:async_hooks:228:14)
+      at FileTest.run (node:internal/test_runner/test:1118:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:787:18)
+      at FileTest.postRun (node:internal/test_runner/test:1247:19)
+      at FileTest.run (node:internal/test_runner/test:1175:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:787:7) {
+    errno: -4048,
+    code: 'EPERM',
+    syscall: 'spawn'
+  }
+
+test at dist\tests\reopen-tty-alignment.test.js:1:1
+Γ£û dist\tests\reopen-tty-alignment.test.js (10.4779ms)
+  Error: spawn EPERM
+      at ChildProcess.spawn (node:internal/child_process:421:11)
+      at spawn (node:child_process:796:9)
+      at TestContext.<anonymous> (node:internal/test_runner/runner:415:19)
+      at FileTest.runInAsyncScope (node:async_hooks:228:14)
+      at FileTest.run (node:internal/test_runner/test:1118:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:787:18)
+      at FileTest.postRun (node:internal/test_runner/test:1247:19)
+      at FileTest.run (node:internal/test_runner/test:1175:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:787:7) {
+    errno: -4048,
+    code: 'EPERM',
+    syscall: 'spawn'
+  }
+
+test at dist\tests\reopen.test.js:1:1
+Γ£û dist\tests\reopen.test.js (10.9455ms)
+  Error: spawn EPERM
+      at ChildProcess.spawn (node:internal/child_process:421:11)
+      at spawn (node:child_process:796:9)
+      at TestContext.<anonymous> (node:internal/test_runner/runner:415:19)
+      at FileTest.runInAsyncScope (node:async_hooks:228:14)
+      at FileTest.run (node:internal/test_runner/test:1118:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:787:18)
+      at FileTest.postRun (node:internal/test_runner/test:1247:19)
+      at FileTest.run (node:internal/test_runner/test:1175:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:787:7) {
+    errno: -4048,
+    code: 'EPERM',
+    syscall: 'spawn'
+  }
+
+test at dist\tests\resolver-safety.test.js:1:1
+Γ£û dist\tests\resolver-safety.test.js (10.7178ms)
+  Error: spawn EPERM
+      at ChildProcess.spawn (node:internal/child_process:421:11)
+      at spawn (node:child_process:796:9)
+      at TestContext.<anonymous> (node:internal/test_runner/runner:415:19)
+      at FileTest.runInAsyncScope (node:async_hooks:228:14)
+      at FileTest.run (node:internal/test_runner/test:1118:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:787:18)
+      at FileTest.postRun (node:internal/test_runner/test:1247:19)
+      at FileTest.run (node:internal/test_runner/test:1175:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:787:7) {
+    errno: -4048,
+    code: 'EPERM',
+    syscall: 'spawn'
+  }
+
+test at dist\tests\stack-dependency-resolution.test.js:1:1
+Γ£û dist\tests\stack-dependency-resolution.test.js (10.3422ms)
+  Error: spawn EPERM
+      at ChildProcess.spawn (node:internal/child_process:421:11)
+      at spawn (node:child_process:796:9)
+      at TestContext.<anonymous> (node:internal/test_runner/runner:415:19)
+      at FileTest.runInAsyncScope (node:async_hooks:228:14)
+      at FileTest.run (node:internal/test_runner/test:1118:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:787:18)
+      at FileTest.postRun (node:internal/test_runner/test:1247:19)
+      at FileTest.run (node:internal/test_runner/test:1175:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:787:7) {
+    errno: -4048,
+    code: 'EPERM',
+    syscall: 'spawn'
+  }
+
+test at dist\tests\technology-stacks.test.js:1:1
+Γ£û dist\tests\technology-stacks.test.js (8.9796ms)
+  Error: spawn EPERM
+      at ChildProcess.spawn (node:internal/child_process:421:11)
+      at spawn (node:child_process:796:9)
+      at TestContext.<anonymous> (node:internal/test_runner/runner:415:19)
+      at FileTest.runInAsyncScope (node:async_hooks:228:14)
+      at FileTest.run (node:internal/test_runner/test:1118:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:787:18)
+      at FileTest.postRun (node:internal/test_runner/test:1247:19)
+      at FileTest.run (node:internal/test_runner/test:1175:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:787:7) {
+    errno: -4048,
+    code: 'EPERM',
+    syscall: 'spawn'
+  }
+
+test at dist\tests\transaction-engine-v130.test.js:1:1
+Γ£û dist\tests\transaction-engine-v130.test.js (7.6753ms)
+  Error: spawn EPERM
+      at ChildProcess.spawn (node:internal/child_process:421:11)
+      at spawn (node:child_process:796:9)
+      at TestContext.<anonymous> (node:internal/test_runner/runner:415:19)
+      at FileTest.runInAsyncScope (node:async_hooks:228:14)
+      at FileTest.run (node:internal/test_runner/test:1118:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:787:18)
+      at FileTest.postRun (node:internal/test_runner/test:1247:19)
+      at FileTest.run (node:internal/test_runner/test:1175:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:787:7) {
+    errno: -4048,
+    code: 'EPERM',
+    syscall: 'spawn'
+  }
+
+test at dist\tests\transaction-manager.test.js:1:1
+Γ£û dist\tests\transaction-manager.test.js (6.4864ms)
+  Error: spawn EPERM
+      at ChildProcess.spawn (node:internal/child_process:421:11)
+      at spawn (node:child_process:796:9)
+      at TestContext.<anonymous> (node:internal/test_runner/runner:415:19)
+      at FileTest.runInAsyncScope (node:async_hooks:228:14)
+      at FileTest.run (node:internal/test_runner/test:1118:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:787:18)
+      at FileTest.postRun (node:internal/test_runner/test:1247:19)
+      at FileTest.run (node:internal/test_runner/test:1175:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:787:7) {
+    errno: -4048,
+    code: 'EPERM',
+    syscall: 'spawn'
+  }
+
+test at dist\tests\validator.test.js:1:1
+Γ£û dist\tests\validator.test.js (5.3747ms)
+  Error: spawn EPERM
+      at ChildProcess.spawn (node:internal/child_process:421:11)
+      at spawn (node:child_process:796:9)
+      at TestContext.<anonymous> (node:internal/test_runner/runner:415:19)
+      at FileTest.runInAsyncScope (node:async_hooks:228:14)
+      at FileTest.run (node:internal/test_runner/test:1118:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:787:18)
+      at FileTest.postRun (node:internal/test_runner/test:1247:19)
+      at FileTest.run (node:internal/test_runner/test:1175:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:787:7) {
+    errno: -4048,
+    code: 'EPERM',
+    syscall: 'spawn'
+  }
+
+test at dist\tests\verify-evidence.test.js:1:1
+Γ£û dist\tests\verify-evidence.test.js (3.5309ms)
+  Error: spawn EPERM
+      at ChildProcess.spawn (node:internal/child_process:421:11)
+      at spawn (node:child_process:796:9)
+      at TestContext.<anonymous> (node:internal/test_runner/runner:415:19)
+      at FileTest.runInAsyncScope (node:async_hooks:228:14)
+      at FileTest.run (node:internal/test_runner/test:1118:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:787:18)
+      at FileTest.postRun (node:internal/test_runner/test:1247:19)
+      at FileTest.run (node:internal/test_runner/test:1175:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:787:7) {
+    errno: -4048,
+    code: 'EPERM',
+    syscall: 'spawn'
+  }
+
+test at dist\tests\workflow-cli.test.js:1:1
+Γ£û dist\tests\workflow-cli.test.js (1.653ms)
+  Error: spawn EPERM
+      at ChildProcess.spawn (node:internal/child_process:421:11)
+      at spawn (node:child_process:796:9)
+      at TestContext.<anonymous> (node:internal/test_runner/runner:415:19)
+      at FileTest.runInAsyncScope (node:async_hooks:228:14)
+      at FileTest.run (node:internal/test_runner/test:1118:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:787:18)
+      at FileTest.postRun (node:internal/test_runner/test:1247:19)
+      at FileTest.run (node:internal/test_runner/test:1175:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:787:7) {
+    errno: -4048,
+    code: 'EPERM',
+    syscall: 'spawn'
+  }

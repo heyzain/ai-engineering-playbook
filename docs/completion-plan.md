@@ -174,8 +174,8 @@ Exit: Final installation, smoke checks, observation, and rollback requirements p
 | Phase 1 | Approved and committed | Checkpoint `9afbfd1`; operator approved Gate 0 and advanced to Stage 1 on 2026-11-17. |
 | Phase 2 | Approved and committed | Checkpoint `1b4fb79`; operator approved Gate 1 and advanced to Stage 2 on 2026-11-17. |
 | Phase 3 | Approved and committed | Checkpoint `ef1b3db`; operator approved Gate 2 and advanced to Stage 3 on 2026-11-17. |
-| Phase 4 | Implementation authored; verification open | Local exception lifecycle/migration, shared waiver checks, per-check proof binding and legacy bypass closure implemented. Required complete regression/concurrency verification remains open; see phase-4-5-implementation audit. |
-| Phase 5 | Implementation authored; verification open | Stage/deliverable/evidence/submission and local exception commands exposed, CLI/API exports and instructions updated. Operator requested one remaining-work batch before committing. Full test pass and Gate 3 remain required. |
+| Phase 4 | Implemented, tested and committed | Included in `dc95b5d`; passing complete operator regression: 1015/1015, zero skipped. Human Gate 3 review remains a separate boundary. |
+| Phase 5 | Implementation verified; Gate 3 review pending | Source `dc95b5d` committed/pushed. Complete operator suite: 1015 passed, zero failed/skipped. Passing proof recorded; human approval required before Phase 6. |
 | Phase 6 | Not started | Requires Phase 5 checkpoint and Gate 3 approval. |
 | Phase 7 | Not started | Requires Phase 6 checkpoint and Gate 4 approval. |
 | Phase 8 | Not started | Requires Phase 7 checkpoint and Gate 5 approval. |
@@ -194,3 +194,8 @@ Latest operator rerun: 1014 total, 1013 passed, 1 failed, zero skipped. The rema
 failure was a four-section lifecycle-test exit-package fixture. It now uses a shared
 complete eight-section helper with strict-parser regression coverage. Full rerun
 is still required; no phase verification or Gate 3 approval is inferred.
+
+Final disposition (2026-11-18): complete isolated operator suite passes 1015/1015,
+zero failures/skips. Source checkpoint `dc95b5d` is pushed. Earlier failed-run notes
+above are retained as history. Passing evidence is recorded and the Stage 3 package
+is submitted for human review; no human approval or Stage 4 advancement is inferred.
